@@ -3,6 +3,7 @@ package com.github.aeddddd.ae2enhanced.structure;
 import com.github.aeddddd.ae2enhanced.ModBlocks;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyController;
 import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -458,7 +459,7 @@ public class AssemblyStructure {
     }
 
     /**
-     * 组装：通知 TileEntity 进入已组装状态
+     * 组装：通知 TileEntity 进入已组装状态，并更新 ME 接口 blockstate
      */
     public static void assemble(World world, BlockPos controllerPos) {
         if (world.isRemote) return;
@@ -466,10 +467,12 @@ public class AssemblyStructure {
         if (tile != null) {
             tile.assemble();
         }
+        BlockPos origin = getOriginFromController(controllerPos);
+        updateMeInterfaceState(world, origin, true, controllerPos);
     }
 
     /**
-     * 解散：通知 TileEntity 进入未组装状态
+     * 解散：通知 TileEntity 进入未组装状态，并更新 ME 接口 blockstate
      */
     public static void disassemble(World world, BlockPos controllerPos) {
         if (world.isRemote) return;
@@ -477,11 +480,123 @@ public class AssemblyStructure {
         if (tile != null) {
             tile.disassemble();
         }
+        BlockPos origin = getOriginFromController(controllerPos);
+        updateMeInterfaceState(world, origin, false, controllerPos);
+    }
+
+    private static void updateMeInterfaceState(World world, BlockPos origin, boolean formed, BlockPos controllerPos) {
+        IBlockState state = ModBlocks.ASSEMBLY_ME_INTERFACE.getDefaultState()
+            .withProperty(com.github.aeddddd.ae2enhanced.block.BlockAssemblyMeInterface.FORMED, formed);
+        for (BlockPos rel : PART1_SET) {
+            BlockPos pos = origin.add(rel);
+            if (world.getBlockState(pos).getBlock() == ModBlocks.ASSEMBLY_ME_INTERFACE) {
+                world.setBlockState(pos, state);
+                net.minecraft.tileentity.TileEntity te = world.getTileEntity(pos);
+                if (te instanceof com.github.aeddddd.ae2enhanced.tile.TileAssemblyMeInterface) {
+                    com.github.aeddddd.ae2enhanced.tile.TileAssemblyMeInterface me = (com.github.aeddddd.ae2enhanced.tile.TileAssemblyMeInterface) te;
+                    me.setControllerPos(formed ? controllerPos : null);
+                    if (formed) {
+                        me.getProxy().onReady();
+                    } else {
+                        me.getProxy().invalidate();
+                    }
+                }
+            }
+        }
     }
 
     private static TileAssemblyController getControllerTile(World world, BlockPos pos) {
         // 注意：控制器在 origin + (0,0,-7)，也就是 controllerPos 参数本身就是控制器位置
         net.minecraft.tileentity.TileEntity te = world.getTileEntity(pos);
         return te instanceof TileAssemblyController ? (TileAssemblyController) te : null;
+    }
+
+    /**
+     * 创造模式：一键生成所有缺失方块
+     */
+    public static void placeMissingBlocks(World world, BlockPos controllerPos, net.minecraft.entity.player.EntityPlayer player) {
+        if (world.isRemote) return;
+        BlockPos origin = getOriginFromController(controllerPos);
+
+        placeBlocks(world, origin, PART1_SET, ModBlocks.ASSEMBLY_ME_INTERFACE);
+        placeBlocks(world, origin, PART2_SET, ModBlocks.ASSEMBLY_CASING);
+        placeBlocks(world, origin, PART3_SET, ModBlocks.ASSEMBLY_INNER_WALL);
+        placeBlocks(world, origin, PART4_SET, ModBlocks.ASSEMBLY_STABILIZER);
+
+        // 立即触发组装（跳过 20 tick 等待）
+        assemble(world, controllerPos);
+    }
+
+    private static void placeBlocks(World world, BlockPos origin, Set<BlockPos> set, Block block) {
+        for (BlockPos rel : set) {
+            BlockPos pos = origin.add(rel);
+            if (world.getBlockState(pos).getBlock() != block) {
+                world.setBlockState(pos, block.getDefaultState());
+            }
+        }
+    }
+
+    /**
+     * 生存模式：检查背包材料，足够则扣除并放置
+     * @return 是否成功
+     */
+    public static boolean tryConsumeAndPlace(World world, BlockPos controllerPos, net.minecraft.entity.player.EntityPlayer player) {
+        if (world.isRemote) return false;
+        BlockPos origin = getOriginFromController(controllerPos);
+
+        Map<Block, Integer> missing = new LinkedHashMap<>();
+        countMissing(world, origin, PART1_SET, ModBlocks.ASSEMBLY_ME_INTERFACE, missing);
+        countMissing(world, origin, PART2_SET, ModBlocks.ASSEMBLY_CASING, missing);
+        countMissing(world, origin, PART3_SET, ModBlocks.ASSEMBLY_INNER_WALL, missing);
+        countMissing(world, origin, PART4_SET, ModBlocks.ASSEMBLY_STABILIZER, missing);
+
+        if (missing.isEmpty()) {
+            assemble(world, controllerPos);
+            return true;
+        }
+
+        // 检查背包是否有足够材料
+        net.minecraft.entity.player.InventoryPlayer inv = player.inventory;
+        Map<Block, Integer> needed = new LinkedHashMap<>(missing);
+
+        for (net.minecraft.item.ItemStack stack : inv.mainInventory) {
+            if (stack.isEmpty()) continue;
+            for (Map.Entry<Block, Integer> entry : needed.entrySet()) {
+                Block block = entry.getKey();
+                if (stack.getItem() == net.minecraft.item.Item.getItemFromBlock(block)) {
+                    int need = entry.getValue();
+                    int have = stack.getCount();
+                    if (have >= need) {
+                        entry.setValue(0);
+                    } else {
+                        entry.setValue(need - have);
+                    }
+                    break;
+                }
+            }
+        }
+
+        for (int count : needed.values()) {
+            if (count > 0) return false; // 材料不足
+        }
+
+        // 扣除材料
+        for (Map.Entry<Block, Integer> entry : missing.entrySet()) {
+            Block block = entry.getKey();
+            int remaining = entry.getValue();
+            net.minecraft.item.Item item = net.minecraft.item.Item.getItemFromBlock(block);
+            for (int i = 0; i < inv.mainInventory.size() && remaining > 0; i++) {
+                net.minecraft.item.ItemStack stack = inv.mainInventory.get(i);
+                if (stack.getItem() == item) {
+                    int take = Math.min(stack.getCount(), remaining);
+                    int removed = inv.decrStackSize(i, take).getCount();
+                    remaining -= removed;
+                }
+            }
+        }
+
+        // 放置方块
+        placeMissingBlocks(world, controllerPos, player);
+        return true;
     }
 }

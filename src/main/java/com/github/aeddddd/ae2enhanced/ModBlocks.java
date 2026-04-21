@@ -2,6 +2,7 @@ package com.github.aeddddd.ae2enhanced;
 
 import com.github.aeddddd.ae2enhanced.block.*;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyController;
+import com.github.aeddddd.ae2enhanced.tile.TileAssemblyMeInterface;
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemBlock;
@@ -33,6 +34,7 @@ public class ModBlocks {
         );
 
         GameRegistry.registerTileEntity(TileAssemblyController.class, AE2Enhanced.MOD_ID + ":assembly_controller");
+        GameRegistry.registerTileEntity(TileAssemblyMeInterface.class, AE2Enhanced.MOD_ID + ":assembly_me_interface");
     }
 
     @SubscribeEvent

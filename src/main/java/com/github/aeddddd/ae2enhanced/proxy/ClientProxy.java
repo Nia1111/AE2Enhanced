@@ -2,6 +2,8 @@ package com.github.aeddddd.ae2enhanced.proxy;
 
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
 import com.github.aeddddd.ae2enhanced.ModBlocks;
+import com.github.aeddddd.ae2enhanced.ModItems;
+import com.github.aeddddd.ae2enhanced.item.ItemUpgradeCard;
 import net.minecraft.block.Block;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.item.Item;
@@ -41,6 +43,11 @@ public class ClientProxy extends CommonProxy {
         registerBlockItemModel(ModBlocks.ASSEMBLY_CASING);
         registerBlockItemModel(ModBlocks.ASSEMBLY_INNER_WALL);
         registerBlockItemModel(ModBlocks.ASSEMBLY_STABILIZER);
+
+        for (int i = 0; i < ItemUpgradeCard.COUNT; i++) {
+            ModelLoader.setCustomModelResourceLocation(ModItems.UPGRADE_CARD, i,
+                new ModelResourceLocation(ModItems.UPGRADE_CARD.getRegistryName(), "inventory"));
+        }
     }
 
     @SideOnly(Side.CLIENT)

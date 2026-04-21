@@ -13,5 +13,6 @@ public class BlockAssemblyCasing extends Block {
         setHardness(4.0F);
         setResistance(8.0F);
         setHarvestLevel("pickaxe", 1);
+        setCreativeTab(net.minecraft.creativetab.CreativeTabs.BUILDING_BLOCKS);
     }
 }

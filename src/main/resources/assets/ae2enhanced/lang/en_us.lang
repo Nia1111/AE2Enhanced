@@ -3,3 +3,43 @@ tile.ae2enhanced.assembly_me_interface.name=Assembly ME Interface
 tile.ae2enhanced.assembly_casing.name=Assembly Casing
 tile.ae2enhanced.assembly_inner_wall.name=Assembly Inner Wall
 tile.ae2enhanced.assembly_stabilizer.name=Assembly Stabilizer
+
+gui.ae2enhanced.unformed.title=§cUnassembled
+gui.ae2enhanced.unformed.subtitle=Supercausal Assembly Hub
+gui.ae2enhanced.unformed.ready=Structure Complete — Ready to Assemble
+gui.ae2enhanced.unformed.hint=Click the button below to assemble
+gui.ae2enhanced.unformed.missing=Missing Materials:
+gui.ae2enhanced.unformed.header.material=Material
+gui.ae2enhanced.unformed.header.quantity=Qty
+gui.ae2enhanced.unformed.status.ready=Status: Ready
+gui.ae2enhanced.unformed.status.missing=Status: Materials Insufficient
+gui.ae2enhanced.assemble.creative=Assemble (Creative)
+gui.ae2enhanced.assemble.survival=Assemble
+gui.ae2enhanced.assemble.insufficient=Insufficient Materials
+gui.ae2enhanced.formed.title=§aSupercausal Assembly Hub
+gui.ae2enhanced.formed.subtitle=Assembled — Operational
+gui.ae2enhanced.formed.status=§aStructure Fully Formed
+gui.ae2enhanced.formed.info=Pattern slots and upgrade modules
+gui.ae2enhanced.formed.placeholder=will be available in Milestone 4
+gui.ae2enhanced.formed.bottom=AE Network Integration — Active
+gui.ae2enhanced.formed.network.active=§aNetwork: Online
+gui.ae2enhanced.formed.network.booting=§eNetwork: Booting
+gui.ae2enhanced.formed.network.offline=§cNetwork: Offline — Connect ME Interface to AE Cable
+
+gui.ae2enhanced.formed.upgrades=Upgrades
+gui.ae2enhanced.formed.patterns=Patterns
+gui.ae2enhanced.formed.parallel=Parallel: %d
+
+gui.ae2enhanced.tooltip.upgrades=§bUpgrades
+gui.ae2enhanced.tooltip.upgrades.parallel=• Parallel Upgrade: Increases parallel cap
+gui.ae2enhanced.tooltip.upgrades.speed=• Speed Upgrade: Reduces crafting time
+
+gui.ae2enhanced.tooltip.patterns=§bPattern Storage
+gui.ae2enhanced.tooltip.patterns.desc=Insert encoded Crafting Patterns
+
+item.ae2enhanced.upgrade_card.parallel.name=Parallel Upgrade Card
+item.ae2enhanced.upgrade_card.speed.name=Speed Upgrade Card
+item.ae2enhanced.upgrade_card.efficiency.name=Efficiency Upgrade Card
+item.ae2enhanced.upgrade_card.capacity.name=Capacity Upgrade Card
+item.ae2enhanced.upgrade_card.reserved1.name=Upgrade Card (Reserved)
+item.ae2enhanced.upgrade_card.reserved2.name=Upgrade Card (Reserved)

@@ -2,12 +2,15 @@ buildscript {
     repositories {
         jcenter()
         maven { url = "https://files.minecraftforge.net/maven" }
+        maven { url = "https://repo.spongepowered.org/repository/maven-public/" }
     }
     dependencies {
         classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
+        classpath 'org.spongepowered:mixingradle:0.6-SNAPSHOT'
     }
 }
 apply plugin: 'net.minecraftforge.gradle.forge'
+apply plugin: 'org.spongepowered.mixin'
 
 version = '1.0-SNAPSHOT'
 group = 'com.github.aeddddd'
@@ -27,10 +30,16 @@ minecraft {
 
 repositories {
     mavenCentral()
+    maven { url = 'https://maven.cleanroommc.com' }
 }
 
 dependencies {
     compile files('libs/ae2-uel-v0.56.7.jar')
+    compile('zone.rong:mixinbooter:8.9') {
+        transitive = false
+    }
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
     testImplementation 'org.junit.jupiter:junit-jupiter-params:5.10.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.0'
@@ -39,6 +48,8 @@ dependencies {
 test {
     useJUnitPlatform()
 }
+
+// MixinGradle 0.6 + annotationProcessor 会自动处理 refmap，无需手动配置
 
 processResources {
     inputs.property 'version', project.version
@@ -49,5 +60,15 @@ processResources {
     }
     from(sourceSets.main.resources.srcDirs) {
         exclude 'mcmod.info'
+    }
+}
+
+jar {
+    manifest {
+        attributes([
+            'FMLCorePluginContainsFMLMod': true,
+            'ForceLoadAsMod': true,
+            'FMLCorePlugin': 'com.github.aeddddd.ae2enhanced.mixin.AssemblyMixinPlugin'
+        ])
     }
 }

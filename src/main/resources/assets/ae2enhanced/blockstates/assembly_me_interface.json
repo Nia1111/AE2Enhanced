@@ -1,6 +1,9 @@
 {
   "variants": {
-    "normal": {
+    "formed=false": {
+      "model": "ae2enhanced:assembly_me_interface"
+    },
+    "formed=true": {
       "model": "ae2enhanced:assembly_me_interface"
     },
     "inventory": {

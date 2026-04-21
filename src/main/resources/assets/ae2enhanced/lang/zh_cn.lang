@@ -3,3 +3,43 @@ tile.ae2enhanced.assembly_me_interface.name=装配枢纽 ME 接口
 tile.ae2enhanced.assembly_casing.name=装配枢纽外壳
 tile.ae2enhanced.assembly_inner_wall.name=装配枢纽内壁
 tile.ae2enhanced.assembly_stabilizer.name=装配枢纽稳定器
+
+gui.ae2enhanced.unformed.title=§c未组装
+gui.ae2enhanced.unformed.subtitle=超因果装配枢纽
+gui.ae2enhanced.unformed.ready=结构完整 — 可以组装
+gui.ae2enhanced.unformed.hint=点击下方按钮进行组装
+gui.ae2enhanced.unformed.missing=缺失材料：
+gui.ae2enhanced.unformed.header.material=材料
+gui.ae2enhanced.unformed.header.quantity=数量
+gui.ae2enhanced.unformed.status.ready=状态：准备就绪
+gui.ae2enhanced.unformed.status.missing=状态：材料不足
+gui.ae2enhanced.assemble.creative=一键组装
+gui.ae2enhanced.assemble.survival=消耗材料组装
+gui.ae2enhanced.assemble.insufficient=材料不足
+gui.ae2enhanced.formed.title=§a超因果装配枢纽
+gui.ae2enhanced.formed.subtitle=已组装 — 运行中
+gui.ae2enhanced.formed.status=§a结构完全形成
+gui.ae2enhanced.formed.info=样板槽位与升级模块
+gui.ae2enhanced.formed.placeholder=将在 M4 中开放
+gui.ae2enhanced.formed.bottom=AE 网络集成 — 已激活
+gui.ae2enhanced.formed.network.active=§a网络：在线
+gui.ae2enhanced.formed.network.booting=§e网络：启动中
+gui.ae2enhanced.formed.network.offline=§c网络：离线 — 请将 ME 接口连接至 AE 线缆
+
+gui.ae2enhanced.formed.upgrades=升级模块
+gui.ae2enhanced.formed.patterns=样板存储
+gui.ae2enhanced.formed.parallel=并行：%d
+
+gui.ae2enhanced.tooltip.upgrades=§b升级模块
+GUI.ae2enhanced.tooltip.upgrades.parallel=• 并行升级卡：提升并行上限
+GUI.ae2enhanced.tooltip.upgrades.speed=• 速度升级卡：减少合成时间
+
+gui.ae2enhanced.tooltip.patterns=§b样板存储
+gui.ae2enhanced.tooltip.patterns.desc=放入编码的合成样板（Crafting Pattern）
+
+item.ae2enhanced.upgrade_card.parallel.name=并行升级卡
+item.ae2enhanced.upgrade_card.speed.name=速度升级卡
+item.ae2enhanced.upgrade_card.efficiency.name=能效升级卡
+item.ae2enhanced.upgrade_card.capacity.name=扩容升级卡
+item.ae2enhanced.upgrade_card.reserved1.name=升级卡（预留）
+item.ae2enhanced.upgrade_card.reserved2.name=升级卡（预留）

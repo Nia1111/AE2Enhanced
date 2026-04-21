@@ -7,19 +7,19 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.event.world.BlockEvent;
-import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 @Mod.EventBusSubscriber(modid = AE2Enhanced.MOD_ID)
 public class StructureEventHandler {
 
-    // 待验证的控制器位置 -> 剩余 tick
-    private static final Map<BlockPos, Integer> pendingChecks = new HashMap<>();
+    // 按维度分离的待验证控制器位置 -> 剩余 tick
+    private static final Map<Integer, Map<BlockPos, Integer>> pendingChecks = new HashMap<>();
 
     @SubscribeEvent
     public static void onNeighborNotify(net.minecraftforge.event.world.BlockEvent.NeighborNotifyEvent event) {
@@ -36,6 +36,10 @@ public class StructureEventHandler {
         if (world.isRemote) return;
 
         BlockPos pos = event.getPos();
+        // 如果是控制器本身被破坏，立即解散（不用等 tick）
+        if (world.getBlockState(pos).getBlock() == ModBlocks.ASSEMBLY_CONTROLLER) {
+            AssemblyStructure.disassemble(world, pos);
+        }
         checkSurroundingControllers(world, pos);
     }
 
@@ -44,7 +48,11 @@ public class StructureEventHandler {
         if (event.phase != TickEvent.Phase.END || event.world.isRemote) return;
 
         World world = event.world;
-        pendingChecks.entrySet().removeIf(entry -> {
+        int dimId = world.provider.getDimension();
+        Map<BlockPos, Integer> dimChecks = pendingChecks.get(dimId);
+        if (dimChecks == null) return;
+
+        dimChecks.entrySet().removeIf(entry -> {
             BlockPos controllerPos = entry.getKey();
             int ticks = entry.getValue() - 1;
             if (ticks <= 0) {
@@ -57,25 +65,21 @@ public class StructureEventHandler {
     }
 
     private static void checkSurroundingControllers(World world, BlockPos changedPos) {
-        // 搜索以 changedPos 为中心、半径约 15 格范围内的控制器
-        // 为了效率，改为检查 changedPos 是否属于某个已知结构的 ALL_SET 偏移
-        // 简化：遍历附近可能的几何中心，反推控制器位置
-        // 需要修改优化！！
-        for (int dx = -15; dx <= 15; dx++) {
-            for (int dy = -15; dy <= 15; dy++) {
-                for (int dz = -15; dz <= 15; dz++) {
-                    if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) > 15) continue;
-                    BlockPos checkPos = changedPos.add(dx, dy, dz);
-                    if (world.getBlockState(checkPos).getBlock() == ModBlocks.ASSEMBLY_CONTROLLER) {
-                        scheduleCheck(checkPos);
-                    }
-                }
+        ControllerIndex index = ControllerIndex.get(world);
+        if (index == null) return;
+
+        Set<BlockPos> controllers = index.getAll();
+        for (BlockPos controllerPos : controllers) {
+            BlockPos origin = AssemblyStructure.getOriginFromController(controllerPos);
+            BlockPos rel = changedPos.subtract(origin);
+            if (AssemblyStructure.ALL_SET.contains(rel)) {
+                scheduleCheck(world.provider.getDimension(), controllerPos);
             }
         }
     }
 
-    private static void scheduleCheck(BlockPos controllerPos) {
-        pendingChecks.put(controllerPos, 20);
+    private static void scheduleCheck(int dimId, BlockPos controllerPos) {
+        pendingChecks.computeIfAbsent(dimId, k -> new HashMap<>()).put(controllerPos, 20);
     }
 
     private static void validateAndUpdate(World world, BlockPos controllerPos) {

@@ -1,6 +1,9 @@
 package com.github.aeddddd.ae2enhanced.block;
 
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+import com.github.aeddddd.ae2enhanced.gui.GuiHandler;
+import com.github.aeddddd.ae2enhanced.structure.AssemblyStructure;
+import com.github.aeddddd.ae2enhanced.structure.ControllerIndex;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyController;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
@@ -23,6 +26,7 @@ public class BlockAssemblyController extends Block {
         setHardness(5.0F);
         setResistance(10.0F);
         setHarvestLevel("pickaxe", 2);
+        setCreativeTab(net.minecraft.creativetab.CreativeTabs.BUILDING_BLOCKS);
     }
 
     @Override
@@ -37,11 +41,35 @@ public class BlockAssemblyController extends Block {
     }
 
     @Override
+    public void onBlockAdded(World world, BlockPos pos, IBlockState state) {
+        super.onBlockAdded(world, pos, state);
+        if (!world.isRemote) {
+            ControllerIndex index = ControllerIndex.get(world);
+            if (index != null) {
+                index.add(pos);
+            }
+        }
+    }
+
+    @Override
+    public void breakBlock(World world, BlockPos pos, IBlockState state) {
+        if (!world.isRemote) {
+            ControllerIndex index = ControllerIndex.get(world);
+            if (index != null) {
+                index.remove(pos);
+            }
+            AssemblyStructure.disassemble(world, pos);
+        }
+        super.breakBlock(world, pos, state);
+    }
+
+    @Override
     public boolean onBlockActivated(World world, BlockPos pos, IBlockState state, EntityPlayer player, EnumHand hand, EnumFacing facing, float hitX, float hitY, float hitZ) {
+        if (player.isSneaking()) return false;
         if (!world.isRemote) {
             TileEntity te = world.getTileEntity(pos);
             if (te instanceof TileAssemblyController) {
-                // TODO: 打开 GUI（M2 实现）
+                player.openGui(AE2Enhanced.instance, GuiHandler.GUI_ASSEMBLY_CONTROLLER, world, pos.getX(), pos.getY(), pos.getZ());
             }
         }
         return true;
