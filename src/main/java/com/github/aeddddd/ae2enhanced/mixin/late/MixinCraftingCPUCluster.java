@@ -2,7 +2,6 @@ package com.github.aeddddd.ae2enhanced.mixin.late;
 
 import appeng.api.networking.crafting.ICraftingMedium;
 import appeng.api.networking.crafting.ICraftingPatternDetails;
-import appeng.api.storage.data.IAEItemStack;
 import appeng.me.cluster.implementations.CraftingCPUCluster;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyController;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyMeInterface;
@@ -12,7 +11,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.Map;
 
 @Mixin(value = CraftingCPUCluster.class, remap = false, priority = 1000)
@@ -33,19 +31,30 @@ public class MixinCraftingCPUCluster {
     private boolean redirectPushPattern(ICraftingMedium provider, ICraftingPatternDetails details, InventoryCrafting table) {
         if (provider instanceof TileAssemblyMeInterface) {
             TileAssemblyController controller = ((TileAssemblyMeInterface) provider).getController();
-            if (controller != null && controller.isVirtualPattern(details)) {
-                long remaining = getRemainingValue(details);
-                if (remaining > 0) {
-                    boolean success = controller.executeBatch(details, remaining);
-                    if (success) {
-                        setRemainingValue(details, 0);
-                        addExpectedOutputsToWaitingFor(details, remaining);
-                        return true;
+            if (controller != null) {
+                // 获取 CraftingCPU 的 ActionSource，让 AE2 能正确追踪产物归属
+                CraftingCPUCluster cpu = (CraftingCPUCluster) (Object) this;
+                appeng.api.networking.security.IActionSource source = cpu.getActionSource();
+                controller.setCurrentActionSource(source);
+                try {
+                    if (controller.isVirtualPattern(details)) {
+                        long remaining = getRemainingValue(details);
+                        if (remaining > 0) {
+                            boolean success = controller.executeBatch(details, remaining);
+                            if (success) {
+                                setRemainingValue(details, 0);
+                                return true;
+                            }
+                        }
                     }
+                    // 回退到标准 pushPattern（1 份），用于第一次 cache miss 或真实合成
+                    return provider.pushPattern(details, table);
+                } finally {
+                    controller.setCurrentActionSource(null);
                 }
             }
         }
-        // 回退到标准 pushPattern（1 份）
+        // 非 Assembly Hub，走原版逻辑
         return provider.pushPattern(details, table);
     }
 
@@ -90,46 +99,4 @@ public class MixinCraftingCPUCluster {
         } catch (Exception ignored) {}
     }
 
-    /**
-     * 将预期产物添加到 CraftingCPUCluster.waitingFor，使 AE2 能正确追踪任务完成。
-     */
-    private void addExpectedOutputsToWaitingFor(ICraftingPatternDetails details, long batchSize) {
-        try {
-            CraftingCPUCluster cpu = (CraftingCPUCluster) (Object) this;
-
-            // 获取 waitingFor 字段
-            Field waitingForField = CraftingCPUCluster.class.getDeclaredField("waitingFor");
-            waitingForField.setAccessible(true);
-            Object waitingFor = waitingForField.get(cpu);
-
-            // 获取 postCraftingStatusChange 方法
-            Method postMethod = CraftingCPUCluster.class.getDeclaredMethod("postCraftingStatusChange", IAEItemStack.class);
-            postMethod.setAccessible(true);
-
-            // 获取 add 方法（IItemList.add）
-            Method addMethod = null;
-            for (Method m : waitingFor.getClass().getMethods()) {
-                if (m.getName().equals("add") && m.getParameterCount() == 1) {
-                    addMethod = m;
-                    break;
-                }
-            }
-            if (addMethod == null) return;
-
-            for (IAEItemStack outputTemplate : details.getCondensedOutputs()) {
-                if (outputTemplate == null || outputTemplate.getStackSize() <= 0) continue;
-
-                long totalCount = outputTemplate.getStackSize() * batchSize;
-                if (totalCount <= 0) continue;
-
-                IAEItemStack expected = outputTemplate.copy();
-                expected.setStackSize(totalCount);
-
-                // 添加到 waitingFor
-                addMethod.invoke(waitingFor, expected);
-                // 通知 AE2 状态变化
-                postMethod.invoke(cpu, expected.copy());
-            }
-        } catch (Exception ignored) {}
-    }
 }

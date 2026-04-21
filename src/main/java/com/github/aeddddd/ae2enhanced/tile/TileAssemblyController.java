@@ -80,6 +80,17 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
     private boolean patternsDirty = false;
     private int patternRefreshTicks = 0;
 
+    /** 当前合成任务的 ActionSource（由 Mixin 在 pushPattern 前设置），用于让 AE2 正确追踪产物 */
+    private IActionSource currentSource = null;
+
+    public void setCurrentActionSource(IActionSource source) {
+        this.currentSource = source;
+    }
+
+    private IActionSource getEffectiveSource() {
+        return currentSource != null ? currentSource : MACHINE_SOURCE;
+    }
+
     public boolean isFormed() {
         return formed;
     }
@@ -261,7 +272,7 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             while (count > 0) {
                 long batch = Math.min(count, Integer.MAX_VALUE);
                 aeStack.setStackSize(batch);
-                IAEItemStack remainder = monitor.injectItems(aeStack, Actionable.MODULATE, MACHINE_SOURCE);
+                IAEItemStack remainder = monitor.injectItems(aeStack, Actionable.MODULATE, getEffectiveSource());
 
                 if (remainder == null || remainder.getStackSize() == 0) {
                     count = 0;
@@ -342,7 +353,7 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
 
         // 只注入 1 份（AE2 每次 pushPattern 只发配 1 份输入）
         aeOutput.setStackSize(output.getCount());
-        IAEItemStack remainder = monitor.injectItems(aeOutput, Actionable.MODULATE, MACHINE_SOURCE);
+        IAEItemStack remainder = monitor.injectItems(aeOutput, Actionable.MODULATE, getEffectiveSource());
 
         if (remainder == null || remainder.getStackSize() == 0) {
             // 全部注入成功
@@ -443,7 +454,7 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             IAEItemStack aeOutput = outputTemplate.copy();
             aeOutput.setStackSize(totalCount);
 
-            IAEItemStack remainder = monitor.injectItems(aeOutput, Actionable.MODULATE, MACHINE_SOURCE);
+            IAEItemStack remainder = monitor.injectItems(aeOutput, Actionable.MODULATE, getEffectiveSource());
             if (remainder != null && remainder.getStackSize() > 0) {
                 // 网络满载，剩余部分放入 pendingOutputs 后续再注入
                 long remCount = remainder.getStackSize();
