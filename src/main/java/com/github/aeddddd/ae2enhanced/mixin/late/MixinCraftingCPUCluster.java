@@ -43,7 +43,7 @@ public class MixinCraftingCPUCluster {
             Field waitingForField = CraftingCPUCluster.class.getDeclaredField("waitingFor");
             waitingForField.setAccessible(true);
             Object waitingFor = waitingForField.get(cpu);
-            Method waitingForAdd = waitingFor.getClass().getMethod("addStorage", Object.class);
+            Method waitingForAdd = waitingFor.getClass().getMethod("addStorage", IAEItemStack.class);
 
             // 反射获取 remainingOperations
             Field remOpsField = CraftingCPUCluster.class.getDeclaredField("remainingOperations");
