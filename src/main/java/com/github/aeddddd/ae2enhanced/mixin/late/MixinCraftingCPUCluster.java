@@ -3,7 +3,9 @@ package com.github.aeddddd.ae2enhanced.mixin.late;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.crafting.ICraftingMedium;
 import appeng.api.networking.crafting.ICraftingPatternDetails;
+import appeng.api.storage.IMEInventory;
 import appeng.api.storage.data.IAEItemStack;
+import appeng.api.storage.data.IItemList;
 import appeng.me.cluster.implementations.CraftingCPUCluster;
 import appeng.me.cache.CraftingGridCache;
 import appeng.api.networking.energy.IEnergyGrid;
@@ -32,6 +34,7 @@ public class MixinCraftingCPUCluster {
     private static Method postChange;
     private static Field taskProgressValueField;
     private static Method completeJobMethod;
+    private static Field meInventoryItemListField;
     private static boolean reflectionReady = false;
 
     private static void initReflection() throws Exception {
@@ -53,6 +56,9 @@ public class MixinCraftingCPUCluster {
         taskProgressValueField.setAccessible(true);
         completeJobMethod = CraftingCPUCluster.class.getDeclaredMethod("completeJob");
         completeJobMethod.setAccessible(true);
+        Class<?> meCraftingInvClass = Class.forName("appeng.crafting.MECraftingInventory");
+        meInventoryItemListField = meCraftingInvClass.getDeclaredField("itemList");
+        meInventoryItemListField.setAccessible(true);
         reflectionReady = true;
     }
 
@@ -72,7 +78,6 @@ public class MixinCraftingCPUCluster {
 
             if (!isComplete && tasks.isEmpty()) {
                 completeJobMethod.invoke(cpu);
-                System.out.println("[AE2E] completeJob() invoked via updateCraftingLogic (tasks empty)");
             }
         } catch (Exception e) {
             System.err.println("[AE2E] onUpdateCraftingLogicHead error: " + e);
@@ -118,25 +123,62 @@ public class MixinCraftingCPUCluster {
                         appeng.api.networking.security.IActionSource source = cpu.getActionSource();
                         controller.setCurrentActionSource(source);
                         try {
-                            boolean success = controller.executeBatch(details, remaining);
-                            if (success) {
-                                toRemove.add(details);
-                                remainingItemCount -= remaining;
-                                changed = true;
+                            // 直接操作 CPU inventory 的内部列表，保证嵌套配方时产物能被上层 canCraft() 识别
+                            IMEInventory<IAEItemStack> cpuInventory = cpu.getInventory();
+                            @SuppressWarnings("unchecked")
+                            IItemList<IAEItemStack> itemList = (IItemList<IAEItemStack>) meInventoryItemListField.get(cpuInventory);
+                            appeng.api.config.Actionable SIMULATE = appeng.api.config.Actionable.SIMULATE;
+                            appeng.api.config.Actionable MODULATE = appeng.api.config.Actionable.MODULATE;
 
-                                for (IAEItemStack outputTemplate : details.getCondensedOutputs()) {
-                                    if (outputTemplate == null || outputTemplate.getStackSize() <= 0) continue;
-                                    IAEItemStack expected = outputTemplate.copy();
-                                    expected.setStackSize(outputTemplate.getStackSize() * remaining);
-
-                                    // 通知监听器（终端等）网络物品变化
-                                    postChange.invoke(cpu, expected.copy(), source);
-                                    // 通知 crafting grid 状态变化
-                                    postCraftingStatusChange.invoke(cpu, expected.copy());
+                            // 1. SIMULATE 检查原料是否足够
+                            boolean canExtract = true;
+                            for (IAEItemStack inputTemplate : details.getCondensedInputs()) {
+                                if (inputTemplate == null || inputTemplate.getStackSize() <= 0) continue;
+                                long totalNeed = inputTemplate.getStackSize() * remaining;
+                                if (totalNeed <= 0) { canExtract = false; break; }
+                                IAEItemStack need = inputTemplate.copy();
+                                need.setStackSize(totalNeed);
+                                IAEItemStack simResult = cpuInventory.extractItems(need, SIMULATE, source);
+                                if (simResult == null || simResult.getStackSize() < totalNeed) {
+                                    canExtract = false;
+                                    break;
                                 }
-
-                                System.out.println("[AE2E] BATCH: removed task remaining=" + remaining);
                             }
+                            if (!canExtract) {
+                                continue; // 原料不足，留给 AE2 正常流程或下次循环
+                            }
+
+                            // 2. MODULATE 扣除原料并通知监听器
+                            for (IAEItemStack inputTemplate : details.getCondensedInputs()) {
+                                if (inputTemplate == null || inputTemplate.getStackSize() <= 0) continue;
+                                long totalNeed = inputTemplate.getStackSize() * remaining;
+                                IAEItemStack need = inputTemplate.copy();
+                                need.setStackSize(totalNeed);
+                                IAEItemStack extracted = cpuInventory.extractItems(need, MODULATE, source);
+                                if (extracted != null && extracted.getStackSize() > 0) {
+                                    IAEItemStack diff = extracted.copy();
+                                    diff.setStackSize(-diff.getStackSize());
+                                    postChange.invoke(cpu, diff, source);
+                                    postCraftingStatusChange.invoke(cpu, diff);
+                                }
+                            }
+
+                            // 3. 将产物加入 inventory 内部列表并通知监听器
+                            for (IAEItemStack outputTemplate : details.getCondensedOutputs()) {
+                                if (outputTemplate == null || outputTemplate.getStackSize() <= 0) continue;
+                                long totalCount = outputTemplate.getStackSize() * remaining;
+                                if (totalCount <= 0) continue;
+                                IAEItemStack product = outputTemplate.copy();
+                                product.setStackSize(totalCount);
+                                itemList.add(product);
+                                postChange.invoke(cpu, product.copy(), source);
+                                postCraftingStatusChange.invoke(cpu, product.copy());
+                            }
+
+                            // 4. 移除 entry
+                            toRemove.add(details);
+                            remainingItemCount -= remaining;
+                            changed = true;
                         } finally {
                             controller.setCurrentActionSource(null);
                         }

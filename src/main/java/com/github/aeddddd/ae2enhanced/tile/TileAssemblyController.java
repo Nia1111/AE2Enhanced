@@ -174,17 +174,18 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             patternRefreshTicks = 5;
         }
         if (patternRefreshTicks > 0 && activeMeInterfacePos != null) {
-            patternRefreshTicks--;
-            TileEntity te = world.getTileEntity(activeMeInterfacePos);
-            if (te instanceof TileAssemblyMeInterface) {
-                TileAssemblyMeInterface me = (TileAssemblyMeInterface) te;
-                appeng.me.helpers.AENetworkProxy proxy = me.getProxy();
-                IGridNode node = proxy.getNode();
-                if (node != null && node.getGrid() != null) {
-                    // 发送 MENetworkCraftingPatternChange 事件，通知 AE2 重新扫描该节点的样板
-                    appeng.api.networking.events.MENetworkCraftingPatternChange event =
-                        new appeng.api.networking.events.MENetworkCraftingPatternChange(me, node);
-                    node.getGrid().postEvent(event);
+            if (--patternRefreshTicks == 0) {
+                TileEntity te = world.getTileEntity(activeMeInterfacePos);
+                if (te instanceof TileAssemblyMeInterface) {
+                    TileAssemblyMeInterface me = (TileAssemblyMeInterface) te;
+                    appeng.me.helpers.AENetworkProxy proxy = me.getProxy();
+                    IGridNode node = proxy.getNode();
+                    if (node != null && node.getGrid() != null) {
+                        // 发送 MENetworkCraftingPatternChange 事件，通知 AE2 重新扫描该节点的样板
+                        appeng.api.networking.events.MENetworkCraftingPatternChange event =
+                            new appeng.api.networking.events.MENetworkCraftingPatternChange(me, node);
+                        node.getGrid().postEvent(event);
+                    }
                 }
             }
         }
@@ -306,13 +307,15 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         String key = getPatternKey(patternDetails);
         Boolean cached = patternVirtualCache.get(key);
         boolean isVirtual;
+        IRecipe recipe = null;
+        NonNullList<ItemStack> remaining = null;
 
         if (cached != null) {
             isVirtual = cached;
         } else {
-            IRecipe recipe = CraftingManager.findMatchingRecipe(table, world);
+            recipe = CraftingManager.findMatchingRecipe(table, world);
             if (recipe == null) return false;
-            NonNullList<ItemStack> remaining = recipe.getRemainingItems(table);
+            remaining = recipe.getRemainingItems(table);
             isVirtual = remaining.stream().allMatch(ItemStack::isEmpty);
             patternVirtualCache.put(key, isVirtual);
         }
@@ -320,9 +323,11 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         if (isVirtual) {
             return executeVirtualCrafting(patternDetails, table);
         } else {
-            IRecipe recipe = CraftingManager.findMatchingRecipe(table, world);
-            if (recipe == null) return false;
-            NonNullList<ItemStack> remaining = recipe.getRemainingItems(table);
+            if (recipe == null) {
+                recipe = CraftingManager.findMatchingRecipe(table, world);
+                if (recipe == null) return false;
+                remaining = recipe.getRemainingItems(table);
+            }
             return executeRealCrafting(patternDetails, table, recipe, remaining);
         }
     }
@@ -426,6 +431,10 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
      * 供 Mixin 调用：批量执行虚拟合成，一次性扣除原材料并注入 batchSize 份产物。
      */
     public boolean executeBatch(ICraftingPatternDetails details, long batchSize) {
+        // 实际原料扣除与产物注入已移至 MixinCraftingCPUCluster.batchProcessVirtualTasks
+        // 中直接操作 CraftingCPUCluster.getInventory() 的内部列表，
+        // 以保证嵌套配方时产物能被上层 canCraft() 正确识别。
+        // 这里仅作为 batch 可行性确认（控制器在线、接口有效）。
         if (world == null || world.isRemote || activeMeInterfacePos == null) return false;
         if (batchSize <= 0) return false;
 
@@ -434,45 +443,7 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
 
         appeng.me.helpers.AENetworkProxy proxy = ((TileAssemblyMeInterface) te).getProxy();
         IGridNode node = proxy.getNode();
-        if (node == null || node.getGrid() == null) return false;
-
-        IStorageGrid storage = node.getGrid().getCache(IStorageGrid.class);
-        IItemStorageChannel channel = AEApi.instance().storage().getStorageChannel(IItemStorageChannel.class);
-        IMEMonitor<IAEItemStack> monitor = storage.getInventory(channel);
-
-        IAEItemStack[] condensedOutputs = details.getCondensedOutputs();
-        if (condensedOutputs == null || condensedOutputs.length == 0) return false;
-
-        // 直接注入产物，不碰网络中的原料。
-        // 原料已在 CraftingCPUCluster.submitJob 时预提取到 CPU 的 inventory 中，
-        // 由 AE2 正常 executeCrafting -> pushPattern 流程消耗。
-        // 如果我们从网络中额外提取，会破坏 inventory 余额一致性，导致 canCraft() 失败卡住。
-        for (IAEItemStack outputTemplate : condensedOutputs) {
-            if (outputTemplate == null || outputTemplate.getStackSize() <= 0) continue;
-            long totalCount = outputTemplate.getStackSize() * batchSize;
-            if (totalCount <= 0) return false;
-
-            IAEItemStack aeOutput = outputTemplate.copy();
-            aeOutput.setStackSize(totalCount);
-
-            IAEItemStack remainder = monitor.injectItems(aeOutput, Actionable.MODULATE, getEffectiveSource());
-            if (remainder != null && remainder.getStackSize() > 0) {
-                long remCount = remainder.getStackSize();
-                while (remCount > 0) {
-                    ItemStack proto = outputTemplate.createItemStack();
-                    int batch = (int) Math.min(remCount, proto.getMaxStackSize());
-                    ItemStack stack = proto.copy();
-                    stack.setCount(batch);
-                    pendingOutputs.add(stack);
-                    remCount -= batch;
-                }
-                System.out.println("[AE2E] BATCH inject partial for " + aeOutput.createItemStack().getDisplayName() + " remainder=" + remainder.getStackSize());
-            } else {
-                System.out.println("[AE2E] BATCH injected " + totalCount + "x " + aeOutput.createItemStack().getDisplayName());
-            }
-        }
-
-        return true;
+        return node != null && node.getGrid() != null;
     }
 
     // ---------- ICraftingProvider ----------
@@ -594,12 +565,41 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
 
     @Override
     public NBTTagCompound getUpdateTag() {
-        return writeToNBT(new NBTTagCompound());
+        // 仅同步客户端渲染/GUI 所需的字段，避免 pendingOutputs 造成网络包膨胀
+        NBTTagCompound tag = new NBTTagCompound();
+        tag.setBoolean("formed", formed);
+        tag.setBoolean("networkActive", networkActive);
+        tag.setBoolean("networkPowered", networkPowered);
+        if (activeMeInterfacePos != null) {
+            tag.setInteger("activeMeX", activeMeInterfacePos.getX());
+            tag.setInteger("activeMeY", activeMeInterfacePos.getY());
+            tag.setInteger("activeMeZ", activeMeInterfacePos.getZ());
+        }
+        tag.setTag("items", itemHandler.serializeNBT());
+        return tag;
     }
 
     @Override
     public void handleUpdateTag(NBTTagCompound tag) {
-        readFromNBT(tag);
+        boolean oldFormed = this.formed;
+        this.formed = tag.getBoolean("formed");
+        this.networkActive = tag.getBoolean("networkActive");
+        this.networkPowered = tag.getBoolean("networkPowered");
+        if (tag.hasKey("activeMeX")) {
+            activeMeInterfacePos = new BlockPos(
+                tag.getInteger("activeMeX"),
+                tag.getInteger("activeMeY"),
+                tag.getInteger("activeMeZ")
+            );
+        } else {
+            activeMeInterfacePos = null;
+        }
+        if (tag.hasKey("items")) {
+            itemHandler.deserializeNBT(tag.getCompoundTag("items"));
+        }
+        if (oldFormed != this.formed && world != null) {
+            world.markBlockRangeForRenderUpdate(pos, pos);
+        }
     }
 
     @Override
@@ -609,6 +609,6 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
 
     @Override
     public void onDataPacket(NetworkManager net, SPacketUpdateTileEntity pkt) {
-        readFromNBT(pkt.getNbtCompound());
+        handleUpdateTag(pkt.getNbtCompound());
     }
 }

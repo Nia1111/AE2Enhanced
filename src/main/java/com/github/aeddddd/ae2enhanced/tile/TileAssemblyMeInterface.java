@@ -59,6 +59,14 @@ public class TileAssemblyMeInterface extends TileEntity implements IGridProxyabl
     }
 
     @Override
+    public void invalidate() {
+        super.invalidate();
+        if (proxy != null) {
+            proxy.invalidate();
+        }
+    }
+
+    @Override
     public void update() {
         if (!needsReady || world == null || world.isRemote || controllerPos == null) {
             return;
