@@ -38,7 +38,6 @@ public class MixinCraftingCPUCluster {
     private static Method postChange;
     private static Field taskProgressValueField;
     private static Method completeJobMethod;
-    private static Field meInventoryItemListField;
     private static boolean reflectionReady = false;
     private static boolean reflectionFailed = false;
 
@@ -69,9 +68,6 @@ public class MixinCraftingCPUCluster {
             taskProgressValueField.setAccessible(true);
             completeJobMethod = CraftingCPUCluster.class.getDeclaredMethod("completeJob");
             completeJobMethod.setAccessible(true);
-            Class<?> meCraftingInvClass = Class.forName("appeng.crafting.MECraftingInventory");
-            meInventoryItemListField = meCraftingInvClass.getDeclaredField("itemList");
-            meInventoryItemListField.setAccessible(true);
             reflectionReady = true;
         } catch (Exception e) {
             reflectionFailed = true;
@@ -161,9 +157,8 @@ public class MixinCraftingCPUCluster {
                         controller.setCurrentActionSource(source);
                         try {
                             // 直接操作 CPU inventory 的内部列表，保证嵌套配方时产物能被上层 canCraft() 识别
-                            IMEInventory<IAEItemStack> cpuInventory = cpu.getInventory();
-                            @SuppressWarnings("unchecked")
-                            IItemList<IAEItemStack> itemList = (IItemList<IAEItemStack>) meInventoryItemListField.get(cpuInventory);
+                            appeng.crafting.MECraftingInventory meInv = (appeng.crafting.MECraftingInventory) cpu.getInventory();
+                            IItemList<IAEItemStack> itemList = meInv.getItemList();
                             appeng.api.config.Actionable SIMULATE = appeng.api.config.Actionable.SIMULATE;
                             appeng.api.config.Actionable MODULATE = appeng.api.config.Actionable.MODULATE;
 
@@ -175,7 +170,7 @@ public class MixinCraftingCPUCluster {
                                 if (totalNeed <= 0) { canExtract = false; break; }
                                 IAEItemStack need = inputTemplate.copy();
                                 need.setStackSize(totalNeed);
-                                IAEItemStack simResult = cpuInventory.extractItems(need, SIMULATE, source);
+                                IAEItemStack simResult = meInv.extractItems(need, SIMULATE, source);
                                 if (simResult == null || simResult.getStackSize() < totalNeed) {
                                     canExtract = false;
                                     break;
@@ -191,7 +186,7 @@ public class MixinCraftingCPUCluster {
                                 long totalNeed = inputTemplate.getStackSize() * remaining;
                                 IAEItemStack need = inputTemplate.copy();
                                 need.setStackSize(totalNeed);
-                                IAEItemStack extracted = cpuInventory.extractItems(need, MODULATE, source);
+                                IAEItemStack extracted = meInv.extractItems(need, MODULATE, source);
                                 if (extracted != null && extracted.getStackSize() > 0) {
                                     IAEItemStack diff = extracted.copy();
                                     diff.setStackSize(-diff.getStackSize());
