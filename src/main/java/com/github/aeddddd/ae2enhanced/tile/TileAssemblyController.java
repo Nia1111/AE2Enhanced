@@ -99,24 +99,21 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         return itemHandler;
     }
 
+    /**
+     * 获取当前并行上限。并行升级卡固定在槽位 0，堆叠数量即为安装数量。
+     * 0 张 = 64，每多 1 张 ×32，5 张 = Long.MAX_VALUE。
+     */
     public long getParallelCap() {
-        int parallelCount = 0;
-        for (int i = 0; i < UPGRADE_SLOTS; i++) {
-            ItemStack stack = itemHandler.getStackInSlot(i);
-            if (!stack.isEmpty() && stack.getItem() instanceof ItemUpgradeCard && stack.getMetadata() == ItemUpgradeCard.META_PARALLEL) {
-                parallelCount++;
-            }
+        ItemStack stack = itemHandler.getStackInSlot(0);
+        if (stack.isEmpty() || !(stack.getItem() instanceof ItemUpgradeCard) || stack.getMetadata() != ItemUpgradeCard.META_PARALLEL) {
+            return 64;
         }
-        if (parallelCount >= 5) {
-            return Long.MAX_VALUE;
-        }
+        int count = stack.getCount();
+        if (count >= 5) return Long.MAX_VALUE;
         long cap = 64;
-        for (int i = 0; i < parallelCount; i++) {
+        for (int i = 0; i < count; i++) {
             cap = cap * 32;
-            if (cap > 67108864) {
-                cap = 67108864;
-                break;
-            }
+            if (cap > 67108864) return 67108864;
         }
         return cap;
     }
@@ -412,11 +409,15 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         return true;
     }
 
+    /**
+     * 获取当前合成延迟 tick 数。速度升级卡固定在槽位 1，堆叠数量即为安装数量。
+     * 每张减半，最低 1 tick。
+     */
     private int getCraftingTicks() {
         int ticks = 20;
-        for (int i = 0; i < UPGRADE_SLOTS; i++) {
-            ItemStack upgrade = itemHandler.getStackInSlot(i);
-            if (upgrade.getItem() instanceof ItemUpgradeCard && upgrade.getMetadata() == ItemUpgradeCard.META_SPEED) {
+        ItemStack stack = itemHandler.getStackInSlot(1);
+        if (!stack.isEmpty() && stack.getItem() instanceof ItemUpgradeCard && stack.getMetadata() == ItemUpgradeCard.META_SPEED) {
+            for (int i = 0; i < stack.getCount() && ticks > 1; i++) {
                 ticks = Math.max(ticks / 2, 1);
             }
         }

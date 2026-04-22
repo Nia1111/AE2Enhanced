@@ -2,7 +2,7 @@
 {
   "modid": "ae2enhanced",
   "name": "AE2Enhanced",
-  "description": "超因果装配枢纽 - Supercausal Assembly Hub for AE2-UEL",
+  "description": "额外添加合成多方块:超因果装配枢纽 - Supercausal Assembly Hub for AE2-UEL",
   "version": "${version}",
   "mcversion": "${mcversion}",
   "url": "",

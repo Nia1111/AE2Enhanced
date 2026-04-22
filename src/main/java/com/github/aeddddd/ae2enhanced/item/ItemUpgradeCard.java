@@ -45,25 +45,40 @@ public class ItemUpgradeCard extends Item {
         }
     }
 
+    /**
+     * 获取指定类型升级卡在装配枢纽升级槽中的最大堆叠数量。
+     * 槽位索引与 metadata 一一对应：0=并行, 1=速度, 2=效率, 3=扩容, 4=预留1, 5=预留2
+     */
+    public static int getMaxStackForMeta(int meta) {
+        switch (meta) {
+            case META_PARALLEL: return 5;   // 5张 → Long.MAX_VALUE
+            case META_SPEED:    return 5;   // 5张 → 1 tick
+            case META_EFFICIENCY: return 10; // 预留
+            case META_CAPACITY:   return 10; // 预留
+            default:              return 10; // 预留
+        }
+    }
+
     @Override
     public void addInformation(ItemStack stack, @Nullable World worldIn, List<String> tooltip, ITooltipFlag flagIn) {
         int meta = stack.getMetadata();
+        int max = getMaxStackForMeta(meta);
         switch (meta) {
             case META_PARALLEL:
                 tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.parallel.tooltip"));
-                tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.parallel.tooltip.detail"));
+                tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.parallel.tooltip.detail", max));
                 break;
             case META_SPEED:
                 tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.speed.tooltip"));
-                tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.speed.tooltip.detail"));
+                tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.speed.tooltip.detail", max));
                 break;
             case META_EFFICIENCY:
                 tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.efficiency.tooltip"));
-                tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.efficiency.tooltip.detail"));
+                tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.efficiency.tooltip.detail", max));
                 break;
             case META_CAPACITY:
                 tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.capacity.tooltip"));
-                tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.capacity.tooltip.detail"));
+                tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.capacity.tooltip.detail", max));
                 break;
             default:
                 tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.reserved.tooltip"));

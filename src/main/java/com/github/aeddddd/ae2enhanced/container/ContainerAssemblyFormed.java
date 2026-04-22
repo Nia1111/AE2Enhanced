@@ -26,20 +26,21 @@ public class ContainerAssemblyFormed extends Container {
         this.tile = tile;
         IItemHandler handler = tile.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
 
-        // 升级槽：2行×3列，槽位 0~5
+        // 升级槽：2行×3列，槽位 0~5，每种升级卡对应固定槽位
         for (int row = 0; row < 2; ++row) {
             for (int col = 0; col < 3; ++col) {
-                int index = row * 3 + col;
+                final int index = row * 3 + col;
                 this.addSlotToContainer(new SlotItemHandler(handler, index,
                     UPGRADE_X + col * 20, UPGRADE_Y + row * 20) {
                     @Override
                     public boolean isItemValid(ItemStack stack) {
-                        return stack.getItem() instanceof ItemUpgradeCard;
+                        return stack.getItem() instanceof ItemUpgradeCard
+                            && stack.getMetadata() == index;
                     }
 
                     @Override
                     public int getItemStackLimit(ItemStack stack) {
-                        return 1;
+                        return ItemUpgradeCard.getMaxStackForMeta(index);
                     }
                 });
             }
@@ -85,9 +86,14 @@ public class ContainerAssemblyFormed extends Container {
                     return ItemStack.EMPTY;
                 }
             } else {
-                // 从玩家背包移到升级槽（仅限升级卡）
+                // 从玩家背包移到对应升级槽（按 metadata 一一对应）
                 if (itemstack1.getItem() instanceof ItemUpgradeCard) {
-                    if (!this.mergeItemStack(itemstack1, upgradeStart, upgradeEnd, false)) {
+                    int meta = itemstack1.getMetadata();
+                    if (meta >= 0 && meta < TileAssemblyController.UPGRADE_SLOTS) {
+                        if (!this.mergeItemStack(itemstack1, meta, meta + 1, false)) {
+                            return ItemStack.EMPTY;
+                        }
+                    } else {
                         return ItemStack.EMPTY;
                     }
                 } else {

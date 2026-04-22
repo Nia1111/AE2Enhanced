@@ -45,16 +45,16 @@ gui.ae2enhanced.tooltip.patterns.desc=Insert encoded Crafting Patterns
 
 item.ae2enhanced.upgrade_card.parallel.name=Parallel Upgrade Card
 item.ae2enhanced.upgrade_card.parallel.tooltip=§bParallel Upgrade Card
-item.ae2enhanced.upgrade_card.parallel.tooltip.detail=§7Each card increases parallel cap (5 cards = infinite)
+item.ae2enhanced.upgrade_card.parallel.tooltip.detail=§7Each card increases parallel cap (%d cards = infinite)
 item.ae2enhanced.upgrade_card.speed.name=Speed Upgrade Card
 item.ae2enhanced.upgrade_card.speed.tooltip=§bSpeed Upgrade Card
-item.ae2enhanced.upgrade_card.speed.tooltip.detail=§7Each card reduces crafting time by 50%%
+item.ae2enhanced.upgrade_card.speed.tooltip.detail=§7Each card reduces crafting time by 50%% (%d cards = 1 tick)
 item.ae2enhanced.upgrade_card.efficiency.name=Efficiency Upgrade Card
 item.ae2enhanced.upgrade_card.efficiency.tooltip=§bEfficiency Upgrade Card
-item.ae2enhanced.upgrade_card.efficiency.tooltip.detail=§7Reserved feature, not yet implemented
+item.ae2enhanced.upgrade_card.efficiency.tooltip.detail=§7Reserved feature, max %d cards
 item.ae2enhanced.upgrade_card.capacity.name=Capacity Upgrade Card
 item.ae2enhanced.upgrade_card.capacity.tooltip=§bCapacity Upgrade Card
-item.ae2enhanced.upgrade_card.capacity.tooltip.detail=§7Reserved feature, not yet implemented
+item.ae2enhanced.upgrade_card.capacity.tooltip.detail=§7Reserved feature, max %d cards
 item.ae2enhanced.upgrade_card.reserved1.name=Upgrade Card (Reserved)
 item.ae2enhanced.upgrade_card.reserved2.name=Upgrade Card (Reserved)
 item.ae2enhanced.upgrade_card.reserved.tooltip=§7Reserved feature, not yet implemented
