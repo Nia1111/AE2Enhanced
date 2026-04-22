@@ -425,6 +425,38 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
     /**
      * 供 Mixin 调用：批量执行虚拟合成，一次性扣除原材料并注入 batchSize 份产物。
      */
+    /**
+     * 二分查找最大可行的 batch size，避免线性回退导致的大数量卡死。
+     * 时间复杂度 O(log batchSize) 次 SIMULATE 调用。
+     */
+    private long findMaxBatchSize(IMEMonitor<IAEItemStack> monitor, IAEItemStack[] condensedInputs, long maxBatch) {
+        long low = 1, high = maxBatch, result = 0;
+        while (low <= high) {
+            long mid = low + (high - low) / 2;
+            if (canSimulateBatch(monitor, condensedInputs, mid)) {
+                result = mid;
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return result;
+    }
+
+    private boolean canSimulateBatch(IMEMonitor<IAEItemStack> monitor, IAEItemStack[] condensedInputs, long batchSize) {
+        for (IAEItemStack inputTemplate : condensedInputs) {
+            if (inputTemplate == null || inputTemplate.getStackSize() <= 0) continue;
+            long totalNeed = inputTemplate.getStackSize() * batchSize;
+            IAEItemStack aeInput = inputTemplate.copy();
+            aeInput.setStackSize(totalNeed);
+            IAEItemStack extracted = monitor.extractItems(aeInput, Actionable.SIMULATE, getEffectiveSource());
+            if (extracted == null || extracted.getStackSize() < totalNeed) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public boolean executeBatch(ICraftingPatternDetails details, long batchSize) {
         if (world == null || world.isRemote || activeMeInterfacePos == null) return false;
         if (batchSize <= 0) return false;
@@ -444,24 +476,8 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         IAEItemStack[] condensedOutputs = details.getCondensedOutputs();
         if (condensedOutputs == null || condensedOutputs.length == 0) return false;
 
-        // 1. SIMULATE 检查原材料是否足够，若不足则逐步减少 batch size 直到满足
-        long actualBatch = batchSize;
-        while (actualBatch > 0) {
-            boolean enough = true;
-            for (IAEItemStack inputTemplate : condensedInputs) {
-                if (inputTemplate == null || inputTemplate.getStackSize() <= 0) continue;
-                long totalNeed = inputTemplate.getStackSize() * actualBatch;
-                IAEItemStack aeInput = inputTemplate.copy();
-                aeInput.setStackSize(totalNeed);
-                IAEItemStack extracted = monitor.extractItems(aeInput, Actionable.SIMULATE, getEffectiveSource());
-                if (extracted == null || extracted.getStackSize() < totalNeed) {
-                    enough = false;
-                    break;
-                }
-            }
-            if (enough) break;
-            actualBatch--;
-        }
+        // 1. SIMULATE 检查原材料是否足够，若不足则用二分查找找到最大可行 batch size
+        long actualBatch = findMaxBatchSize(monitor, condensedInputs, batchSize);
         if (actualBatch <= 0) {
             return false; // 原材料不足，连 1 份都做不到
         }
