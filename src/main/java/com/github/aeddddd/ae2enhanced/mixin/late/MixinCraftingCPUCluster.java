@@ -229,16 +229,15 @@ public class MixinCraftingCPUCluster {
                                 }
                             }
 
-                            // 4. 更新或移除 entry，同步计数器
+                            // 4. 更新或移除 entry
+                            // 注意：不修改 remainingItemCount / remainingOperations，
+                            // 因为 AE2 中 remainingItemCount 只统计最终产物而非中间产物。
+                            // batch 对中间产物减扣会导致其被过度减扣，原生 executeCrafting 提前返回，
+                            // 留下未处理的 entry 造成合成卡住。
                             if (batchSize >= remaining) {
                                 toRemove.add(details);
                             } else {
                                 taskProgressValueField.setLong(progress, remaining - batchSize);
-                            }
-                            remainingItemCount -= totalOutputItems;
-                            int ops = (int) Math.min(batchSize, Integer.MAX_VALUE);
-                            if (remainingOperations > 0) {
-                                remainingOperations = Math.max(0, remainingOperations - ops);
                             }
                             changed = true;
                             virtualTasksExecuted++;
