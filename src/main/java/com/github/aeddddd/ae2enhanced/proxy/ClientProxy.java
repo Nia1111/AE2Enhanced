@@ -44,17 +44,28 @@ public class ClientProxy extends CommonProxy {
         registerBlockItemModel(ModBlocks.ASSEMBLY_INNER_WALL);
         registerBlockItemModel(ModBlocks.ASSEMBLY_STABILIZER);
 
-        for (int i = 0; i < ItemUpgradeCard.COUNT; i++) {
-            String variant;
-            switch (i) {
-                case ItemUpgradeCard.META_PARALLEL:  variant = "upgrade_card_parallel";  break;
-                case ItemUpgradeCard.META_SPEED:     variant = "upgrade_card_speed";     break;
-                case ItemUpgradeCard.META_CAPACITY:  variant = "upgrade_card_capacity";  break;
-                default:                             variant = "upgrade_card";           break;
+        // 注册升级卡的所有模型 variant
+        ModelLoader.registerItemVariants(ModItems.UPGRADE_CARD,
+            new ModelResourceLocation(AE2Enhanced.MOD_ID + ":upgrade_card", "inventory"),
+            new ModelResourceLocation(AE2Enhanced.MOD_ID + ":upgrade_card_parallel", "inventory"),
+            new ModelResourceLocation(AE2Enhanced.MOD_ID + ":upgrade_card_speed", "inventory"),
+            new ModelResourceLocation(AE2Enhanced.MOD_ID + ":upgrade_card_capacity", "inventory")
+        );
+
+        // 使用 ItemMeshDefinition 根据 metadata 动态选择模型
+        ModelLoader.setCustomMeshDefinition(ModItems.UPGRADE_CARD, stack -> {
+            int meta = stack.getMetadata();
+            switch (meta) {
+                case ItemUpgradeCard.META_PARALLEL:
+                    return new ModelResourceLocation(AE2Enhanced.MOD_ID + ":upgrade_card_parallel", "inventory");
+                case ItemUpgradeCard.META_SPEED:
+                    return new ModelResourceLocation(AE2Enhanced.MOD_ID + ":upgrade_card_speed", "inventory");
+                case ItemUpgradeCard.META_CAPACITY:
+                    return new ModelResourceLocation(AE2Enhanced.MOD_ID + ":upgrade_card_capacity", "inventory");
+                default:
+                    return new ModelResourceLocation(AE2Enhanced.MOD_ID + ":upgrade_card", "inventory");
             }
-            ModelLoader.setCustomModelResourceLocation(ModItems.UPGRADE_CARD, i,
-                new ModelResourceLocation(AE2Enhanced.MOD_ID + ":" + variant, "inventory"));
-        }
+        });
     }
 
     @SideOnly(Side.CLIENT)
