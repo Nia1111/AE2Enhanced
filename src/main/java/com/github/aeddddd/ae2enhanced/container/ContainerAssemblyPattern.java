@@ -59,29 +59,26 @@ public class ContainerAssemblyPattern extends Container {
                 }
 
                 /**
-                 * 覆盖 putStack，正确处理 insertItem 返回值。
-                 * 默认实现忽略返回值，导致 Container.mergeItemStack 认为物品已放入，
-                 * 但实际上传入的 stack 引用未被消耗，源槽位（背包）不会被清空，
-                 * 出现"样板还在背包中"的同步异常。
+                 * 覆盖 putStack，使用 setStackInSlot 直接替换槽位内容。
+                 * 默认 SlotItemHandler.putStack 使用 insertItem，其语义是"合并"而非"替换"，
+                 * 会导致 Container.setAll (SPacketWindowItems) 每次同步时都将新 stack grow
+                 * 到已有 stack 上，造成样板数量异常累加（如切页后返回时数量+2）。
                  *
-                 * 注意：必须先复制 stack 再调用 insertItem，因为 Forge 的 ItemStackHandler
-                 * 在成功时可能直接将传入的 stack 引用存入内部列表。如果随后修改该 stack
-                 * 的 count，会同时污染 itemHandler 中的数据，导致物品消失。
+                 * 使用 IItemHandlerModifiable.setStackInSlot 可直接设置槽位内容，避免合并语义。
+                 * PatternItemHandler 已对 setStackInSlot 添加越界保护，防止客户端容量未同步时崩溃。
                  */
                 @Override
                 public void putStack(@Nonnull ItemStack stack) {
-                    if (stack.isEmpty()) {
-                        handlerRef.extractItem(handlerIndex, Integer.MAX_VALUE, false);
-                        this.onSlotChanged();
-                        return;
-                    }
-                    ItemStack toInsert = stack.copy();
-                    ItemStack remainder = handlerRef.insertItem(handlerIndex, toInsert, false);
-                    if (remainder.isEmpty()) {
-                        stack.setCount(0);
+                    if (handlerRef instanceof net.minecraftforge.items.IItemHandlerModifiable) {
+                        ((net.minecraftforge.items.IItemHandlerModifiable) handlerRef)
+                                .setStackInSlot(handlerIndex, stack.isEmpty() ? ItemStack.EMPTY : stack.copy());
                     } else {
-                        stack.setCount(remainder.getCount());
+                        handlerRef.extractItem(handlerIndex, Integer.MAX_VALUE, false);
+                        if (!stack.isEmpty()) {
+                            handlerRef.insertItem(handlerIndex, stack.copy(), false);
+                        }
                     }
+                    stack.setCount(0);
                     this.onSlotChanged();
                 }
             });

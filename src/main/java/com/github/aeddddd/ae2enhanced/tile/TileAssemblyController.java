@@ -137,6 +137,12 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             if (slot < 0 || slot >= stacks.size()) return 0;
             return super.getSlotLimit(slot);
         }
+
+        @Override
+        public void setStackInSlot(int slot, @Nonnull ItemStack stack) {
+            if (slot < 0 || slot >= stacks.size()) return;
+            super.setStackInSlot(slot, stack);
+        }
     }
 
     /** 缓存样板是否为纯虚拟合成（getRemainingItems 全空），String key 避免 hash 碰撞 */
