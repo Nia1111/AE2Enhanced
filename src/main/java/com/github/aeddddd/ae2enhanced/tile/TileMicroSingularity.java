@@ -84,7 +84,8 @@ public class TileMicroSingularity extends TileEntity implements ITickable {
     public void activateCrafting() {
         if (world == null || world.isRemote) return;
         // 产物生成在扫描范围外（y+2），防止产物被再次吸入作为材料
-        BlackHoleCraftingHelper.tryCraft(world, pos, pos.add(0, 2, 0), false);
+        // 循环处理直到没有可匹配配方，右键一次完成所有合成
+        BlackHoleCraftingHelper.tryCraftAll(world, pos, pos.add(0, 2, 0), false, 100);
     }
 
     private void collapse() {

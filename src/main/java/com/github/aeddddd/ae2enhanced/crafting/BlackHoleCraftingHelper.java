@@ -19,9 +19,11 @@ public class BlackHoleCraftingHelper {
     /**
      * 尝试执行一次黑洞合成。
      * 产物生成在扫描范围外（y+2），默认行为：配方不匹配时销毁所有物品。
+     *
+     * @return 是否成功匹配并执行了至少一个配方
      */
-    public static void tryCraft(World world, BlockPos pos) {
-        tryCraft(world, pos, pos.add(0, 2, 0), true);
+    public static boolean tryCraft(World world, BlockPos pos) {
+        return tryCraft(world, pos, pos.add(0, 2, 0), true);
     }
 
     /**
@@ -33,14 +35,15 @@ public class BlackHoleCraftingHelper {
      * @param destroyOnMismatch 配方不匹配时是否销毁区域内的所有物品。
      *                          正式黑洞自动吸入时应为 true；
      *                          微型奇点玩家主动触发时应为 false，避免误销毁未配齐的材料。
+     * @return 是否成功匹配并执行了至少一个配方
      */
-    public static void tryCraft(World world, BlockPos pos, BlockPos outputPos, boolean destroyOnMismatch) {
+    public static boolean tryCraft(World world, BlockPos pos, BlockPos outputPos, boolean destroyOnMismatch) {
         AxisAlignedBB area = new AxisAlignedBB(
                 pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1,
                 pos.getX() + 2, pos.getY() + 2, pos.getZ() + 2
         );
         List<EntityItem> items = world.getEntitiesWithinAABB(EntityItem.class, area);
-        if (items.isEmpty()) return;
+        if (items.isEmpty()) return false;
 
         // 累加物品数量（区分 metadata）
         Map<String, Integer> found = new HashMap<>();
@@ -75,6 +78,7 @@ public class BlackHoleCraftingHelper {
                     recipe.getOutput().copy());
             result.setNoPickupDelay();
             world.spawnEntity(result);
+            return true;
         } else if (destroyOnMismatch) {
             // 不匹配任何配方：黑洞销毁所有物品
             for (EntityItem entityItem : items) {
@@ -82,5 +86,20 @@ public class BlackHoleCraftingHelper {
             }
         }
         // 若 destroyOnMismatch == false 且配方不匹配，保留所有物品，什么都不做
+        return false;
+    }
+
+    /**
+     * 循环执行黑洞合成，直到区域内的物品不再匹配任何配方。
+     * 用于微型奇点右键时一次性处理所有可合成配方。
+     *
+     * @param maxIterations 最大循环次数，防止意外死循环
+     */
+    public static void tryCraftAll(World world, BlockPos pos, BlockPos outputPos, boolean destroyOnMismatch, int maxIterations) {
+        for (int i = 0; i < maxIterations; i++) {
+            if (!tryCraft(world, pos, outputPos, destroyOnMismatch)) {
+                break;
+            }
+        }
     }
 }

@@ -420,8 +420,7 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             }
             eventHorizonStrikes.keySet().removeIf(uuid -> !currentUuids.contains(uuid));
 
-            // 黑洞合成：自动吸入物品到缓存，每 20 ticks 尝试配方匹配
-            // 避免每 tick 直接销毁不匹配物品，给玩家时间丢齐材料
+            // 黑洞合成：自动吸入物品到缓存，立即尝试配方匹配（一次性输出）
             AxisAlignedBB craftArea = new AxisAlignedBB(
                     origin.getX() - 1, origin.getY() - 1, origin.getZ() - 1,
                     origin.getX() + 2, origin.getY() + 2, origin.getZ() + 2
@@ -435,9 +434,9 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
                     ei.setDead();
                 }
             }
-            if (++blackHoleCraftTicks >= 20) {
-                blackHoleCraftTicks = 0;
-                tryBlackHoleCraft();
+            // 有新材料吸入时立即尝试合成，循环处理直到缓存中不再匹配任何配方
+            if (!craftItems.isEmpty()) {
+                tryBlackHoleCraftAll();
             }
         }
 
@@ -782,6 +781,22 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             world.spawnEntity(result);
         }
         // 配方不匹配时保留缓存，等待玩家继续丢入材料
+    }
+
+    /**
+     * 循环执行黑洞合成，直到缓存中的物品不再匹配任何配方。
+     * 用于正式黑洞一次性输出所有可合成产物。
+     */
+    private void tryBlackHoleCraftAll() {
+        int maxIterations = 100;
+        for (int i = 0; i < maxIterations; i++) {
+            int sizeBefore = blackHoleBuffer.size();
+            tryBlackHoleCraft();
+            // 若缓存为空或大小未变（无匹配），退出循环
+            if (blackHoleBuffer.isEmpty() || blackHoleBuffer.size() == sizeBefore) {
+                break;
+            }
+        }
     }
 
     /**
