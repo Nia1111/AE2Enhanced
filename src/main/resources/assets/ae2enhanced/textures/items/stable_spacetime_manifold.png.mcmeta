@@ -1,1 +1,5 @@
-{" animation\:{rametime\:2}}
+{
+  "animation": {
+    "frametime": 2
+  }
+}

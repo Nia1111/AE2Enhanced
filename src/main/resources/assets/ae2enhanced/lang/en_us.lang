@@ -67,7 +67,10 @@ item.ae2enhanced.upgrade_card.reserved2.name=Extension Module (Reserved)
 item.ae2enhanced.upgrade_card.reserved.tooltip=§7Reserved interface. Functionality not yet activated.
 
 item.ae2enhanced.conformal_invariant_charge.name=Conformal Invariant Charge
+item.ae2enhanced.conformal_invariant_charge.tooltip=§e§lConformal Invariant Charge §7\nA topological quantum charge preserved under conformal transformations,\ninvariant across all reference frames.\n§8A creation from the black hole, an incomprehensible form of matter.\n§b§l"Invariance is the only true constant"
 item.ae2enhanced.differential_form_stabilizer.name=Differential Form Stabilizer
+item.ae2enhanced.differential_form_stabilizer.tooltip=§e§lDifferential Form Stabilizer §7\nStabilizes the differential geometric structure of spacetime,\npreventing catastrophic manifold degeneration.\n§8Sufficient to stabilize the metric variations caused by the black hole.\n§b§l"Form without boundary, stable without limit"
 item.ae2enhanced.stable_spacetime_manifold.name=Stable Spacetime Manifold
+item.ae2enhanced.stable_spacetime_manifold.tooltip=§e§lStable Spacetime Manifold §7\nA self-stabilizing region of spacetime extracted from the event horizon,\nmaintaining topological integrity under extreme curvature.\n§8A piece of stable spacetime manifold.\n§b§l"Where time stands still"
 
 death.spacetime.blackHole=%1$s was forever lost in the event horizon
