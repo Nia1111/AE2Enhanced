@@ -78,37 +78,49 @@ public class RenderBlackHole extends TileEntitySpecialRenderer<TileAssemblyContr
         GlStateManager.disableTexture2D();
         GlStateManager.shadeModel(GL11.GL_SMOOTH);
 
-        // 1. 事件视界（纯黑，始终存在）
-        drawSphere(EVENT_HORIZON_RADIUS, 0x000000, 0.99f);
+        try {
+            // 1. 事件视界（纯黑，始终存在）
+            drawSphere(EVENT_HORIZON_RADIUS, 0x000000, 0.99f);
 
-        // 2. 内层光晕（深紫，主旋转，由内扩张）
-        GlStateManager.pushMatrix();
-        GlStateManager.rotate(time * 0.5f, 0, 1, 0);
-        GlStateManager.rotate(18.0f, 1, 0, 0.3f);
-        drawSphere(innerR, 0x140029, innerAlpha);
-        // 内层网格：始终可见，仅有亮度变化
-        drawWireframeSphere(innerR, 0x7700DD, 0.28f * (0.5f + 0.5f * gridEnergy));
-        GlStateManager.popMatrix();
+            // 2. 内层光晕（深紫，主旋转，由内扩张）
+            GlStateManager.pushMatrix();
+            GlStateManager.rotate(time * 0.5f, 0, 1, 0);
+            GlStateManager.rotate(18.0f, 1, 0, 0.3f);
+            drawSphere(innerR, 0x140029, innerAlpha);
+            // 内层网格：始终可见，仅有亮度变化
+            drawWireframeSphere(innerR, 0x7700DD, 0.28f * (0.5f + 0.5f * gridEnergy));
+            GlStateManager.popMatrix();
 
-        // 3. 中层光晕（极深紫，反向旋转，与内层错相）
-        GlStateManager.pushMatrix();
-        GlStateManager.rotate(-time * 0.3f, 0, 1, 0);
-        GlStateManager.rotate(12.0f, 0.5f, 0, 1.0f);
-        drawSphere(midR, 0x05000D, midAlpha);
-        // 中层网格：始终可见
-        drawWireframeSphere(midR, 0x110022, 0.08f * (0.5f + 0.5f * gridEnergy));
-        GlStateManager.popMatrix();
+            // 3. 中层光晕（极深紫，反向旋转，与内层错相）
+            GlStateManager.pushMatrix();
+            GlStateManager.rotate(-time * 0.3f, 0, 1, 0);
+            GlStateManager.rotate(12.0f, 0.5f, 0, 1.0f);
+            drawSphere(midR, 0x05000D, midAlpha);
+            // 中层网格：始终可见
+            drawWireframeSphere(midR, 0x110022, 0.08f * (0.5f + 0.5f * gridEnergy));
+            GlStateManager.popMatrix();
 
-        // 4. 外层光晕（深紫雾，缓慢旋转）
-        GlStateManager.pushMatrix();
-        GlStateManager.rotate(time * 0.12f, 0, 1, 0);
-        GlStateManager.rotate(8.0f, 1, 0.2f, 0);
-        drawSphere(outerR, 0x020005, outerAlpha);
-        GlStateManager.popMatrix();
-
-        GlStateManager.shadeModel(GL11.GL_FLAT);
-        GlStateManager.popAttrib();
-        GlStateManager.popMatrix();
+            // 4. 外层光晕（深紫雾，缓慢旋转）
+            GlStateManager.pushMatrix();
+            GlStateManager.rotate(time * 0.12f, 0, 1, 0);
+            GlStateManager.rotate(8.0f, 1, 0.2f, 0);
+            drawSphere(outerR, 0x020005, outerAlpha);
+            GlStateManager.popMatrix();
+        } finally {
+            // 显式恢复所有可能被修改的状态
+            // popAttrib 不覆盖 depthMask / blendFunc，必须手动恢复
+            GlStateManager.shadeModel(GL11.GL_FLAT);
+            GlStateManager.enableTexture2D();
+            GlStateManager.enableLighting();
+            GlStateManager.depthMask(true);
+            GlStateManager.disableBlend();
+            GlStateManager.tryBlendFuncSeparate(
+                GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO
+            );
+            GlStateManager.popAttrib();
+            GlStateManager.popMatrix();
+        }
     }
 
     private void drawSphere(double radius, int color, float alpha) {
