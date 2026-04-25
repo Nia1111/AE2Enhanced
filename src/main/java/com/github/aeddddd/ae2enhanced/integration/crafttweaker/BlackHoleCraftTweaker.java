@@ -76,7 +76,7 @@ public class BlackHoleCraftTweaker {
 
         @Override
         public void apply() {
-            BlackHoleRecipeRegistry.getRecipes().removeIf(r -> r.getId().equals(id));
+            BlackHoleRecipeRegistry.removeById(id);
         }
 
         @Override

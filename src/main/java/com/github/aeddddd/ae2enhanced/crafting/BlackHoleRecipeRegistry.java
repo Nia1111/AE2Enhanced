@@ -27,6 +27,10 @@ public class BlackHoleRecipeRegistry {
         return null;
     }
 
+    public static boolean removeById(String id) {
+        return RECIPES.removeIf(r -> r.getId().equals(id));
+    }
+
     public static List<BlackHoleRecipe> getRecipes() {
         return new ArrayList<>(RECIPES);
     }
