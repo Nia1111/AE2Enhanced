@@ -1,11 +1,13 @@
 package com.github.aeddddd.ae2enhanced.client.render;
 
+import com.github.aeddddd.ae2enhanced.block.BlockAssemblyController;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyController;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import net.minecraft.util.EnumFacing;
 import org.lwjgl.opengl.GL11;
 
 public class RenderBlackHole extends TileEntitySpecialRenderer<TileAssemblyController> {
@@ -27,9 +29,21 @@ public class RenderBlackHole extends TileEntitySpecialRenderer<TileAssemblyContr
     public void render(TileAssemblyController te, double x, double y, double z, float partialTicks, int destroyStage, float alpha) {
         if (!te.isFormed()) return;
 
+        EnumFacing facing = EnumFacing.NORTH;
+        if (te.getWorld() != null) {
+            facing = te.getWorld().getBlockState(te.getPos()).getValue(BlockAssemblyController.FACING);
+        }
+
         double centerX = x + 0.5;
         double centerY = y + 0.5;
-        double centerZ = z + 0.5 + 7.0;
+        double centerZ = z + 0.5;
+        switch (facing) {
+            case NORTH: centerZ += 7.0; break;
+            case SOUTH: centerZ -= 7.0; break;
+            case EAST:  centerX -= 7.0; break;
+            case WEST:  centerX += 7.0; break;
+            default:    centerZ += 7.0; break;
+        }
 
         float time = (te.getWorld().getTotalWorldTime() + partialTicks) * ROTATION_SPEED;
 
