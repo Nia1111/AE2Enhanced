@@ -17,7 +17,25 @@ import java.util.Map;
  */
 public class BlackHoleCraftingHelper {
 
+    /**
+     * 尝试执行一次黑洞合成。
+     * 产物生成在扫描范围外（y+2），默认行为：配方不匹配时销毁所有物品。
+     */
     public static void tryCraft(World world, BlockPos pos) {
+        tryCraft(world, pos, pos.add(0, 2, 0), true);
+    }
+
+    /**
+     * 尝试执行一次黑洞合成。
+     *
+     * @param world 世界
+     * @param pos 扫描中心坐标
+     * @param outputPos 产物掉落坐标
+     * @param destroyOnMismatch 配方不匹配时是否销毁区域内的所有物品。
+     *                          正式黑洞自动吸入时应为 true；
+     *                          微型奇点玩家主动触发时应为 false，避免误销毁未配齐的材料。
+     */
+    public static void tryCraft(World world, BlockPos pos, BlockPos outputPos, boolean destroyOnMismatch) {
         AxisAlignedBB area = new AxisAlignedBB(
                 pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1,
                 pos.getX() + 2, pos.getY() + 2, pos.getZ() + 2
@@ -52,17 +70,18 @@ public class BlackHoleCraftingHelper {
                     }
                 }
             }
-            // 生成产物（从黑洞中心向上喷出）
+            // 生成产物（从指定位置喷出）
             EntityItem result = new EntityItem(world,
-                    pos.getX() + 0.5, pos.getY() + 1.5, pos.getZ() + 0.5,
+                    outputPos.getX() + 0.5, outputPos.getY() + 0.5, outputPos.getZ() + 0.5,
                     recipe.getOutput().copy());
             result.setNoPickupDelay();
             world.spawnEntity(result);
-        } else {
+        } else if (destroyOnMismatch) {
             // 不匹配任何配方：黑洞销毁所有物品
             for (EntityItem entityItem : items) {
                 entityItem.setDead();
             }
         }
+        // 若 destroyOnMismatch == false 且配方不匹配，保留所有物品，什么都不做
     }
 }

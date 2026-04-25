@@ -13,10 +13,15 @@ import appeng.api.storage.IMEMonitor;
 import appeng.api.storage.channels.IItemStorageChannel;
 import appeng.api.storage.data.IAEItemStack;
 import com.github.aeddddd.ae2enhanced.crafting.BlackHoleCraftingHelper;
+import com.github.aeddddd.ae2enhanced.crafting.BlackHoleRecipe;
+import com.github.aeddddd.ae2enhanced.crafting.BlackHoleRecipeRegistry;
 import com.github.aeddddd.ae2enhanced.item.ItemUpgradeCard;
 import com.github.aeddddd.ae2enhanced.structure.AssemblyStructure;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.init.SoundEvents;
+import net.minecraft.util.SoundCategory;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -73,6 +78,10 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
     private boolean networkPowered = false;
     private int batchCooldown = 0;
     private boolean batchBusy = false;
+
+    /** 黑洞合成缓存：事件视界内的物品被吸入到这里，每 20 ticks 尝试匹配配方 */
+    private final List<ItemStack> blackHoleBuffer = new ArrayList<>();
+    private int blackHoleCraftTicks = 0;
 
     private final PatternItemHandler itemHandler = new PatternItemHandler(TOTAL_SLOTS_BASE);
 
@@ -411,8 +420,25 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             }
             eventHorizonStrikes.keySet().removeIf(uuid -> !currentUuids.contains(uuid));
 
-            // 黑洞合成：对事件视界内的物品执行合成或销毁
-            BlackHoleCraftingHelper.tryCraft(world, origin);
+            // 黑洞合成：自动吸入物品到缓存，每 20 ticks 尝试配方匹配
+            // 避免每 tick 直接销毁不匹配物品，给玩家时间丢齐材料
+            AxisAlignedBB craftArea = new AxisAlignedBB(
+                    origin.getX() - 1, origin.getY() - 1, origin.getZ() - 1,
+                    origin.getX() + 2, origin.getY() + 2, origin.getZ() + 2
+            );
+            List<net.minecraft.entity.item.EntityItem> craftItems = world.getEntitiesWithinAABB(
+                    net.minecraft.entity.item.EntityItem.class, craftArea);
+            for (net.minecraft.entity.item.EntityItem ei : craftItems) {
+                ItemStack stack = ei.getItem();
+                if (!stack.isEmpty()) {
+                    blackHoleBuffer.add(stack.copy());
+                    ei.setDead();
+                }
+            }
+            if (++blackHoleCraftTicks >= 20) {
+                blackHoleCraftTicks = 0;
+                tryBlackHoleCraft();
+            }
         }
 
         // 样板变化时触发 AE 网络重新扫描，1 tick 延迟合并同一 tick 内的连续变化
@@ -692,6 +718,73 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
     }
 
     /**
+     * 尝试用黑洞缓存中的物品匹配配方并产出。
+     * 缓存物品种类超过 5 种时触发溢出销毁；
+     * 配方不匹配时保留缓存，等待更多材料。
+     */
+    private void tryBlackHoleCraft() {
+        if (blackHoleBuffer.isEmpty()) return;
+
+        // 统计物品种类
+        Set<Item> uniqueTypes = new HashSet<>();
+        for (ItemStack stack : blackHoleBuffer) {
+            if (!stack.isEmpty()) {
+                uniqueTypes.add(stack.getItem());
+            }
+        }
+        if (uniqueTypes.size() > 5) {
+            // 溢出销毁：清空缓存并释放特效
+            blackHoleBuffer.clear();
+            BlockPos origin = AssemblyStructure.getOriginFromController(pos);
+            world.spawnParticle(EnumParticleTypes.EXPLOSION_HUGE,
+                    origin.getX() + 0.5, origin.getY() + 0.5, origin.getZ() + 0.5, 0, 0, 0);
+            world.playSound(null, origin, SoundEvents.ENTITY_GENERIC_EXPLODE,
+                    SoundCategory.BLOCKS, 2.0f, 0.5f);
+            return;
+        }
+
+        // 累加物品数量
+        Map<Item, Integer> found = new HashMap<>();
+        for (ItemStack stack : blackHoleBuffer) {
+            if (!stack.isEmpty()) {
+                found.merge(stack.getItem(), stack.getCount(), Integer::sum);
+            }
+        }
+
+        // 匹配配方
+        BlackHoleRecipe recipe = BlackHoleRecipeRegistry.findMatching(found);
+        if (recipe != null) {
+            // 消耗材料
+            Map<Item, Integer> remaining = new HashMap<>(recipe.getInputs());
+            Iterator<ItemStack> it = blackHoleBuffer.iterator();
+            while (it.hasNext()) {
+                ItemStack stack = it.next();
+                if (stack.isEmpty()) {
+                    it.remove();
+                    continue;
+                }
+                Item item = stack.getItem();
+                int needed = remaining.getOrDefault(item, 0);
+                if (needed > 0) {
+                    int consume = Math.min(needed, stack.getCount());
+                    stack.shrink(consume);
+                    remaining.put(item, needed - consume);
+                    if (stack.isEmpty()) {
+                        it.remove();
+                    }
+                }
+            }
+            // 生成产物（控制器上方）
+            EntityItem result = new EntityItem(world,
+                    pos.getX() + 0.5, pos.getY() + 1.5, pos.getZ() + 0.5,
+                    recipe.getOutput().copy());
+            result.setNoPickupDelay();
+            world.spawnEntity(result);
+        }
+        // 配方不匹配时保留缓存，等待玩家继续丢入材料
+    }
+
+    /**
      * 获取当前合成延迟 tick 数。速度升级卡固定在槽位 1，堆叠数量即为安装数量。
      * 每张减半，最低 1 tick。
      */
@@ -929,6 +1022,24 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
                 pendingOutputs.add(stack);
             }
         }
+        if (compound.hasKey("blackHoleBuffer")) {
+            blackHoleBuffer.clear();
+            NBTTagList list = compound.getTagList("blackHoleBuffer", Constants.NBT.TAG_COMPOUND);
+            for (int i = 0; i < list.tagCount(); i++) {
+                NBTTagCompound tag = list.getCompoundTagAt(i);
+                Item item = Item.getByNameOrId(tag.getString("id"));
+                int count = tag.getInteger("Count");
+                int meta = tag.getInteger("Damage");
+                ItemStack stack = new ItemStack(item, count, meta);
+                if (tag.hasKey("tag", Constants.NBT.TAG_COMPOUND)) {
+                    stack.setTagCompound(tag.getCompoundTag("tag"));
+                }
+                blackHoleBuffer.add(stack);
+            }
+        }
+        if (compound.hasKey("blackHoleCraftTicks")) {
+            blackHoleCraftTicks = compound.getInteger("blackHoleCraftTicks");
+        }
         // 存档加载后立即预填充虚拟缓存，避免 AE2 网络扫描前下单时缓存为空
         if (world != null && !world.isRemote) {
             int patternSlots = getPatternSlotCount();
@@ -970,6 +1081,20 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             list.appendTag(tag);
         }
         compound.setTag("pendingOutputs", list);
+
+        NBTTagList bhList = new NBTTagList();
+        for (ItemStack stack : blackHoleBuffer) {
+            NBTTagCompound tag = new NBTTagCompound();
+            tag.setString("id", Objects.toString(stack.getItem().getRegistryName()));
+            tag.setInteger("Count", stack.getCount());
+            tag.setInteger("Damage", stack.getMetadata());
+            if (stack.hasTagCompound()) {
+                tag.setTag("tag", stack.getTagCompound().copy());
+            }
+            bhList.appendTag(tag);
+        }
+        compound.setTag("blackHoleBuffer", bhList);
+        compound.setInteger("blackHoleCraftTicks", blackHoleCraftTicks);
         return compound;
     }
 

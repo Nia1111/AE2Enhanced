@@ -5,7 +5,10 @@ import com.github.aeddddd.ae2enhanced.tile.TileMicroSingularity;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
@@ -16,6 +19,7 @@ import javax.annotation.Nullable;
 /**
  * 微型奇点 —— 仪式召唤的临时黑洞方块。
  * 不可破坏，发光，有较小的碰撞箱，300 秒后自动坍缩。
+ * 玩家右键可主动触发黑洞合成（配方不匹配时不销毁物品）。
  */
 public class BlockMicroSingularity extends Block {
 
@@ -59,5 +63,18 @@ public class BlockMicroSingularity extends Block {
     @Override
     public TileEntity createTileEntity(World world, IBlockState state) {
         return new TileMicroSingularity();
+    }
+
+    @Override
+    public boolean onBlockActivated(World world, BlockPos pos, IBlockState state,
+                                    EntityPlayer player, EnumHand hand, EnumFacing facing,
+                                    float hitX, float hitY, float hitZ) {
+        if (!world.isRemote) {
+            TileEntity te = world.getTileEntity(pos);
+            if (te instanceof TileMicroSingularity) {
+                ((TileMicroSingularity) te).activateCrafting();
+            }
+        }
+        return true;
     }
 }

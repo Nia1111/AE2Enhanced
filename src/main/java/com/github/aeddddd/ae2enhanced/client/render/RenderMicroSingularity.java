@@ -14,9 +14,9 @@ import org.lwjgl.opengl.GL11;
  */
 public class RenderMicroSingularity extends TileEntitySpecialRenderer<TileMicroSingularity> {
 
-    private static final double EVENT_HORIZON_RADIUS = 0.6;
-    private static final double INNER_HALO_BASE = 0.9;
-    private static final double OUTER_HALO_BASE = 1.4;
+    private static final double EVENT_HORIZON_RADIUS = 1.2;
+    private static final double INNER_HALO_BASE = 1.8;
+    private static final double OUTER_HALO_BASE = 2.8;
 
     private static final int LATITUDE_SEGMENTS = 16;
     private static final int LONGITUDE_SEGMENTS = 16;
