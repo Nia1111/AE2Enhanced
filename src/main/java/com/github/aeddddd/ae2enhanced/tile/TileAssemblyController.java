@@ -319,6 +319,15 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
      */
     public boolean tryAutoUploadPattern(ItemStack pattern) {
         if (world == null || world.isRemote || !formed || pattern.isEmpty()) return false;
+        // 防御性检查：仅接受合成样板（crafting=1），拒绝处理样板
+        if (pattern.hasTagCompound()) {
+            NBTTagCompound tag = pattern.getTagCompound();
+            if (!tag.hasKey("crafting", Constants.NBT.TAG_BYTE) || tag.getByte("crafting") != 1) {
+                return false;
+            }
+        } else {
+            return false;
+        }
         int patternSlots = getPatternSlotCount();
         for (int i = UPGRADE_SLOTS; i < UPGRADE_SLOTS + patternSlots; i++) {
             if (itemHandler.getStackInSlot(i).isEmpty()) {

@@ -9,9 +9,11 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraftforge.common.util.Constants;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -53,6 +55,7 @@ public class MixinPatternEncoder {
 
             ItemStack pattern = patternSlotOUT.getStack();
             if (pattern.isEmpty()) return;
+            if (!isCraftingPattern(pattern)) return; // 仅上传合成样板，跳过处理样板
 
             InventoryPlayer invPlayer = ((AEBaseContainer) container).getPlayerInv();
             if (invPlayer == null) return;
@@ -73,6 +76,16 @@ public class MixinPatternEncoder {
         } catch (Exception e) {
             AE2Enhanced.LOGGER.error("[AE2E] AutoUpload unexpected error: {}", e.toString());
         }
+    }
+
+    /**
+     * 检查样板是否为合成样板（Crafting Pattern），而非处理样板（Processing Pattern）。
+     * AE2 编码样板的 NBT 中 "crafting" 字段为 1 表示合成样板，0 表示处理样板。
+     */
+    private static boolean isCraftingPattern(ItemStack pattern) {
+        if (!pattern.hasTagCompound()) return false;
+        NBTTagCompound tag = pattern.getTagCompound();
+        return tag.hasKey("crafting", Constants.NBT.TAG_BYTE) && tag.getByte("crafting") == 1;
     }
 
     private static TileAssemblyController findTargetController(World world, EntityPlayer player, ItemStack pattern) {

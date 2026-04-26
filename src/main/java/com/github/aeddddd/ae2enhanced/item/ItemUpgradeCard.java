@@ -51,11 +51,12 @@ public class ItemUpgradeCard extends Item {
      */
     public static int getMaxStackForMeta(int meta) {
         switch (meta) {
-            case META_PARALLEL: return 5;   // 5张 → Long.MAX_VALUE
-            case META_SPEED:    return 5;   // 5张 → 1 tick
-            case META_EFFICIENCY: return 10; // 预留
-            case META_CAPACITY:   return 10; // 预留
-            default:              return 10; // 预留
+            case META_PARALLEL:   return 5;   // 5张 → Long.MAX_VALUE
+            case META_SPEED:      return 5;   // 5张 → 1 tick
+            case META_EFFICIENCY: return 10;  // 预留
+            case META_CAPACITY:   return 10;  // 预留
+            case META_RESERVED1:  return 1;   // 自动上传模块：每个控制器只需1张
+            default:              return 10;  // 预留
         }
     }
 
@@ -85,8 +86,13 @@ public class ItemUpgradeCard extends Item {
                 lines = I18n.format("item.ae2enhanced.upgrade_card.capacity.tooltip.detail", max).replace("\\n", "\n").split("\n");
                 for (String line : lines) tooltip.add(line);
                 break;
+            case META_RESERVED1:
+                tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.upload.tooltip"));
+                lines = I18n.format("item.ae2enhanced.upgrade_card.upload.tooltip.detail", max).replace("\\n", "\n").split("\n");
+                for (String line : lines) tooltip.add(line);
+                break;
             default:
-                tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.reserved.tooltip"));
+                tooltip.add(I18n.format("item.ae2enhanced.upgrade_card.reserved2.tooltip"));
         }
     }
 

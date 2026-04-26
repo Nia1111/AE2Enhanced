@@ -4,6 +4,7 @@ tile.ae2enhanced.assembly_casing.name=装配枢纽外壳
 tile.ae2enhanced.assembly_inner_wall.name=装配枢纽内壁
 tile.ae2enhanced.assembly_stabilizer.name=装配枢纽稳定器
 tile.ae2enhanced.micro_singularity.name=微型奇点
+tile.ae2enhanced.micro_singularity.tooltip=§8§o「来自事件视界的造物」§r\n§7右键事件视界可将物品投入黑洞进行合成.\n§7生成方法: §e手持 4 个下界之星右键 ME 控制器§7,\n§7消耗 §e64 个 AE2 奇点 §7后生成微型奇点.
 
 jei.ae2enhanced.category.blackhole=黑洞合成
 jei.ae2enhanced.blackhole.hint=投入事件视界
@@ -46,9 +47,14 @@ gui.ae2enhanced.pattern.page=第 %d/%d 页
 gui.ae2enhanced.tooltip.upgrades=§b升级模块
 gui.ae2enhanced.tooltip.upgrades.parallel=• 并行扩展模块: 提升批量合成并行上限
 gui.ae2enhanced.tooltip.upgrades.speed=• 超频处理模块: 降低批量合成冷却间隔
+gui.ae2enhanced.tooltip.upgrades.efficiency=• 能量优化模块: 降低 AE 网络能耗
+gui.ae2enhanced.tooltip.upgrades.capacity=• 维度折叠模块: 扩展样板存储容量
+gui.ae2enhanced.tooltip.upgrades.upload=• 自动上传模块: 编码样板自动导入控制器
 
 gui.ae2enhanced.tooltip.patterns=§b样板存储
 gui.ae2enhanced.tooltip.patterns.desc=放入编码的合成样板 (Crafting Pattern)
+gui.ae2enhanced.tooltip.network.booting=网络节点正在初始化, 请稍候
+gui.ae2enhanced.tooltip.network.offline=请将任意 ME 接口连接至 AE 线缆以接入网络
 
 item.ae2enhanced.upgrade_card.parallel.name=时间折叠模块
 item.ae2enhanced.upgrade_card.parallel.tooltip=§b§l时间折叠模块 §r§8[类型: 并行]
@@ -62,9 +68,11 @@ item.ae2enhanced.upgrade_card.efficiency.tooltip.detail=§7降低装配枢纽的
 item.ae2enhanced.upgrade_card.capacity.name=维度折叠模块
 item.ae2enhanced.upgrade_card.capacity.tooltip=§b§l维度折叠模块 §r§8[类型: 扩容]
 item.ae2enhanced.upgrade_card.capacity.tooltip.detail=§7扩展样板存储的维度容量. 每级增加 §e480 §7槽位 (5 页).\n§7堆叠上限: §b%d §7张
-item.ae2enhanced.upgrade_card.reserved1.name=扩展模块 (预留)
+item.ae2enhanced.upgrade_card.reserved1.name=自动上传模块
+item.ae2enhanced.upgrade_card.upload.tooltip=§b§l自动上传模块 §r§8[类型: 上传]
+item.ae2enhanced.upgrade_card.upload.tooltip.detail=§7将 ME 样板编码终端编码完成的 §e合成样板 §7自动上传到最近的装配枢纽.\n§7§8(处理样板不会被自动上传)\n§7需要控制器已组装并放入此升级模块.\n§7堆叠上限: §b%d §7张\n §b§l知识即力量
 item.ae2enhanced.upgrade_card.reserved2.name=扩展模块 (预留)
-item.ae2enhanced.upgrade_card.reserved.tooltip=§7预留接口. 功能尚未激活.
+item.ae2enhanced.upgrade_card.reserved2.tooltip=§7预留接口. 功能尚未激活.
 
 item.ae2enhanced.conformal_invariant_charge.name=共形不变荷
 item.ae2enhanced.conformal_invariant_charge.tooltip=§e§l共形不变荷 §7\n在共形变换下保持不变的拓扑量子荷,\n在所有参考系中保持绝对不变性.\n§8来自黑洞的造物,难以理解的物质存在\n§b§l「不变者,唯一之恒常」

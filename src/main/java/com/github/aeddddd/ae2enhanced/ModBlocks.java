@@ -1,6 +1,7 @@
 package com.github.aeddddd.ae2enhanced;
 
 import com.github.aeddddd.ae2enhanced.block.*;
+import com.github.aeddddd.ae2enhanced.item.ItemBlockMicroSingularity;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyController;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyMeInterface;
 import com.github.aeddddd.ae2enhanced.tile.TileMicroSingularity;
@@ -49,7 +50,7 @@ public class ModBlocks {
             new ItemBlock(ASSEMBLY_CASING).setRegistryName(ASSEMBLY_CASING.getRegistryName()),
             new ItemBlock(ASSEMBLY_INNER_WALL).setRegistryName(ASSEMBLY_INNER_WALL.getRegistryName()),
             new ItemBlock(ASSEMBLY_STABILIZER).setRegistryName(ASSEMBLY_STABILIZER.getRegistryName()),
-            new ItemBlock(MICRO_SINGULARITY).setRegistryName(MICRO_SINGULARITY.getRegistryName())
+            new ItemBlockMicroSingularity(MICRO_SINGULARITY).setRegistryName(MICRO_SINGULARITY.getRegistryName())
         );
     }
 }

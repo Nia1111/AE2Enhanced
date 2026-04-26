@@ -4,6 +4,7 @@ tile.ae2enhanced.assembly_casing.name=Assembly Casing
 tile.ae2enhanced.assembly_inner_wall.name=Assembly Inner Wall
 tile.ae2enhanced.assembly_stabilizer.name=Assembly Stabilizer
 tile.ae2enhanced.micro_singularity.name=Micro Singularity
+tile.ae2enhanced.micro_singularity.tooltip=§8§o"A creation from the event horizon"§r\n§7Right-click the event horizon to throw items into the black hole for crafting.\n§7Generation: §eHold 4 Nether Stars and right-click an ME Controller§7,\n§7consuming §e64 AE2 Singularities §7to spawn a Micro Singularity.
 
 jei.ae2enhanced.category.blackhole=Black Hole Crafting
 jei.ae2enhanced.blackhole.hint=Throw into event horizon
@@ -46,9 +47,14 @@ gui.ae2enhanced.pattern.page=Page %d/%d
 gui.ae2enhanced.tooltip.upgrades=§bUpgrades
 gui.ae2enhanced.tooltip.upgrades.parallel=• Parallel Extension Module: Increases batch parallel cap
 gui.ae2enhanced.tooltip.upgrades.speed=• Overclock Processing Module: Reduces batch cooldown
+gui.ae2enhanced.tooltip.upgrades.efficiency=• Energy Optimization Module: Reduces AE network power draw
+gui.ae2enhanced.tooltip.upgrades.capacity=• Dimensional Fold Module: Expands pattern storage capacity
+gui.ae2enhanced.tooltip.upgrades.upload=• Auto-Upload Module: Auto-imports encoded patterns into controller
 
 gui.ae2enhanced.tooltip.patterns=§bPattern Storage
 gui.ae2enhanced.tooltip.patterns.desc=Insert encoded Crafting Patterns
+gui.ae2enhanced.tooltip.network.booting=Network node is initializing, please wait
+gui.ae2enhanced.tooltip.network.offline=Connect any ME Interface to an AE cable to join the network
 
 item.ae2enhanced.upgrade_card.parallel.name=Temporal Fold Module
 item.ae2enhanced.upgrade_card.parallel.tooltip=§b§lTemporal Fold Module §r§8[Type: Parallel]
@@ -62,9 +68,11 @@ item.ae2enhanced.upgrade_card.efficiency.tooltip.detail=§7Reduces AE network po
 item.ae2enhanced.upgrade_card.capacity.name=Dimensional Fold Module
 item.ae2enhanced.upgrade_card.capacity.tooltip=§b§lDimensional Fold Module §r§8[Type: Capacity]
 item.ae2enhanced.upgrade_card.capacity.tooltip.detail=§7Expands pattern storage dimensional capacity. Each tier adds §e480 §7slots (5 pages).\n§7Stack Limit: §b%d §7cards
-item.ae2enhanced.upgrade_card.reserved1.name=Extension Module (Reserved)
+item.ae2enhanced.upgrade_card.reserved1.name=Auto-Upload Module
+item.ae2enhanced.upgrade_card.upload.tooltip=§b§lAuto-Upload Module §r§8[Type: Upload]
+item.ae2enhanced.upgrade_card.upload.tooltip.detail=§7Automatically uploads §eencoded crafting patterns §7from the ME Pattern Terminal to the nearest Assembly Hub.\n§7§8(Processing patterns will not be auto-uploaded)\n§7Requires the controller to be assembled and this upgrade installed.\n§7Stack Limit: §b%d §7cards\n §b§l"Knowledge is power"
 item.ae2enhanced.upgrade_card.reserved2.name=Extension Module (Reserved)
-item.ae2enhanced.upgrade_card.reserved.tooltip=§7Reserved interface. Functionality not yet activated.
+item.ae2enhanced.upgrade_card.reserved2.tooltip=§7Reserved interface. Functionality not yet activated.
 
 item.ae2enhanced.conformal_invariant_charge.name=Conformal Invariant Charge
 item.ae2enhanced.conformal_invariant_charge.tooltip=§e§lConformal Invariant Charge §7\nA topological quantum charge preserved under conformal transformations,\ninvariant across all reference frames.\n§8A creation from the black hole, an incomprehensible form of matter.\n§b§l"Invariance is the only true constant"

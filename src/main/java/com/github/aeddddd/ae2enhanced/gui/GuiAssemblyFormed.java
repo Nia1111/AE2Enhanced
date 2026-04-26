@@ -174,6 +174,30 @@ public class GuiAssemblyFormed extends GuiContainer {
             lines.add(I18n.format("gui.ae2enhanced.tooltip.upgrades"));
             lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.parallel") + "§r");
             lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.speed") + "§r");
+            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.efficiency") + "§r");
+            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.capacity") + "§r");
+            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.upload") + "§r");
+            this.drawHoveringText(lines, mouseX, mouseY);
+        }
+        // 样板存储按钮 tooltip
+        if (patternButton != null && patternButton.isMouseOver()) {
+            List<String> lines = new ArrayList<>();
+            lines.add(I18n.format("gui.ae2enhanced.tooltip.patterns"));
+            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.patterns.desc") + "§r");
+            this.drawHoveringText(lines, mouseX, mouseY);
+        }
+        // 网络状态区域 tooltip
+        if (isPointInRegion(140, 125, 120, 20, mouseX, mouseY)) {
+            List<String> lines = new ArrayList<>();
+            if (tile.isNetworkActive()) {
+                lines.add(I18n.format("gui.ae2enhanced.formed.network.active"));
+            } else if (tile.isNetworkPowered()) {
+                lines.add(I18n.format("gui.ae2enhanced.formed.network.booting"));
+                lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.network.booting") + "§r");
+            } else {
+                lines.add(I18n.format("gui.ae2enhanced.formed.network.offline"));
+                lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.network.offline") + "§r");
+            }
             this.drawHoveringText(lines, mouseX, mouseY);
         }
     }

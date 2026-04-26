@@ -78,7 +78,11 @@ public class MixinCraftingCPUCluster {
 
     /**
      * 在 updateCraftingLogic 开头检查：如果 tasks 已空但 isComplete 仍为 false，
-     * 说明所有合成（包括被 AE2 正常处理的非虚拟配方）已完成，手动调用 completeJob() 结束任务。
+     * 且没有等待返回的产物（waitingFor 为空），才手动调用 completeJob() 结束任务。
+     *
+     * 注意：普通 ME 接口的处理样板（Processing Pattern）在发配后 tasks 会变空，
+     * 但预期产物会登记在 waitingFor 中，必须等产物实际返回后才能标记完成。
+     * 因此必须同时检查 waitingFor 为空，避免破坏原版处理样板逻辑。
      */
     @Inject(method = "updateCraftingLogic", at = @At("HEAD"))
     private void onUpdateCraftingLogicHead(IGrid grid, IEnergyGrid eg, CraftingGridCache cache, CallbackInfo ci) {
@@ -93,7 +97,12 @@ public class MixinCraftingCPUCluster {
             boolean isComplete = isCompleteField.getBoolean(cpu);
 
             if (!isComplete && tasks.isEmpty()) {
-                completeJobMethod.invoke(cpu);
+                @SuppressWarnings("unchecked")
+                IItemList<IAEItemStack> waitingFor = (IItemList<IAEItemStack>) waitingForField.get(cpu);
+                // 只有当没有等待返回的产物时才强制完成，避免影响处理样板
+                if (waitingFor == null || waitingFor.isEmpty()) {
+                    completeJobMethod.invoke(cpu);
+                }
             }
         } catch (Exception e) {
             AE2Enhanced.LOGGER.error("[AE2E] onUpdateCraftingLogicHead unexpected error: {}", e.toString());
