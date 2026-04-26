@@ -175,8 +175,9 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
     /** 真实合成 batch 信息缓存：配方、催化剂槽位、槽位物品模板 */
     public static class PatternBatchInfo {
         public IRecipe recipe;
-        public java.util.BitSet catalystSlots;
-        public IAEItemStack[] slotTemplates;
+        public java.util.BitSet catalystSlots;  // 真催化剂：remaining 与 input 完全一致（NBT 不变）
+        public java.util.BitSet transformSlots; // 消耗性转换：remaining 与 input 同一物品但 NBT 不同（如耐久扣减）
+        public IAEItemStack[] slotTemplates;    // 每个槽位实际提取的物品模板（用于构造 InventoryCrafting）
     }
     private final Map<ICraftingPatternDetails, PatternBatchInfo> patternBatchInfoCache = new HashMap<>();
     private final List<Integer> jobTimers = new ArrayList<>();
@@ -934,14 +935,17 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
 
         NonNullList<ItemStack> remaining = info.recipe.getRemainingItems(ic);
         info.catalystSlots = new java.util.BitSet(inputs.length);
+        info.transformSlots = new java.util.BitSet(inputs.length);
         for (int i = 0; i < ic.getSizeInventory(); i++) {
             ItemStack input = ic.getStackInSlot(i);
             ItemStack rem = i < remaining.size() ? remaining.get(i) : ItemStack.EMPTY;
             if (rem.isEmpty()) continue;
-            if (ItemStack.areItemsEqual(input, rem)
-                    && input.getMetadata() == rem.getMetadata()
-                    && Objects.equals(input.getTagCompound(), rem.getTagCompound())) {
-                info.catalystSlots.set(i);
+            if (ItemStack.areItemsEqual(input, rem) && input.getMetadata() == rem.getMetadata()) {
+                if (Objects.equals(input.getTagCompound(), rem.getTagCompound())) {
+                    info.catalystSlots.set(i); // 真催化剂：NBT 完全不变
+                } else {
+                    info.transformSlots.set(i); // 消耗性转换：同一物品但 NBT 变化（耐久、能量等）
+                }
             }
         }
 

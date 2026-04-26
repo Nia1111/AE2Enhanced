@@ -165,6 +165,11 @@ public class MixinCraftingCPUCluster {
                                 TileAssemblyController.PatternBatchInfo info = controller.getPatternBatchInfo(details, meInv, source);
                                 if (info == null || info.recipe == null) break;
 
+                                // 消耗性转换（耐久扣减、能量变化等）必须逐件处理，不能 batch
+                                if (info.transformSlots != null && info.transformSlots.cardinality() > 0) {
+                                    actualBatchSize = 1;
+                                }
+
                                 int estimatedStacks = 1;
                                 for (int i = 0; i < info.slotTemplates.length; i++) {
                                     if (info.slotTemplates[i] != null && !info.catalystSlots.get(i)) {
@@ -176,12 +181,17 @@ public class MixinCraftingCPUCluster {
                                 boolean canExtract = true;
                                 for (int i = 0; i < info.slotTemplates.length; i++) {
                                     if (info.slotTemplates[i] == null) continue;
-                                    long needCount = info.catalystSlots.get(i) ? 1 : actualBatchSize;
+                                    long needCount;
+                                    if (info.catalystSlots.get(i) || info.transformSlots.get(i)) {
+                                        needCount = 1;
+                                    } else {
+                                        needCount = actualBatchSize;
+                                    }
                                     IAEItemStack need = info.slotTemplates[i].copy();
                                     need.setStackSize(needCount);
                                     IAEItemStack simResult = meInv.extractItems(need, SIMULATE, source);
                                     if (simResult == null || simResult.getStackSize() < needCount) {
-                                        if (info.catalystSlots.get(i)) {
+                                        if (info.catalystSlots.get(i) || info.transformSlots.get(i)) {
                                             canExtract = false;
                                         } else {
                                             actualBatchSize = Math.min(actualBatchSize,
@@ -193,7 +203,12 @@ public class MixinCraftingCPUCluster {
 
                                 for (int i = 0; i < info.slotTemplates.length; i++) {
                                     if (info.slotTemplates[i] == null) continue;
-                                    long needCount = info.catalystSlots.get(i) ? 1 : actualBatchSize;
+                                    long needCount;
+                                    if (info.catalystSlots.get(i) || info.transformSlots.get(i)) {
+                                        needCount = 1;
+                                    } else {
+                                        needCount = actualBatchSize;
+                                    }
                                     IAEItemStack need = info.slotTemplates[i].copy();
                                     need.setStackSize(needCount);
                                     IAEItemStack extracted = meInv.extractItems(need, MODULATE, source);
@@ -256,7 +271,7 @@ public class MixinCraftingCPUCluster {
                                 changed = true;
                                 controller.resetBatchCooldown();
 
-                                AE2Enhanced.LOGGER.info("[AE2E Batch] Processed {}x real {} -> remaining={}",
+                                AE2Enhanced.LOGGER.debug("[AE2E Batch] Processed {}x real {} -> remaining={}",
                                     actualBatchSize, details.getOutput(null, null).getDisplayName(), newRemaining);
                             } catch (Exception e) {
                                 AE2Enhanced.LOGGER.error("[AE2E] Real batch error: {}", e.toString());
@@ -372,7 +387,7 @@ public class MixinCraftingCPUCluster {
             batchCallCount++;
             if (virtualTasksExecuted > 0) {
                 batchSuccessCount += virtualTasksExecuted;
-                AE2Enhanced.LOGGER.info("[AE2E Batch] Executed {} virtual task(s) (found {} candidates, total calls={}, successes={})",
+                AE2Enhanced.LOGGER.debug("[AE2E Batch] Executed {} virtual task(s) (found {} candidates, total calls={}, successes={})",
                     virtualTasksExecuted, virtualTasksFound, batchCallCount, batchSuccessCount);
             } else if (anyOurTask && batchCallCount % 20 == 1) {
                 batchFailCount++;
