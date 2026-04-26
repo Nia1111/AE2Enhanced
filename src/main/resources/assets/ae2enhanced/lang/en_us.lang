@@ -4,7 +4,7 @@ tile.ae2enhanced.assembly_casing.name=Assembly Casing
 tile.ae2enhanced.assembly_inner_wall.name=Assembly Inner Wall
 tile.ae2enhanced.assembly_stabilizer.name=Assembly Stabilizer
 tile.ae2enhanced.micro_singularity.name=Micro Singularity
-tile.ae2enhanced.micro_singularity.tooltip=§8§o"A creation from the event horizon"§r\n§7Right-click the event horizon to throw items into the black hole for crafting.\n§7Generation: §eHold 4 Nether Stars and right-click an ME Controller§7,\n§7consuming §e64 AE2 Singularities §7to spawn a Micro Singularity.
+tile.ae2enhanced.micro_singularity.tooltip=§8§o"A creation from the event horizon"§r\n§7Right-click the event horizon to throw items into the black hole for crafting.\n§7Generation: §eThrow 64 AE2 Singularities and 4 Nether Stars §7onto the ground,\n§7then §ehold 1 Nether Star and right-click an ME Controller §7to spawn a Micro Singularity.
 
 jei.ae2enhanced.category.blackhole=Black Hole Crafting
 jei.ae2enhanced.blackhole.hint=Throw into event horizon

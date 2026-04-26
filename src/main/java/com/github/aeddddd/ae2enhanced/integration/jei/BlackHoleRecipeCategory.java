@@ -1,6 +1,7 @@
 package com.github.aeddddd.ae2enhanced.integration.jei;
 
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+import com.github.aeddddd.ae2enhanced.ModItems;
 import com.github.aeddddd.ae2enhanced.crafting.BlackHoleRecipe;
 import mezz.jei.api.IGuiHelper;
 import mezz.jei.api.gui.IDrawable;
@@ -31,7 +32,7 @@ public class BlackHoleRecipeCategory implements IRecipeCategory<BlackHoleRecipeW
 
     public BlackHoleRecipeCategory(IGuiHelper guiHelper) {
         this.background = guiHelper.createBlankDrawable(140, 50);
-        this.icon = guiHelper.createDrawable(BG, 0, 0, 16, 16);
+        this.icon = guiHelper.createDrawableIngredient(new ItemStack(ModItems.CONFORMAL_CHARGE));
         this.localizedName = I18n.format("jei.ae2enhanced.category.blackhole");
     }
 

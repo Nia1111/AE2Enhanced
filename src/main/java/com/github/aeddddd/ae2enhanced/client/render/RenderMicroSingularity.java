@@ -11,6 +11,9 @@ import org.lwjgl.opengl.GL11;
 /**
  * 微型奇点的 TESR。
  * 比正式黑洞更小、更致密、旋转更快，仅 2 层光晕。
+ *
+ * GL 状态恢复策略：不使用 pushAttrib/popAttrib（Kirino 不兼容底层 glPushAttrib），
+ * 所有修改的状态在 finally 中显式恢复。
  */
 public class RenderMicroSingularity extends TileEntitySpecialRenderer<TileMicroSingularity> {
 
@@ -45,7 +48,6 @@ public class RenderMicroSingularity extends TileEntitySpecialRenderer<TileMicroS
 
         GlStateManager.pushMatrix();
         GlStateManager.translate(centerX, centerY, centerZ);
-        GlStateManager.pushAttrib();
 
         GlStateManager.depthMask(false);
         GlStateManager.enableBlend();
@@ -57,29 +59,39 @@ public class RenderMicroSingularity extends TileEntitySpecialRenderer<TileMicroS
         GlStateManager.disableTexture2D();
         GlStateManager.shadeModel(GL11.GL_SMOOTH);
 
-        // 1. 事件视界（纯黑）
-        drawSphere(EVENT_HORIZON_RADIUS, 0x000000, 0.99f);
+        try {
+            // 1. 事件视界（纯黑）
+            drawSphere(EVENT_HORIZON_RADIUS, 0x000000, 0.99f);
 
-        // 2. 内层光晕（深紫，主旋转）
-        GlStateManager.pushMatrix();
-        GlStateManager.rotate(time * 0.8f, 0, 1, 0);
-        GlStateManager.rotate(18.0f, 1, 0, 0.3f);
-        drawSphere(innerR, 0x140029, innerAlpha);
-        // 内层网格：常亮 80% 亮度
-        drawWireframeSphere(innerR, 0x7700DD, 0.4f * (0.5f + 0.5f * gridEnergy));
-        GlStateManager.popMatrix();
+            // 2. 内层光晕（深紫，主旋转）
+            GlStateManager.pushMatrix();
+            GlStateManager.rotate(time * 0.8f, 0, 1, 0);
+            GlStateManager.rotate(18.0f, 1, 0, 0.3f);
+            drawSphere(innerR, 0x140029, innerAlpha);
+            // 内层网格：常亮 80% 亮度
+            drawWireframeSphere(innerR, 0x7700DD, 0.4f * (0.5f + 0.5f * gridEnergy));
+            GlStateManager.popMatrix();
 
-        // 3. 外层光晕（深紫雾，反向旋转）
-        GlStateManager.pushMatrix();
-        GlStateManager.rotate(-time * 0.5f, 0, 1, 0);
-        GlStateManager.rotate(12.0f, 0.5f, 0, 1.0f);
-        drawSphere(outerR, 0x05000D, outerAlpha);
-        drawWireframeSphere(outerR, 0x440088, 0.12f * (0.5f + 0.5f * gridEnergy));
-        GlStateManager.popMatrix();
-
-        GlStateManager.shadeModel(GL11.GL_FLAT);
-        GlStateManager.popAttrib();
-        GlStateManager.popMatrix();
+            // 3. 外层光晕（深紫雾，反向旋转）
+            GlStateManager.pushMatrix();
+            GlStateManager.rotate(-time * 0.5f, 0, 1, 0);
+            GlStateManager.rotate(12.0f, 0.5f, 0, 1.0f);
+            drawSphere(outerR, 0x05000D, outerAlpha);
+            drawWireframeSphere(outerR, 0x440088, 0.12f * (0.5f + 0.5f * gridEnergy));
+            GlStateManager.popMatrix();
+        } finally {
+            // 显式恢复所有修改的状态（Kirino 不兼容 glPushAttrib/glPopAttrib）
+            GlStateManager.shadeModel(GL11.GL_FLAT);
+            GlStateManager.enableTexture2D();
+            GlStateManager.enableLighting();
+            GlStateManager.depthMask(true);
+            GlStateManager.disableBlend();
+            GlStateManager.tryBlendFuncSeparate(
+                GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO
+            );
+            GlStateManager.popMatrix();
+        }
     }
 
     private void drawSphere(double radius, int color, float alpha) {

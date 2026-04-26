@@ -1,6 +1,12 @@
 {
-  "parent": "block/cube_all",
+  "parent": "block/cube",
   "textures": {
-    "all": "ae2enhanced:blocks/assembly_controller"
+    "particle": "ae2enhanced:blocks/assembly_casing",
+    "down": "ae2enhanced:blocks/assembly_casing",
+    "up": "ae2enhanced:blocks/assembly_casing",
+    "north": "ae2enhanced:blocks/assembly_controller",
+    "south": "ae2enhanced:blocks/assembly_casing",
+    "east": "ae2enhanced:blocks/assembly_casing",
+    "west": "ae2enhanced:blocks/assembly_casing"
   }
 }

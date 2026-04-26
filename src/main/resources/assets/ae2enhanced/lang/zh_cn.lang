@@ -4,7 +4,7 @@ tile.ae2enhanced.assembly_casing.name=装配枢纽外壳
 tile.ae2enhanced.assembly_inner_wall.name=装配枢纽内壁
 tile.ae2enhanced.assembly_stabilizer.name=装配枢纽稳定器
 tile.ae2enhanced.micro_singularity.name=微型奇点
-tile.ae2enhanced.micro_singularity.tooltip=§8§o「来自事件视界的造物」§r\n§7右键事件视界可将物品投入黑洞进行合成.\n§7生成方法: §e手持 4 个下界之星右键 ME 控制器§7,\n§7消耗 §e64 个 AE2 奇点 §7后生成微型奇点.
+tile.ae2enhanced.micro_singularity.tooltip=§8§o「来自事件视界的造物」§r\n§7右键事件视界可将物品投入黑洞进行合成.\n§7生成方法: §e扔出 64 个 AE2 奇点和 4 个下界之星 §7到地面,\n§7然后 §e手持 1 个下界之星右键 ME 控制器 §7即可生成微型奇点.
 
 jei.ae2enhanced.category.blackhole=黑洞合成
 jei.ae2enhanced.blackhole.hint=投入事件视界

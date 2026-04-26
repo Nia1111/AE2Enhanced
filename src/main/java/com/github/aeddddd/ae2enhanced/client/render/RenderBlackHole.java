@@ -10,6 +10,12 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.util.EnumFacing;
 import org.lwjgl.opengl.GL11;
 
+/**
+ * 装配枢纽控制器中心黑洞的 TESR。
+ *
+ * GL 状态恢复策略：不使用 pushAttrib/popAttrib（Kirino 不兼容底层 glPushAttrib），
+ * 所有修改的状态在 finally 中显式恢复。
+ */
 public class RenderBlackHole extends TileEntitySpecialRenderer<TileAssemblyController> {
 
     // 基础半径（扩张以此为基准）
@@ -66,7 +72,6 @@ public class RenderBlackHole extends TileEntitySpecialRenderer<TileAssemblyContr
 
         GlStateManager.pushMatrix();
         GlStateManager.translate(centerX, centerY, centerZ);
-        GlStateManager.pushAttrib();
 
         GlStateManager.depthMask(false);
         GlStateManager.enableBlend();
@@ -107,8 +112,7 @@ public class RenderBlackHole extends TileEntitySpecialRenderer<TileAssemblyContr
             drawSphere(outerR, 0x020005, outerAlpha);
             GlStateManager.popMatrix();
         } finally {
-            // 显式恢复所有可能被修改的状态
-            // popAttrib 不覆盖 depthMask / blendFunc，必须手动恢复
+            // 显式恢复所有修改的状态（Kirino 不兼容 glPushAttrib/glPopAttrib）
             GlStateManager.shadeModel(GL11.GL_FLAT);
             GlStateManager.enableTexture2D();
             GlStateManager.enableLighting();
@@ -118,7 +122,6 @@ public class RenderBlackHole extends TileEntitySpecialRenderer<TileAssemblyContr
                 GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
                 GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO
             );
-            GlStateManager.popAttrib();
             GlStateManager.popMatrix();
         }
     }
