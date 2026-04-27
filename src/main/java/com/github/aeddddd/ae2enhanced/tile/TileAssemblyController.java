@@ -12,7 +12,13 @@ import appeng.api.networking.storage.IStorageGrid;
 import appeng.api.storage.IMEMonitor;
 import appeng.api.storage.channels.IItemStorageChannel;
 import appeng.api.storage.data.IAEItemStack;
+import appeng.api.util.AECableType;
+import appeng.api.util.AEPartLocation;
+import appeng.api.util.DimensionalCoord;
+import appeng.me.helpers.AENetworkProxy;
+import appeng.me.helpers.IGridProxyable;
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+import com.github.aeddddd.ae2enhanced.ModBlocks;
 import com.github.aeddddd.ae2enhanced.block.BlockAssemblyController;
 import com.github.aeddddd.ae2enhanced.crafting.BlackHoleCraftingHelper;
 import com.github.aeddddd.ae2enhanced.crafting.BlackHoleRecipe;
@@ -56,7 +62,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
 
-public class TileAssemblyController extends TileEntity implements ICraftingProvider, ITickable {
+public class TileAssemblyController extends TileEntity implements ICraftingProvider, ITickable, IGridProxyable {
 
     public static final int UPGRADE_SLOTS = 6;
     public static final int PATTERN_SLOTS_PER_PAGE = 96; // 16×6
@@ -76,6 +82,8 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
     private int tickCounter = 0;
     private boolean formed = false;
     private BlockPos activeMeInterfacePos = null;
+    private AENetworkProxy proxy;
+    private boolean needsReady = false;
     private boolean networkActive = false;
     private boolean networkPowered = false;
     private int batchCooldown = 0;
@@ -398,6 +406,62 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         return activeMeInterfacePos;
     }
 
+    // ---- IGridProxyable / IGridHost (控制器集中代理) ----
+
+    private AENetworkProxy createProxy() {
+        AENetworkProxy p = new AENetworkProxy(this, "assembly_controller",
+            new net.minecraft.item.ItemStack(ModBlocks.ASSEMBLY_CONTROLLER), true);
+        p.setValidSides(java.util.EnumSet.allOf(EnumFacing.class));
+        return p;
+    }
+
+    @Override
+    public AENetworkProxy getProxy() {
+        if (proxy == null) {
+            proxy = createProxy();
+        }
+        return proxy;
+    }
+
+    @Override
+    public DimensionalCoord getLocation() {
+        return new DimensionalCoord(this);
+    }
+
+    @Override
+    public void gridChanged() {
+    }
+
+    @Override
+    public IGridNode getGridNode(@Nonnull AEPartLocation dir) {
+        return getProxy().getNode();
+    }
+
+    @Nonnull
+    @Override
+    public AECableType getCableConnectionType(@Nonnull AEPartLocation dir) {
+        return formed ? AECableType.SMART : AECableType.NONE;
+    }
+
+    @Override
+    public void securityBreak() {
+        disassemble();
+    }
+
+    @Override
+    public void validate() {
+        super.validate();
+        needsReady = true;
+    }
+
+    @Override
+    public void invalidate() {
+        super.invalidate();
+        if (proxy != null) {
+            proxy.invalidate();
+        }
+    }
+
     public void assemble() {
         if (!formed) {
             formed = true;
@@ -405,6 +469,7 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             if (world != null && !world.isRemote) {
                 world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 2);
             }
+            getProxy().onReady();
         }
     }
 
@@ -418,6 +483,7 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             if (world != null && !world.isRemote) {
                 world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 2);
             }
+            getProxy().invalidate();
         }
     }
 
@@ -455,6 +521,12 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
                 spawnBlackHoleParticles();
             }
             return;
+        }
+
+        // 网络代理就绪
+        if (needsReady && formed) {
+            needsReady = false;
+            getProxy().onReady();
         }
 
         // 黑洞事件视界：秒杀进入中心区域的生物；16次未死则放逐至随机维度
@@ -544,19 +616,12 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             patternsDirty = false;
             patternRefreshTicks = 1;
         }
-        if (patternRefreshTicks > 0 && activeMeInterfacePos != null) {
+        if (patternRefreshTicks > 0) {
             if (--patternRefreshTicks == 0) {
-                TileEntity te = world.getTileEntity(activeMeInterfacePos);
-                if (te instanceof TileAssemblyMeInterface) {
-                    TileAssemblyMeInterface me = (TileAssemblyMeInterface) te;
-                    appeng.me.helpers.AENetworkProxy proxy = me.getProxy();
-                    IGridNode node = proxy.getNode();
-                    if (node != null && node.getGrid() != null) {
-                        // 发送 MENetworkCraftingPatternChange 事件，通知 AE2 重新扫描该节点的样板
-                        appeng.api.networking.events.MENetworkCraftingPatternChange event =
-                            new appeng.api.networking.events.MENetworkCraftingPatternChange(me, node);
-                        node.getGrid().postEvent(event);
-                    }
+                AENetworkProxy proxy = getProxy();
+                IGridNode node = proxy.getNode();
+                if (node != null && node.getGrid() != null) {
+                    node.getGrid().postEvent(new appeng.api.networking.events.MENetworkCraftingPatternChange(this, node));
                 }
             }
         }
@@ -590,15 +655,11 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
 
         boolean newActive = false;
         boolean newPowered = false;
-        if (formed && activeMeInterfacePos != null) {
-            TileEntity te = world.getTileEntity(activeMeInterfacePos);
-            if (te instanceof TileAssemblyMeInterface) {
-                TileAssemblyMeInterface me = (TileAssemblyMeInterface) te;
-                appeng.me.helpers.AENetworkProxy proxy = me.getProxy();
-                if (proxy != null) {
-                    newActive = proxy.isActive();
-                    newPowered = proxy.isPowered();
-                }
+        if (formed) {
+            AENetworkProxy proxy = getProxy();
+            if (proxy != null) {
+                newActive = proxy.isActive();
+                newPowered = proxy.isPowered();
             }
         }
 
@@ -632,12 +693,7 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
     // ---------- 产物注入（BatchExporter 风格，合并后批量注入） ----------
 
     private void tryInjectPendingOutputs() {
-        if (activeMeInterfacePos == null) return;
-        TileEntity te = world.getTileEntity(activeMeInterfacePos);
-        if (!(te instanceof TileAssemblyMeInterface)) return;
-
-        TileAssemblyMeInterface me = (TileAssemblyMeInterface) te;
-        appeng.me.helpers.AENetworkProxy proxy = me.getProxy();
+        AENetworkProxy proxy = getProxy();
         if (proxy == null) return;
 
         IGridNode node = proxy.getNode();
@@ -739,10 +795,7 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         if (output.isEmpty()) return false;
 
         // 网络未就绪：拒绝，让 AE 稍后重试
-        if (activeMeInterfacePos == null) return false;
-        TileEntity te = world.getTileEntity(activeMeInterfacePos);
-        if (!(te instanceof TileAssemblyMeInterface)) return false;
-        appeng.me.helpers.AENetworkProxy proxy = ((TileAssemblyMeInterface) te).getProxy();
+        AENetworkProxy proxy = getProxy();
         IGridNode node = proxy.getNode();
         if (node == null || node.getGrid() == null) return false;
 
@@ -945,14 +998,11 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         // 实际原料扣除与产物注入已移至 MixinCraftingCPUCluster.batchProcessVirtualTasks
         // 中直接操作 CraftingCPUCluster.getInventory() 的内部列表，
         // 以保证嵌套配方时产物能被上层 canCraft() 正确识别。
-        // 这里仅作为 batch 可行性确认（控制器在线、接口有效）。
-        if (world == null || world.isRemote || activeMeInterfacePos == null) return false;
+        // 这里仅作为 batch 可行性确认（控制器在线、网络就绪）。
+        if (world == null || world.isRemote) return false;
         if (batchSize <= 0) return false;
 
-        TileEntity te = world.getTileEntity(activeMeInterfacePos);
-        if (!(te instanceof TileAssemblyMeInterface)) return false;
-
-        appeng.me.helpers.AENetworkProxy proxy = ((TileAssemblyMeInterface) te).getProxy();
+        AENetworkProxy proxy = getProxy();
         IGridNode node = proxy.getNode();
         return node != null && node.getGrid() != null;
     }
@@ -1238,6 +1288,9 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         if (compound.hasKey("blackHoleCraftTicks")) {
             blackHoleCraftTicks = compound.getInteger("blackHoleCraftTicks");
         }
+        if (compound.hasKey("proxy")) {
+            getProxy().readFromNBT(compound.getCompoundTag("proxy"));
+        }
         // 存档加载后立即预填充虚拟缓存，避免 AE2 网络扫描前下单时缓存为空
         if (world != null && !world.isRemote) {
             int patternSlots = getPatternSlotCount();
@@ -1293,6 +1346,11 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         }
         compound.setTag("blackHoleBuffer", bhList);
         compound.setInteger("blackHoleCraftTicks", blackHoleCraftTicks);
+        if (proxy != null) {
+            NBTTagCompound proxyTag = new NBTTagCompound();
+            proxy.writeToNBT(proxyTag);
+            compound.setTag("proxy", proxyTag);
+        }
         return compound;
     }
 

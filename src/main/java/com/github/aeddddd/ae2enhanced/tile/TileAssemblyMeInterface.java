@@ -9,24 +9,16 @@ import appeng.api.util.AEPartLocation;
 import appeng.api.util.DimensionalCoord;
 import appeng.me.helpers.AENetworkProxy;
 import appeng.me.helpers.IGridProxyable;
-import com.github.aeddddd.ae2enhanced.ModBlocks;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.ITickable;
 import net.minecraft.util.math.BlockPos;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import java.util.EnumSet;
 
-public class TileAssemblyMeInterface extends TileEntity implements IGridProxyable, ICraftingProvider, ITickable {
-
-    private boolean needsReady = false;
+public class TileAssemblyMeInterface extends TileEntity implements IGridProxyable, ICraftingProvider {
 
     private BlockPos controllerPos;
-    private AENetworkProxy proxy;
 
     public void setControllerPos(BlockPos pos) {
         this.controllerPos = pos;
@@ -37,48 +29,13 @@ public class TileAssemblyMeInterface extends TileEntity implements IGridProxyabl
         return controllerPos;
     }
 
-    private AENetworkProxy createProxy() {
-        AENetworkProxy p = new AENetworkProxy(this, "me_interface",
-            new net.minecraft.item.ItemStack(ModBlocks.ASSEMBLY_ME_INTERFACE), true);
-        p.setValidSides(EnumSet.allOf(EnumFacing.class));
-        return p;
-    }
-
     @Override
     public AENetworkProxy getProxy() {
-        if (proxy == null) {
-            proxy = createProxy();
+        TileAssemblyController controller = getController();
+        if (controller != null) {
+            return controller.getProxy();
         }
-        return proxy;
-    }
-
-    @Override
-    public void validate() {
-        super.validate();
-        needsReady = true;
-    }
-
-    @Override
-    public void invalidate() {
-        super.invalidate();
-        if (proxy != null) {
-            proxy.invalidate();
-        }
-    }
-
-    @Override
-    public void update() {
-        if (!needsReady || world == null || world.isRemote || controllerPos == null) {
-            return;
-        }
-        if (!world.isBlockLoaded(controllerPos)) {
-            return; // 控制器所在 chunk 未加载，延迟到下次 tick
-        }
-        needsReady = false;
-        TileEntity te = world.getTileEntity(controllerPos);
-        if (te instanceof TileAssemblyController && ((TileAssemblyController) te).isFormed()) {
-            getProxy().onReady();
-        }
+        return null;
     }
 
     @Override
@@ -96,7 +53,11 @@ public class TileAssemblyMeInterface extends TileEntity implements IGridProxyabl
         if (controllerPos == null || world == null) return null;
         TileEntity te = world.getTileEntity(controllerPos);
         if (te instanceof TileAssemblyController && ((TileAssemblyController) te).isFormed()) {
-            return getProxy().getNode();
+            TileAssemblyController controller = (TileAssemblyController) te;
+            AENetworkProxy proxy = controller.getProxy();
+            if (proxy != null) {
+                return proxy.getNode();
+            }
         }
         return null;
     }
@@ -169,9 +130,6 @@ public class TileAssemblyMeInterface extends TileEntity implements IGridProxyabl
                 compound.getInteger("controllerZ")
             );
         }
-        if (compound.hasKey("proxy")) {
-            getProxy().readFromNBT(compound.getCompoundTag("proxy"));
-        }
     }
 
     @Override
@@ -181,11 +139,6 @@ public class TileAssemblyMeInterface extends TileEntity implements IGridProxyabl
             compound.setInteger("controllerX", controllerPos.getX());
             compound.setInteger("controllerY", controllerPos.getY());
             compound.setInteger("controllerZ", controllerPos.getZ());
-        }
-        if (proxy != null) {
-            NBTTagCompound proxyTag = new NBTTagCompound();
-            proxy.writeToNBT(proxyTag);
-            compound.setTag("proxy", proxyTag);
         }
         return compound;
     }
