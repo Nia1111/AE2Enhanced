@@ -39,7 +39,7 @@ Unlike Large Molecular Assemblers or pattern providers, the Assembly Hub uses a 
 
 ## Download
 
-CurseForge: *(Coming Soon)*  
+[CurseForge](https://www.curseforge.com/minecraft/mc-mods/ae2enhanced)  
 [Releases](https://github.com/aeddddd/AE2Enhanced/releases)
 
 ---
@@ -63,12 +63,3 @@ BlackHole.addRecipe([<minecraft:stone> * 8, <minecraft:diamond>], <minecraft:obs
 BlackHole.removeRecipe("test_obsidian");
 ```
 
----
-
-## License
-
-GPL-2.0
-
----
-
-*"This very moment is all of eternity."*

@@ -34,8 +34,8 @@ AE2Enhanced 是 **AE2 Unofficial Extended Life (AE2-UEL)** 的终局扩展模组
 ---
 ## 下载
 
-CurseForge: *(即将推出)*
-Releases
+[CurseForge](https://www.curseforge.com/minecraft/mc-mods/ae2enhanced)  
+[Releases](https://github.com/aeddddd/AE2Enhanced/releases)
 
 ---
 
