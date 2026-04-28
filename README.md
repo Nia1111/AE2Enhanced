@@ -59,7 +59,17 @@ A unique crafting system that allows players to create a **Micro Singularity** a
 Full **CraftTweaker** support:
 ```zenscript
 import mods.ae2enhanced.BlackHole;
+BlackHole.addRecipe(IItemStack output, IItemStack[] inputs);
+//like
 BlackHole.addRecipe([<minecraft:stone> * 8, <minecraft:diamond>], <minecraft:obsidian>);
 BlackHole.removeRecipe("test_obsidian");
+```
+
+Built-in recipe name
+```
+id: "test_obsidian"
+id: "stable_spacetime_manifold"
+id: "differential_form_stabilizer"
+id: "conformal_invariant_charge"
 ```
 

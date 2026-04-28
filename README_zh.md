@@ -54,8 +54,18 @@ AE2Enhanced 是 **AE2 Unofficial Extended Life (AE2-UEL)** 的终局扩展模组
 支持**CraftTweaker**修改配方:
 ```zenscript
 import mods.ae2enhanced.BlackHole;
+BlackHole.addRecipe(IItemStack output, IItemStack[] inputs);
+//示例
 BlackHole.addRecipe([<minecraft:stone> * 8, <minecraft:diamond>], <minecraft:obsidian>);
 BlackHole.removeRecipe("test_obsidian");
+```
+
+内置的配方名
+```
+id: "test_obsidian"
+id: "stable_spacetime_manifold"
+id: "differential_form_stabilizer"
+id: "conformal_invariant_charge"
 ```
 
 
