@@ -56,7 +56,7 @@ AE2Enhanced 是 **AE2 Unofficial Extended Life (AE2-UEL)** 的终局扩展模组
 import mods.ae2enhanced.BlackHole;
 BlackHole.addRecipe(IItemStack output, IItemStack[] inputs);
 //示例
-BlackHole.addRecipe([<minecraft:stone> * 8, <minecraft:diamond>], <minecraft:obsidian>);
+BlackHole.addRecipe(<minecraft:obsidian>, [<minecraft:stone> * 8, <minecraft:diamond>]);
 BlackHole.removeRecipe("test_obsidian");
 ```
 

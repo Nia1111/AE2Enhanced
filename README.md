@@ -61,7 +61,7 @@ Full **CraftTweaker** support:
 import mods.ae2enhanced.BlackHole;
 BlackHole.addRecipe(IItemStack output, IItemStack[] inputs);
 //like
-BlackHole.addRecipe([<minecraft:stone> * 8, <minecraft:diamond>], <minecraft:obsidian>);
+BlackHole.addRecipe(<minecraft:obsidian>, [<minecraft:stone> * 8, <minecraft:diamond>]);
 BlackHole.removeRecipe("test_obsidian");
 ```
 
