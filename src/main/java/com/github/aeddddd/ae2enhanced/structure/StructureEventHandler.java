@@ -3,7 +3,10 @@ package com.github.aeddddd.ae2enhanced.structure;
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
 import com.github.aeddddd.ae2enhanced.ModBlocks;
 import com.github.aeddddd.ae2enhanced.block.BlockAssemblyController;
+import com.github.aeddddd.ae2enhanced.block.BlockHyperdimensionalController;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyController;
+import com.github.aeddddd.ae2enhanced.tile.TileHyperdimensionalController;
+import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
@@ -40,8 +43,11 @@ public class StructureEventHandler {
 
         BlockPos pos = event.getPos();
         // 如果是控制器本身被破坏，立即解散（不用等 tick）
-        if (world.getBlockState(pos).getBlock() == ModBlocks.ASSEMBLY_CONTROLLER) {
+        Block brokenBlock = world.getBlockState(pos).getBlock();
+        if (brokenBlock == ModBlocks.ASSEMBLY_CONTROLLER) {
             AssemblyStructure.disassemble(world, pos);
+        } else if (brokenBlock == ModBlocks.HYPERDIMENSIONAL_CONTROLLER) {
+            HyperdimensionalStructure.disassemble(world, pos);
         }
         checkSurroundingControllers(world, pos);
     }
@@ -100,14 +106,22 @@ public class StructureEventHandler {
         Set<BlockPos> controllers = index.getAll();
         for (BlockPos controllerPos : controllers) {
             IBlockState state = world.getBlockState(controllerPos);
+            Block block = state.getBlock();
             EnumFacing facing = EnumFacing.NORTH;
-            if (state.getBlock() instanceof BlockAssemblyController) {
+            if (block instanceof BlockAssemblyController) {
                 facing = state.getValue(BlockAssemblyController.FACING);
-            }
-            BlockPos origin = AssemblyStructure.getOriginFromController(controllerPos, facing);
-            BlockPos rel = changedPos.subtract(origin);
-            if (AssemblyStructure.ALL_SET.contains(rel)) {
-                scheduleCheck(world.provider.getDimension(), controllerPos);
+                BlockPos origin = AssemblyStructure.getOriginFromController(controllerPos, facing);
+                BlockPos rel = changedPos.subtract(origin);
+                if (AssemblyStructure.ALL_SET.contains(rel)) {
+                    scheduleCheck(world.provider.getDimension(), controllerPos);
+                }
+            } else if (block instanceof BlockHyperdimensionalController) {
+                facing = state.getValue(BlockHyperdimensionalController.FACING);
+                BlockPos rel = changedPos.subtract(controllerPos);
+                BlockPos rotatedRel = HyperdimensionalStructure.rotate(rel, facing.getOpposite());
+                if (HyperdimensionalStructure.ALL_SET.contains(rotatedRel)) {
+                    scheduleCheck(world.provider.getDimension(), controllerPos);
+                }
             }
         }
     }
@@ -117,18 +131,28 @@ public class StructureEventHandler {
     }
 
     private static void validateAndUpdate(World world, BlockPos controllerPos) {
-        if (world.getBlockState(controllerPos).getBlock() != ModBlocks.ASSEMBLY_CONTROLLER) {
-            return;
-        }
-
-        boolean valid = AssemblyStructure.validate(world, controllerPos);
-        TileEntity te = world.getTileEntity(controllerPos);
-        if (te instanceof TileAssemblyController) {
-            TileAssemblyController tile = (TileAssemblyController) te;
-            if (valid && !tile.isFormed()) {
-                AssemblyStructure.assemble(world, controllerPos);
-            } else if (!valid && tile.isFormed()) {
-                AssemblyStructure.disassemble(world, controllerPos);
+        Block controllerBlock = world.getBlockState(controllerPos).getBlock();
+        if (controllerBlock == ModBlocks.ASSEMBLY_CONTROLLER) {
+            boolean valid = AssemblyStructure.validate(world, controllerPos);
+            TileEntity te = world.getTileEntity(controllerPos);
+            if (te instanceof TileAssemblyController) {
+                TileAssemblyController tile = (TileAssemblyController) te;
+                if (valid && !tile.isFormed()) {
+                    AssemblyStructure.assemble(world, controllerPos);
+                } else if (!valid && tile.isFormed()) {
+                    AssemblyStructure.disassemble(world, controllerPos);
+                }
+            }
+        } else if (controllerBlock == ModBlocks.HYPERDIMENSIONAL_CONTROLLER) {
+            boolean valid = HyperdimensionalStructure.validate(world, controllerPos);
+            TileEntity te = world.getTileEntity(controllerPos);
+            if (te instanceof TileHyperdimensionalController) {
+                TileHyperdimensionalController tile = (TileHyperdimensionalController) te;
+                if (valid && !tile.isFormed()) {
+                    HyperdimensionalStructure.assemble(world, controllerPos);
+                } else if (!valid && tile.isFormed()) {
+                    HyperdimensionalStructure.disassemble(world, controllerPos);
+                }
             }
         }
     }

@@ -82,4 +82,9 @@ item.ae2enhanced.differential_form_stabilizer.tooltip=§e§lDifferential Form St
 item.ae2enhanced.stable_spacetime_manifold.name=Stable Spacetime Manifold
 item.ae2enhanced.stable_spacetime_manifold.tooltip=§e§lStable Spacetime Manifold §7\nA self-stabilizing region of spacetime extracted from the event horizon,\nmaintaining topological integrity under extreme curvature.\n§8A piece of stable spacetime manifold.\n§b§l"Where time stands still"
 
+tile.ae2enhanced.hyperdimensional_controller.name=Hyperdimensional Storage Controller
+tile.ae2enhanced.hyperdimensional_me_interface.name=Hyperdimensional ME Interface
+tile.ae2enhanced.hyperdimensional_casing.name=Hyperdimensional Metric Anchor
+tile.ae2enhanced.hyperdimensional_singularity_core.name=Hyperdimensional Singularity Core
+
 death.spacetime.blackHole=%1$s was forever lost in the event horizon

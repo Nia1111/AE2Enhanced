@@ -4,6 +4,8 @@ import com.github.aeddddd.ae2enhanced.block.*;
 import com.github.aeddddd.ae2enhanced.item.ItemBlockMicroSingularity;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyController;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyMeInterface;
+import com.github.aeddddd.ae2enhanced.tile.TileHyperdimensionalController;
+import com.github.aeddddd.ae2enhanced.tile.TileHyperdimensionalMeInterface;
 import com.github.aeddddd.ae2enhanced.tile.TileMicroSingularity;
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
@@ -23,6 +25,11 @@ public class ModBlocks {
     public static BlockAssemblyStabilizer ASSEMBLY_STABILIZER;
     public static BlockMicroSingularity MICRO_SINGULARITY;
 
+    public static BlockHyperdimensionalController HYPERDIMENSIONAL_CONTROLLER;
+    public static BlockHyperdimensionalMeInterface HYPERDIMENSIONAL_ME_INTERFACE;
+    public static BlockHyperdimensionalCasing HYPERDIMENSIONAL_CASING;
+    public static BlockHyperdimensionalSingularityCore HYPERDIMENSIONAL_SINGULARITY_CORE;
+
     public static void init() {
     }
 
@@ -34,12 +41,18 @@ public class ModBlocks {
             ASSEMBLY_CASING = new BlockAssemblyCasing(),
             ASSEMBLY_INNER_WALL = new BlockAssemblyInnerWall(),
             ASSEMBLY_STABILIZER = new BlockAssemblyStabilizer(),
-            MICRO_SINGULARITY = new BlockMicroSingularity()
+            MICRO_SINGULARITY = new BlockMicroSingularity(),
+            HYPERDIMENSIONAL_CONTROLLER = new BlockHyperdimensionalController(),
+            HYPERDIMENSIONAL_ME_INTERFACE = new BlockHyperdimensionalMeInterface(),
+            HYPERDIMENSIONAL_CASING = new BlockHyperdimensionalCasing(),
+            HYPERDIMENSIONAL_SINGULARITY_CORE = new BlockHyperdimensionalSingularityCore()
         );
 
         GameRegistry.registerTileEntity(TileAssemblyController.class, AE2Enhanced.MOD_ID + ":assembly_controller");
         GameRegistry.registerTileEntity(TileAssemblyMeInterface.class, AE2Enhanced.MOD_ID + ":assembly_me_interface");
         GameRegistry.registerTileEntity(TileMicroSingularity.class, AE2Enhanced.MOD_ID + ":micro_singularity");
+        GameRegistry.registerTileEntity(TileHyperdimensionalController.class, AE2Enhanced.MOD_ID + ":hyperdimensional_controller");
+        GameRegistry.registerTileEntity(TileHyperdimensionalMeInterface.class, AE2Enhanced.MOD_ID + ":hyperdimensional_me_interface");
     }
 
     @SubscribeEvent
@@ -50,7 +63,11 @@ public class ModBlocks {
             new ItemBlock(ASSEMBLY_CASING).setRegistryName(ASSEMBLY_CASING.getRegistryName()),
             new ItemBlock(ASSEMBLY_INNER_WALL).setRegistryName(ASSEMBLY_INNER_WALL.getRegistryName()),
             new ItemBlock(ASSEMBLY_STABILIZER).setRegistryName(ASSEMBLY_STABILIZER.getRegistryName()),
-            new ItemBlockMicroSingularity(MICRO_SINGULARITY).setRegistryName(MICRO_SINGULARITY.getRegistryName())
+            new ItemBlockMicroSingularity(MICRO_SINGULARITY).setRegistryName(MICRO_SINGULARITY.getRegistryName()),
+            new ItemBlock(HYPERDIMENSIONAL_CONTROLLER).setRegistryName(HYPERDIMENSIONAL_CONTROLLER.getRegistryName()),
+            new ItemBlock(HYPERDIMENSIONAL_ME_INTERFACE).setRegistryName(HYPERDIMENSIONAL_ME_INTERFACE.getRegistryName()),
+            new ItemBlock(HYPERDIMENSIONAL_CASING).setRegistryName(HYPERDIMENSIONAL_CASING.getRegistryName()),
+            new ItemBlock(HYPERDIMENSIONAL_SINGULARITY_CORE).setRegistryName(HYPERDIMENSIONAL_SINGULARITY_CORE.getRegistryName())
         );
     }
 }
