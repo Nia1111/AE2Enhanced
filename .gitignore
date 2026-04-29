@@ -55,7 +55,9 @@ runClient/
 runServer/
 
 AGENTS.md
+AGENTS_*.md
 
 ### Project Assets (source files) ###
 AssemblyTexture/
 Supercausal Assembly Hub.json
+Hyperdimensional Storage Nexus.json
