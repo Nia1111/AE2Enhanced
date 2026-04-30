@@ -44,7 +44,7 @@ public class GuiHyperdimensionalUnformed extends GuiContainer {
         super(new ContainerHyperdimensionalUnformed(playerInv, tile));
         this.tile = tile;
         this.xSize = 280;
-        this.ySize = 210;
+        this.ySize = 260;
     }
 
     private void refreshMissingMap() {
@@ -55,7 +55,7 @@ public class GuiHyperdimensionalUnformed extends GuiContainer {
     public void initGui() {
         super.initGui();
         int centerX = guiLeft + xSize / 2;
-        assembleButton = new GuiButtonTech(0, centerX - 80, guiTop + 96, 160, 24, getAssembleButtonText());
+        assembleButton = new GuiButtonTech(0, centerX - 80, guiTop + 150, 160, 24, getAssembleButtonText());
         buttonList.add(assembleButton);
         refreshMissingMap();
         updateButtonState();
@@ -118,7 +118,7 @@ public class GuiHyperdimensionalUnformed extends GuiContainer {
         drawRect(guiLeft, guiTop, guiLeft + xSize, guiTop + ySize, PANEL_BG);
 
         // 内面板区域
-        drawRect(guiLeft + 10, guiTop + 40, guiLeft + xSize - 10, guiTop + 90, PANEL_LIGHT);
+        drawRect(guiLeft + 10, guiTop + 40, guiLeft + xSize - 10, guiTop + 140, PANEL_LIGHT);
 
         // 顶部高亮条
         drawRect(guiLeft, guiTop, guiLeft + xSize, guiTop + 2, ACCENT);
@@ -142,7 +142,7 @@ public class GuiHyperdimensionalUnformed extends GuiContainer {
 
         // 内面板边框
         drawRect(guiLeft + 10, guiTop + 40, guiLeft + xSize - 10, guiTop + 41, BORDER_DIM);
-        drawRect(guiLeft + 10, guiTop + 89, guiLeft + xSize - 10, guiTop + 90, BORDER_DIM);
+        drawRect(guiLeft + 10, guiTop + 139, guiLeft + xSize - 10, guiTop + 140, BORDER_DIM);
     }
 
     @Override
@@ -195,15 +195,15 @@ public class GuiHyperdimensionalUnformed extends GuiContainer {
         if (missingMap.isEmpty()) {
             String status = I18n.format("gui.ae2enhanced.unformed.status.ready");
             int sw = fontRenderer.getStringWidth(status);
-            fontRenderer.drawString(status, (xSize - sw) / 2, 84, TEXT_SUCCESS);
+            fontRenderer.drawString(status, (xSize - sw) / 2, 134, TEXT_SUCCESS);
         } else {
             String status = I18n.format("gui.ae2enhanced.unformed.status.missing");
             int sw = fontRenderer.getStringWidth(status);
-            fontRenderer.drawString(status, (xSize - sw) / 2, 84, TEXT_ERROR);
+            fontRenderer.drawString(status, (xSize - sw) / 2, 134, TEXT_ERROR);
         }
 
         // 背包上方分隔线
-        drawRect(16, 116, xSize - 16, 117, ACCENT_SOFT);
+        drawRect(16, 170, xSize - 16, 171, ACCENT_SOFT);
     }
 
     @Override

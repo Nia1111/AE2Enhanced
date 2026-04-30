@@ -1,8 +1,12 @@
 package com.github.aeddddd.ae2enhanced.crafting;
 
+import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 黑洞合成配方注册表。
@@ -10,6 +14,9 @@ import java.util.Map;
 public class BlackHoleRecipeRegistry {
 
     private static final List<BlackHoleRecipe> RECIPES = new ArrayList<>();
+
+    /** 延迟移除队列：CraftTweaker 脚本可能在配方注册前执行 */
+    private static final Set<String> PENDING_REMOVALS = new HashSet<>();
 
     public static void register(BlackHoleRecipe recipe) {
         RECIPES.add(recipe);
@@ -33,5 +40,18 @@ public class BlackHoleRecipeRegistry {
 
     public static List<BlackHoleRecipe> getRecipes() {
         return new ArrayList<>(RECIPES);
+    }
+
+    public static void queueRemoval(String id) {
+        PENDING_REMOVALS.add(id);
+    }
+
+    public static void applyPendingRemovals() {
+        if (PENDING_REMOVALS.isEmpty()) return;
+        for (String id : new HashSet<>(PENDING_REMOVALS)) {
+            boolean removed = removeById(id);
+            AE2Enhanced.LOGGER.info("[AE2E CT] applyPendingRemovals('{}'): {}", id, removed ? "removed" : "not found");
+        }
+        PENDING_REMOVALS.clear();
     }
 }

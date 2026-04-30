@@ -60,7 +60,7 @@ public class ItemStorageAdapter implements IMEInventory<IAEItemStack> {
         BigInteger toExtract = available.min(requested);
 
         if (toExtract.signum() <= 0) {
-            return request.copy(); // 无法提取任何，返回原请求
+            return null; // 无法提取任何
         }
 
         if (type == Actionable.MODULATE) {

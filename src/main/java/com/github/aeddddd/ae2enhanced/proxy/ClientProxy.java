@@ -52,6 +52,11 @@ public class ClientProxy extends CommonProxy {
         registerBlockItemModel(ModBlocks.ASSEMBLY_STABILIZER);
         registerBlockItemModel(ModBlocks.MICRO_SINGULARITY);
 
+        registerBlockItemModel(ModBlocks.HYPERDIMENSIONAL_CONTROLLER);
+        registerBlockItemModel(ModBlocks.HYPERDIMENSIONAL_ME_INTERFACE);
+        registerBlockItemModel(ModBlocks.HYPERDIMENSIONAL_CASING);
+        registerBlockItemModel(ModBlocks.HYPERDIMENSIONAL_SINGULARITY_CORE);
+
         // 注册升级卡的所有模型 variant
         ModelLoader.registerItemVariants(ModItems.UPGRADE_CARD,
             new ModelResourceLocation(AE2Enhanced.MOD_ID + ":upgrade_card", "inventory"),

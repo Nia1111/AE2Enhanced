@@ -1,22 +1,16 @@
 package com.github.aeddddd.ae2enhanced.tile;
 
 import appeng.api.networking.IGridNode;
-import appeng.api.networking.security.IActionSource;
-import appeng.api.storage.IStorageMonitorable;
-import appeng.api.storage.IStorageMonitorableAccessor;
 import appeng.api.util.AECableType;
 import appeng.api.util.AEPartLocation;
 import appeng.api.util.DimensionalCoord;
 import appeng.me.helpers.AENetworkProxy;
 import appeng.me.helpers.IGridProxyable;
-import com.github.aeddddd.ae2enhanced.AE2Enhanced;
-import com.github.aeddddd.ae2enhanced.block.BlockHyperdimensionalMeInterface;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 
 /**
  * 仓储中枢 ME 接口，仅作为 AE 网络物理接入点。
@@ -63,15 +57,11 @@ public class TileHyperdimensionalMeInterface extends TileEntity implements IGrid
 
     @Override
     public IGridNode getGridNode(@Nonnull AEPartLocation dir) {
-        if (controllerPos == null || world == null) return null;
-        TileEntity te = world.getTileEntity(controllerPos);
-        if (te instanceof TileHyperdimensionalController) {
-            TileHyperdimensionalController controller = (TileHyperdimensionalController) te;
-            if (controller.isFormed()) {
-                AENetworkProxy proxy = controller.getProxy();
-                if (proxy != null) {
-                    return proxy.getNode();
-                }
+        TileHyperdimensionalController controller = getController();
+        if (controller != null && controller.isFormed()) {
+            AENetworkProxy proxy = controller.getProxy();
+            if (proxy != null) {
+                return proxy.getNode();
             }
         }
         return null;
@@ -80,15 +70,8 @@ public class TileHyperdimensionalMeInterface extends TileEntity implements IGrid
     @Nonnull
     @Override
     public AECableType getCableConnectionType(@Nonnull AEPartLocation dir) {
-        if (controllerPos == null || world == null) return AECableType.NONE;
-        TileEntity te = world.getTileEntity(controllerPos);
-        if (te instanceof TileHyperdimensionalController) {
-            TileHyperdimensionalController controller = (TileHyperdimensionalController) te;
-            if (controller.isFormed()) {
-                return AECableType.SMART;
-            }
-        }
-        return AECableType.NONE;
+        TileHyperdimensionalController controller = getController();
+        return (controller != null && controller.isFormed()) ? AECableType.SMART : AECableType.NONE;
     }
 
     @Override
@@ -100,6 +83,8 @@ public class TileHyperdimensionalMeInterface extends TileEntity implements IGrid
             }
         }
     }
+
+    // ---- NBT ----
 
     @Override
     public void readFromNBT(NBTTagCompound compound) {

@@ -29,6 +29,10 @@ public class ItemDescriptor {
         );
     }
 
+    private static String nbtString(NBTTagCompound nbt) {
+        return nbt != null ? nbt.toString() : null;
+    }
+
     private ItemDescriptor(Item item, int meta, NBTTagCompound nbt) {
         this.item = item;
         this.meta = meta;
@@ -87,15 +91,18 @@ public class ItemDescriptor {
         if (!(o instanceof ItemDescriptor)) return false;
         ItemDescriptor other = (ItemDescriptor) o;
         if (meta != other.meta || item != other.item) return false;
-        return nbtString(nbt).equals(nbtString(other.nbt));
+        if (nbt == null && other.nbt == null) return true;
+        if (nbt == null || other.nbt == null) return false;
+        return nbt.equals(other.nbt);
     }
 
     @Override
     public int hashCode() {
-        return hash;
-    }
-
-    private static String nbtString(NBTTagCompound nbt) {
-        return nbt != null ? nbt.toString() : "";
+        // hashCode 不依赖 NBT 内容，避免 HashMap 迭代顺序导致的查找失败
+        // 相同 item+meta 的不同 NBT 会落在同一 bucket，由 equals() 精确区分
+        return Objects.hash(
+            item != null ? item.getRegistryName() : null,
+            meta
+        );
     }
 }

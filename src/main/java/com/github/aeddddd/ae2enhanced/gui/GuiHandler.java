@@ -3,6 +3,7 @@ package com.github.aeddddd.ae2enhanced.gui;
 import com.github.aeddddd.ae2enhanced.container.ContainerAssemblyFormed;
 import com.github.aeddddd.ae2enhanced.container.ContainerAssemblyPattern;
 import com.github.aeddddd.ae2enhanced.container.ContainerAssemblyUnformed;
+import com.github.aeddddd.ae2enhanced.container.ContainerHyperdimensionalNexus;
 import com.github.aeddddd.ae2enhanced.container.ContainerHyperdimensionalUnformed;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyController;
 import com.github.aeddddd.ae2enhanced.tile.TileHyperdimensionalController;
@@ -55,8 +56,9 @@ public class GuiHandler implements IGuiHandler {
             TileHyperdimensionalController tile = (TileHyperdimensionalController) te;
             if (ID == GUI_HYPERDIMENSIONAL_UNFORMED && !tile.isFormed()) {
                 return new ContainerHyperdimensionalUnformed(player.inventory, tile);
+            } else if (ID == GUI_HYPERDIMENSIONAL_NEXUS && tile.isFormed()) {
+                return new ContainerHyperdimensionalNexus();
             }
-            // 信息面板不需要服务器端 Container
             return null;
         }
         return null;
@@ -81,9 +83,9 @@ public class GuiHandler implements IGuiHandler {
             }
         } else if (te instanceof TileHyperdimensionalController) {
             TileHyperdimensionalController tile = (TileHyperdimensionalController) te;
-            if (ID == GUI_HYPERDIMENSIONAL_NEXUS && tile.isFormed()) {
+            if (ID == GUI_HYPERDIMENSIONAL_NEXUS) {
                 return new GuiHyperdimensionalNexus(tile);
-            } else if (ID == GUI_HYPERDIMENSIONAL_UNFORMED && !tile.isFormed()) {
+            } else if (ID == GUI_HYPERDIMENSIONAL_UNFORMED) {
                 return new GuiHyperdimensionalUnformed(player.inventory, tile);
             }
         }

@@ -10,7 +10,7 @@ import net.minecraft.item.ItemStack;
 public class ContainerHyperdimensionalUnformed extends Container {
 
     private static final int INV_X = 59;
-    private static final int INV_Y = 130;
+    private static final int INV_Y = 180;
 
     private final TileHyperdimensionalController tile;
 

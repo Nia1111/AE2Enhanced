@@ -1,18 +1,16 @@
 package com.github.aeddddd.ae2enhanced.tile;
 
 import appeng.api.networking.IGridNode;
-import appeng.api.networking.security.IActionSource;
-import appeng.api.storage.IStorageMonitorable;
-import appeng.api.storage.IStorageMonitorableAccessor;
-import appeng.api.storage.data.IAEItemStack;
+import appeng.api.networking.security.IActionHost;
+import appeng.api.storage.ICellContainer;
+import appeng.api.storage.ICellInventory;
+import appeng.api.storage.ISaveProvider;
 import appeng.api.util.AECableType;
 import appeng.api.util.AEPartLocation;
 import appeng.api.util.DimensionalCoord;
 import appeng.me.helpers.AENetworkProxy;
 import appeng.me.helpers.IGridProxyable;
-import com.github.aeddddd.ae2enhanced.AE2Enhanced;
 import com.github.aeddddd.ae2enhanced.ModBlocks;
-import com.github.aeddddd.ae2enhanced.block.BlockHyperdimensionalController;
 import com.github.aeddddd.ae2enhanced.storage.HyperdimensionalStorageFile;
 import com.github.aeddddd.ae2enhanced.storage.ItemStorageAdapter;
 import com.github.aeddddd.ae2enhanced.storage.SimpleMEMonitor;
@@ -25,16 +23,16 @@ import net.minecraft.util.math.BlockPos;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public class TileHyperdimensionalController extends TileEntity implements IGridProxyable, IStorageMonitorableAccessor, ITickable {
-
-    private static final IActionSource MACHINE_SOURCE = new IActionSource() {
-        @Override public Optional<EntityPlayer> player() { return Optional.empty(); }
-        @Override public Optional<appeng.api.networking.security.IActionHost> machine() { return Optional.empty(); }
-        @Override public <T> Optional<T> context(Class<T> clazz) { return Optional.empty(); }
-    };
+/**
+ * 超维度仓储中枢核心控制器。
+ * 实现 IGridProxyable + ICellContainer，AE2-UEL 通过 ICellContainer 发现存储。
+ */
+public class TileHyperdimensionalController extends TileEntity implements IGridProxyable, ICellContainer, ITickable {
 
     private boolean formed = false;
     private boolean needsReady = false;
@@ -98,7 +96,8 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
     @Nonnull
     @Override
     public AECableType getCableConnectionType(@Nonnull AEPartLocation dir) {
-        return formed ? AECableType.SMART : AECableType.NONE;
+        // 控制器本身不允许线缆直接连接，AE 接入必须通过 ME 接口
+        return AECableType.NONE;
     }
 
     @Override
@@ -106,21 +105,38 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
         disassemble();
     }
 
-    // ---- IStorageMonitorableAccessor ----
+    // ---- IActionHost (via ICellContainer) ----
 
     @Override
-    public IStorageMonitorable getInventory(IActionSource src) {
-        if (!formed || itemMonitor == null) return null;
-        return new IStorageMonitorable() {
-            @Override
-            @SuppressWarnings("unchecked")
-            public <T extends appeng.api.storage.data.IAEStack<T>> appeng.api.storage.IMEMonitor<T> getInventory(appeng.api.storage.IStorageChannel<T> channel) {
-                if (channel == itemAdapter.getChannel()) {
-                    return (appeng.api.storage.IMEMonitor<T>) itemMonitor;
-                }
-                return null;
-            }
-        };
+    public IGridNode getActionableNode() {
+        return getProxy().getNode();
+    }
+
+    // ---- ICellProvider (via ICellContainer) ----
+
+    @Override
+    public List<appeng.api.storage.IMEInventoryHandler> getCellArray(appeng.api.storage.IStorageChannel<?> channel) {
+        if (!formed || itemMonitor == null) return Collections.emptyList();
+        if (channel == itemMonitor.getChannel() || channel instanceof appeng.api.storage.channels.IItemStorageChannel) {
+            return Collections.singletonList(itemMonitor);
+        }
+        return Collections.emptyList();
+    }
+
+    @Override
+    public int getPriority() {
+        return 0;
+    }
+
+    @Override
+    public void blinkCell(int slot) {
+    }
+
+    // ---- ISaveProvider (via ICellContainer) ----
+
+    @Override
+    public void saveChanges(ICellInventory<?> inv) {
+        // 我们的存储不是 cell-based，由 ItemStorageAdapter 自行管理持久化
     }
 
     // ---- Lifecycle ----
@@ -170,7 +186,9 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
             if (world != null && !world.isRemote) {
                 world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 2);
             }
-            getProxy().invalidate();
+            if (proxy != null) {
+                proxy.invalidate();
+            }
             closeStorage();
         }
     }
@@ -265,6 +283,9 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
         tag.setBoolean("formed", formed);
         tag.setBoolean("networkActive", networkActive);
         tag.setBoolean("networkPowered", networkPowered);
+        if (nexusId != null) {
+            tag.setUniqueId("nexusId", nexusId);
+        }
         return tag;
     }
 
@@ -274,5 +295,8 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
         formed = tag.getBoolean("formed");
         networkActive = tag.getBoolean("networkActive");
         networkPowered = tag.getBoolean("networkPowered");
+        if (tag.hasUniqueId("nexusId")) {
+            nexusId = tag.getUniqueId("nexusId");
+        }
     }
 }

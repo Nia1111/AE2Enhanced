@@ -26,12 +26,28 @@ public class SimpleMEMonitor implements IMEMonitor<IAEItemStack> {
 
     @Override
     public IAEItemStack injectItems(IAEItemStack input, appeng.api.config.Actionable type, IActionSource src) {
-        return adapter.injectItems(input, type, src);
+        IAEItemStack result = adapter.injectItems(input, type, src);
+        if (type == appeng.api.config.Actionable.MODULATE && result == null) {
+            List<IAEItemStack> changes = new ArrayList<>();
+            IAEItemStack change = input.copy();
+            change.setStackSize(input.getStackSize());
+            changes.add(change);
+            notifyPostChange(changes, src);
+        }
+        return result;
     }
 
     @Override
     public IAEItemStack extractItems(IAEItemStack request, appeng.api.config.Actionable type, IActionSource src) {
-        return adapter.extractItems(request, type, src);
+        IAEItemStack result = adapter.extractItems(request, type, src);
+        if (type == appeng.api.config.Actionable.MODULATE && result != null && result.getStackSize() > 0) {
+            List<IAEItemStack> changes = new ArrayList<>();
+            IAEItemStack change = result.copy();
+            change.setStackSize(-result.getStackSize());
+            changes.add(change);
+            notifyPostChange(changes, src);
+        }
+        return result;
     }
 
     @Override
