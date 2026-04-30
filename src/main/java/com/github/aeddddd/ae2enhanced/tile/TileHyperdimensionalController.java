@@ -46,6 +46,10 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
     private boolean networkPowered = false;
     private int tickCounter = 0;
 
+    // 客户端同步的存储统计
+    private int clientStorageTypes = 0;
+    private String clientStorageTotal = "0";
+
     public boolean isFormed() {
         return formed;
     }
@@ -116,9 +120,9 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
 
     @Override
     public List<appeng.api.storage.IMEInventoryHandler> getCellArray(appeng.api.storage.IStorageChannel<?> channel) {
-        if (!formed || itemMonitor == null) return Collections.emptyList();
-        if (channel == itemMonitor.getChannel() || channel instanceof appeng.api.storage.channels.IItemStorageChannel) {
-            return Collections.singletonList(itemMonitor);
+        if (!formed || itemAdapter == null) return Collections.emptyList();
+        if (channel instanceof appeng.api.storage.channels.IItemStorageChannel) {
+            return Collections.singletonList(itemAdapter);
         }
         return Collections.emptyList();
     }
@@ -198,7 +202,32 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
         if (storageFile == null) {
             storageFile = new HyperdimensionalStorageFile(world, nexusId);
             itemAdapter = new ItemStorageAdapter(storageFile);
+            storageFile.setStorageRef(itemAdapter.getStorageMap());
+            itemAdapter.setOnChangeCallback(this::refreshNetworkMonitor);
             itemMonitor = new SimpleMEMonitor(itemAdapter);
+        }
+    }
+
+    /**
+     * 强制刷新 AE2 NetworkMonitor 缓存，使终端立即显示最新存储内容。
+     * 由于 AE2-UEL 不监听 IMEMonitor 的 addListener，只能通过反射设置 forceUpdate。
+     */
+    private void refreshNetworkMonitor() {
+        try {
+            appeng.api.networking.IGrid grid = getProxy().getGrid();
+            if (grid == null) return;
+            appeng.api.networking.storage.IStorageGrid storageGrid = grid.getCache(appeng.api.networking.storage.IStorageGrid.class);
+            if (storageGrid == null) return;
+            appeng.api.storage.IMEMonitor<appeng.api.storage.data.IAEItemStack> monitor = storageGrid.getInventory(
+                appeng.api.AEApi.instance().storage().getStorageChannel(appeng.api.storage.channels.IItemStorageChannel.class)
+            );
+            if (monitor != null) {
+                java.lang.reflect.Field field = monitor.getClass().getDeclaredField("forceUpdate");
+                field.setAccessible(true);
+                field.setBoolean(monitor, true);
+            }
+        } catch (Exception e) {
+            // AE2 内部类可能变化，忽略反射错误
         }
     }
 
@@ -218,27 +247,45 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
 
         if (needsReady && formed) {
             needsReady = false;
+            initStorage();
             getProxy().onReady();
         }
 
         tickCounter++;
-        if (tickCounter % 20 != 0) return;
-
-        boolean newActive = false;
-        boolean newPowered = false;
-        if (formed) {
-            AENetworkProxy p = getProxy();
-            if (p != null) {
-                newActive = p.isActive();
-                newPowered = p.isPowered();
+        if (tickCounter % 20 == 0) {
+            boolean newActive = false;
+            boolean newPowered = false;
+            if (formed) {
+                AENetworkProxy p = getProxy();
+                if (p != null) {
+                    newActive = p.isActive();
+                    newPowered = p.isPowered();
+                }
             }
-        }
 
-        if (newActive != networkActive || newPowered != networkPowered) {
+            boolean needUpdate = newActive != networkActive || newPowered != networkPowered;
             networkActive = newActive;
             networkPowered = newPowered;
-            markDirty();
-            world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 2);
+
+            // 更新存储统计并同步到客户端
+            if (itemAdapter != null) {
+                int newTypes = itemAdapter.getStorageMap().size();
+                java.math.BigInteger total = java.math.BigInteger.ZERO;
+                for (java.math.BigInteger count : itemAdapter.getStorageMap().values()) {
+                    total = total.add(count);
+                }
+                String newTotal = formatBigNumber(total);
+                if (newTypes != clientStorageTypes || !newTotal.equals(clientStorageTotal)) {
+                    clientStorageTypes = newTypes;
+                    clientStorageTotal = newTotal;
+                    needUpdate = true;
+                }
+            }
+
+            if (needUpdate) {
+                markDirty();
+                world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 2);
+            }
         }
     }
 
@@ -248,6 +295,27 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
 
     public boolean isNetworkPowered() {
         return networkPowered;
+    }
+
+    public int getClientStorageTypes() {
+        return clientStorageTypes;
+    }
+
+    public String getClientStorageTotal() {
+        return clientStorageTotal;
+    }
+
+    private static String formatBigNumber(java.math.BigInteger num) {
+        if (num.compareTo(java.math.BigInteger.valueOf(1_000_000_000_000L)) >= 0) {
+            return num.divide(java.math.BigInteger.valueOf(1_000_000_000_000L)) + " G";
+        } else if (num.compareTo(java.math.BigInteger.valueOf(1_000_000_000L)) >= 0) {
+            return num.divide(java.math.BigInteger.valueOf(1_000_000_000L)) + " B";
+        } else if (num.compareTo(java.math.BigInteger.valueOf(1_000_000L)) >= 0) {
+            return num.divide(java.math.BigInteger.valueOf(1_000_000L)) + " M";
+        } else if (num.compareTo(java.math.BigInteger.valueOf(1_000L)) >= 0) {
+            return num.divide(java.math.BigInteger.valueOf(1_000L)) + " K";
+        }
+        return num.toString();
     }
 
     // ---- NBT ----
@@ -283,6 +351,8 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
         tag.setBoolean("formed", formed);
         tag.setBoolean("networkActive", networkActive);
         tag.setBoolean("networkPowered", networkPowered);
+        tag.setInteger("storageTypes", clientStorageTypes);
+        tag.setString("storageTotal", clientStorageTotal);
         if (nexusId != null) {
             tag.setUniqueId("nexusId", nexusId);
         }
@@ -295,6 +365,8 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
         formed = tag.getBoolean("formed");
         networkActive = tag.getBoolean("networkActive");
         networkPowered = tag.getBoolean("networkPowered");
+        clientStorageTypes = tag.getInteger("storageTypes");
+        clientStorageTotal = tag.getString("storageTotal");
         if (tag.hasUniqueId("nexusId")) {
             nexusId = tag.getUniqueId("nexusId");
         }

@@ -5,7 +5,7 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.GlStateManager;
 
 import java.io.IOException;
-import java.math.BigInteger;
+
 
 /**
  * 超维度仓储中枢信息面板。
@@ -116,34 +116,18 @@ public class GuiHyperdimensionalNexus extends GuiScreen {
             y += lineHeight;
         }
 
-        // 存储统计
-        if (tile.getItemAdapter() != null) {
-            int types = tile.getItemAdapter().getStorageMap().size();
-            BigInteger totalItems = BigInteger.ZERO;
-            for (BigInteger count : tile.getItemAdapter().getStorageMap().values()) {
-                totalItems = totalItems.add(count);
-            }
+        // 存储统计（客户端同步字段）
+        int types = tile.getClientStorageTypes();
+        String total = tile.getClientStorageTotal();
+        if (types > 0) {
             fontRenderer.drawString("存储种类: §e" + types, x, y, TEXT_MAIN);
             y += lineHeight;
-            fontRenderer.drawString("总物品数: §e" + formatBigNumber(totalItems), x, y, TEXT_MAIN);
+            fontRenderer.drawString("总物品数: §e" + total, x, y, TEXT_MAIN);
         } else {
-            fontRenderer.drawString("存储核心: §e已初始化", x, y, TEXT_SUCCESS);
+            fontRenderer.drawString("存储核心: §7空", x, y, TEXT_MAIN);
         }
 
         super.drawScreen(mouseX, mouseY, partialTicks);
-    }
-
-    private String formatBigNumber(BigInteger num) {
-        if (num.compareTo(BigInteger.valueOf(1_000_000_000_000L)) >= 0) {
-            return num.toString();
-        } else if (num.compareTo(BigInteger.valueOf(1_000_000_000L)) >= 0) {
-            return num.divide(BigInteger.valueOf(1_000_000_000L)) + " B";
-        } else if (num.compareTo(BigInteger.valueOf(1_000_000L)) >= 0) {
-            return num.divide(BigInteger.valueOf(1_000_000L)) + " M";
-        } else if (num.compareTo(BigInteger.valueOf(1_000L)) >= 0) {
-            return num.divide(BigInteger.valueOf(1_000L)) + " K";
-        }
-        return num.toString();
     }
 
     @Override

@@ -3,7 +3,11 @@ package com.github.aeddddd.ae2enhanced.storage;
 import appeng.api.AEApi;
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
-import appeng.api.storage.IMEInventory;
+import appeng.api.config.AccessRestriction;
+import appeng.api.networking.security.IActionSource;
+import appeng.api.storage.IMEInventoryHandler;
+import appeng.api.storage.IMEMonitor;
+import appeng.api.storage.IMEMonitorHandlerReceiver;
 import appeng.api.storage.IStorageChannel;
 import appeng.api.storage.channels.IItemStorageChannel;
 import appeng.api.storage.data.IAEItemStack;
@@ -11,6 +15,8 @@ import appeng.api.storage.data.IItemList;
 import net.minecraft.item.ItemStack;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -18,11 +24,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * 物品存储适配器，实现 AE2 的 IMEInventory 接口。
  * 内部使用 BigInteger 维护数量，突破 long 上限。
  */
-public class ItemStorageAdapter implements IMEInventory<IAEItemStack> {
+public class ItemStorageAdapter implements IMEMonitor<IAEItemStack> {
 
     private final Map<ItemDescriptor, BigInteger> storage = new ConcurrentHashMap<>();
     private final IItemStorageChannel channel;
     private final HyperdimensionalStorageFile file;
+    private final List<IMEMonitorHandlerReceiver<IAEItemStack>> listeners = new ArrayList<>();
+    private Runnable onChangeCallback = null;
 
     public ItemStorageAdapter(HyperdimensionalStorageFile file) {
         this.channel = AEApi.instance().storage().getStorageChannel(IItemStorageChannel.class);
@@ -44,6 +52,7 @@ public class ItemStorageAdapter implements IMEInventory<IAEItemStack> {
         if (type == Actionable.MODULATE) {
             storage.merge(key, amount, BigInteger::add);
             file.markDirty();
+            notifyPostChange(input.copy(), src);
             return null; // 无限容量，全部接受
         }
         // SIMULATE: 无限容量，全部接受
@@ -71,6 +80,9 @@ public class ItemStorageAdapter implements IMEInventory<IAEItemStack> {
                 storage.put(key, remaining);
             }
             file.markDirty();
+            IAEItemStack change = request.copy();
+            change.setStackSize(-toExtract.min(BigInteger.valueOf(Long.MAX_VALUE)).longValue());
+            notifyPostChange(change, src);
         }
 
         IAEItemStack result = channel.createStack(itemStack);
@@ -111,5 +123,73 @@ public class ItemStorageAdapter implements IMEInventory<IAEItemStack> {
 
     public HyperdimensionalStorageFile getFile() {
         return file;
+    }
+
+    // ---- IMEInventoryHandler ----
+
+    @Override
+    public AccessRestriction getAccess() {
+        return AccessRestriction.READ_WRITE;
+    }
+
+    @Override
+    public boolean isPrioritized(IAEItemStack input) {
+        return false;
+    }
+
+    @Override
+    public boolean canAccept(IAEItemStack input) {
+        return true;
+    }
+
+    @Override
+    public int getPriority() {
+        return 0;
+    }
+
+    @Override
+    public int getSlot() {
+        return 0;
+    }
+
+    @Override
+    public boolean validForPass(int i) {
+        return true;
+    }
+
+    // ---- IMEMonitor / IBaseMonitor ----
+
+    @Override
+    public IItemList<IAEItemStack> getStorageList() {
+        IItemList<IAEItemStack> list = channel.createList();
+        return getAvailableItems(list);
+    }
+
+    @Override
+    public void addListener(IMEMonitorHandlerReceiver<IAEItemStack> l, Object verificationToken) {
+        listeners.add(l);
+    }
+
+    @Override
+    public void removeListener(IMEMonitorHandlerReceiver<IAEItemStack> l) {
+        listeners.remove(l);
+    }
+
+    public void setOnChangeCallback(Runnable callback) {
+        this.onChangeCallback = callback;
+    }
+
+    private void notifyPostChange(IAEItemStack change, IActionSource src) {
+        if (listeners.isEmpty() && onChangeCallback == null) return;
+        if (!listeners.isEmpty()) {
+            List<IAEItemStack> changes = new ArrayList<>();
+            changes.add(change);
+            for (IMEMonitorHandlerReceiver<IAEItemStack> listener : new ArrayList<>(listeners)) {
+                listener.postChange(this, changes, src);
+            }
+        }
+        if (onChangeCallback != null) {
+            onChangeCallback.run();
+        }
     }
 }

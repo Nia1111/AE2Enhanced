@@ -36,6 +36,7 @@ public class HyperdimensionalStorageFile {
     private final ScheduledExecutorService executor;
     private volatile boolean dirty = false;
     private volatile boolean closed = false;
+    private Map<ItemDescriptor, BigInteger> storageRef = null;
 
     public HyperdimensionalStorageFile(World world, UUID nexusId) {
         this.nexusId = nexusId;
@@ -121,9 +122,15 @@ public class HyperdimensionalStorageFile {
         this.dirty = true;
     }
 
+    public void setStorageRef(Map<ItemDescriptor, BigInteger> ref) {
+        this.storageRef = ref;
+    }
+
     private void flush() {
         if (!dirty || closed) return;
-        // 由外部传入当前数据快照
+        if (storageRef != null) {
+            save(storageRef);
+        }
         dirty = false;
     }
 

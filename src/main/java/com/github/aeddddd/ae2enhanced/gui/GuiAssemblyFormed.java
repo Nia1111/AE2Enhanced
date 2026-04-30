@@ -169,17 +169,79 @@ public class GuiAssemblyFormed extends GuiContainer {
     }
 
     private boolean drawCustomTooltips(int mouseX, int mouseY) {
-        // 升级槽区域 tooltip
-        if (isPointInRegion(16, 40, 58, 38, mouseX, mouseY)) {
-            List<String> lines = new ArrayList<>();
-            lines.add(I18n.format("gui.ae2enhanced.tooltip.upgrades"));
-            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.parallel") + "§r");
-            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.speed") + "§r");
-            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.efficiency") + "§r");
-            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.capacity") + "§r");
-            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.upload") + "§r");
-            this.drawHoveringText(lines, mouseX, mouseY);
-            return true;
+        // 升级槽按槽位显示 tooltip，已安装高亮
+        int[][] upgradeSlots = {
+            {16, 38}, {36, 38}, {56, 38},
+            {16, 58}, {36, 58}, {56, 58}
+        };
+        String[] upgradeKeys = {
+            "item.ae2enhanced.upgrade_card.parallel.name",
+            "item.ae2enhanced.upgrade_card.speed.name",
+            "item.ae2enhanced.upgrade_card.efficiency.name",
+            "item.ae2enhanced.upgrade_card.capacity.name",
+            "item.ae2enhanced.upgrade_card.reserved1.name",
+            "item.ae2enhanced.upgrade_card.reserved2.name"
+        };
+        for (int i = 0; i < upgradeSlots.length; i++) {
+            int sx = upgradeSlots[i][0];
+            int sy = upgradeSlots[i][1];
+            if (isPointInRegion(sx, sy, 16, 16, mouseX, mouseY)) {
+                List<String> lines = new ArrayList<>();
+                Slot slot = this.inventorySlots.inventorySlots.get(i);
+                boolean installed = slot != null && slot.getHasStack();
+                int count = installed ? slot.getStack().getCount() : 0;
+                String name = I18n.format(upgradeKeys[i]);
+                if (installed) {
+                    lines.add("§a● §r" + name);
+                    switch (i) {
+                        case 0: // 并行
+                            long parallel = tile.getParallelCap();
+                            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.parallel.status",
+                                parallel >= Long.MAX_VALUE / 2 ? "∞" : String.valueOf(parallel)) + "§r");
+                            break;
+                        case 1: // 速度
+                            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.speed.status", tile.getCraftingTicks()) + "§r");
+                            break;
+                        case 2: // 效率
+                            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.efficiency.status", count) + "§r");
+                            break;
+                        case 3: // 容量
+                            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.capacity.status",
+                                tile.getPatternPages(), tile.getPatternSlotCount()) + "§r");
+                            break;
+                        case 4: // 上传
+                            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.upload.status") + "§r");
+                            break;
+                        case 5: // 预留2
+                            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.reserved2.status") + "§r");
+                            break;
+                    }
+                } else {
+                    lines.add("§7○ §r" + name);
+                    switch (i) {
+                        case 0:
+                            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.parallel.empty") + "§r");
+                            break;
+                        case 1:
+                            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.speed.empty") + "§r");
+                            break;
+                        case 2:
+                            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.efficiency.empty") + "§r");
+                            break;
+                        case 3:
+                            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.capacity.empty") + "§r");
+                            break;
+                        case 4:
+                            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.upload.empty") + "§r");
+                            break;
+                        case 5:
+                            lines.add("§7" + I18n.format("gui.ae2enhanced.tooltip.upgrades.reserved2.empty") + "§r");
+                            break;
+                    }
+                }
+                this.drawHoveringText(lines, mouseX, mouseY);
+                return true;
+            }
         }
         // 样板存储按钮 tooltip
         if (patternButton != null && patternButton.isMouseOver()) {
