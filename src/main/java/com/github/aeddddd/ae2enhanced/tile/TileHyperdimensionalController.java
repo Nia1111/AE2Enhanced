@@ -14,7 +14,10 @@ import com.github.aeddddd.ae2enhanced.ModBlocks;
 import com.github.aeddddd.ae2enhanced.storage.FluidStorageAdapter;
 import com.github.aeddddd.ae2enhanced.storage.HyperdimensionalStorageFile;
 import com.github.aeddddd.ae2enhanced.storage.ItemStorageAdapter;
+import com.github.aeddddd.ae2enhanced.storage.OptionalStorageManager;
 import com.github.aeddddd.ae2enhanced.storage.SimpleMEMonitor;
+import appeng.api.AEApi;
+import appeng.api.storage.IMEInventoryHandler;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
@@ -42,6 +45,7 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
     private HyperdimensionalStorageFile storageFile;
     private ItemStorageAdapter itemAdapter;
     private FluidStorageAdapter fluidAdapter;
+    private OptionalStorageManager optionalStorage;
     private SimpleMEMonitor itemMonitor;
 
     private boolean networkActive = false;
@@ -134,6 +138,8 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
         if (channel instanceof appeng.api.storage.channels.IFluidStorageChannel && fluidAdapter != null) {
             return Collections.singletonList(fluidAdapter);
         }
+        List<IMEInventoryHandler> optional = optionalStorage.getHandlers(channel);
+        if (!optional.isEmpty()) return optional;
         return Collections.emptyList();
     }
 
@@ -230,6 +236,19 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
             storageFile.setFluidStorageRef(fluidAdapter.getStorageMap());
             fluidAdapter.setOnChangeCallback(this::refreshNetworkMonitor);
             fluidAdapter.setPostChangeCallback(this::postFluidAlteration);
+
+            optionalStorage = new OptionalStorageManager();
+            optionalStorage.init(storageFile);
+            if (optionalStorage.getGasAdapter() != null) {
+                storageFile.setGasStorageRef(optionalStorage.getGasAdapter().getStorageMap());
+                optionalStorage.getGasAdapter().setOnChangeCallback(this::refreshNetworkMonitor);
+                optionalStorage.getGasAdapter().setPostChangeCallback(this::postGasAlteration);
+            }
+            if (optionalStorage.getEssentiaAdapter() != null) {
+                storageFile.setEssentiaStorageRef(optionalStorage.getEssentiaAdapter().getStorageMap());
+                optionalStorage.getEssentiaAdapter().setOnChangeCallback(this::refreshNetworkMonitor);
+                optionalStorage.getEssentiaAdapter().setPostChangeCallback(this::postEssentiaAlteration);
+            }
         }
     }
 
@@ -304,6 +323,38 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
                     FORCE_UPDATE_METHOD.invoke(fluidMonitor);
                 }
             }
+
+            // 刷新可选存储 monitor
+            if (optionalStorage != null) {
+                try {
+                    if (optionalStorage.getGasAdapter() != null) {
+                        Object gasMonitor = storageGrid.getInventory(
+                            AEApi.instance().storage().getStorageChannel(com.mekeng.github.common.me.storage.IGasStorageChannel.class)
+                        );
+                        if (gasMonitor != null) {
+                            FORCE_UPDATE_FIELD.setBoolean(gasMonitor, true);
+                            if (SEND_EVENT_FIELD != null) SEND_EVENT_FIELD.setBoolean(gasMonitor, true);
+                            if (ON_TICK_METHOD != null) ON_TICK_METHOD.invoke(gasMonitor);
+                        }
+                    }
+                } catch (Exception e) {
+                    com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.warn("[AE2E] Failed to refresh gas monitor", e);
+                }
+                try {
+                    if (optionalStorage.getEssentiaAdapter() != null) {
+                        Object essentiaMonitor = storageGrid.getInventory(
+                            AEApi.instance().storage().getStorageChannel(thaumicenergistics.api.storage.IEssentiaStorageChannel.class)
+                        );
+                        if (essentiaMonitor != null) {
+                            FORCE_UPDATE_FIELD.setBoolean(essentiaMonitor, true);
+                            if (SEND_EVENT_FIELD != null) SEND_EVENT_FIELD.setBoolean(essentiaMonitor, true);
+                            if (ON_TICK_METHOD != null) ON_TICK_METHOD.invoke(essentiaMonitor);
+                        }
+                    }
+                } catch (Exception e) {
+                    com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.warn("[AE2E] Failed to refresh essentia monitor", e);
+                }
+            }
         } catch (Exception e) {
             com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.warn(
                 "[AE2E] Failed to refresh NetworkMonitor cache", e);
@@ -344,6 +395,34 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
         }
     }
 
+    private void postGasAlteration(com.mekeng.github.common.me.data.IAEGasStack change, appeng.api.networking.security.IActionSource src) {
+        try {
+            appeng.api.networking.IGrid grid = getProxy().getGrid();
+            if (grid == null) return;
+            appeng.api.networking.storage.IStorageGrid storageGrid = grid.getCache(appeng.api.networking.storage.IStorageGrid.class);
+            if (storageGrid == null) return;
+            storageGrid.postAlterationOfStoredItems(
+                appeng.api.AEApi.instance().storage().getStorageChannel(com.mekeng.github.common.me.storage.IGasStorageChannel.class),
+                java.util.Collections.singletonList(change), src);
+        } catch (Exception e) {
+            com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.warn("[AE2E] Failed to post gas alteration", e);
+        }
+    }
+
+    private void postEssentiaAlteration(thaumicenergistics.api.storage.IAEEssentiaStack change, appeng.api.networking.security.IActionSource src) {
+        try {
+            appeng.api.networking.IGrid grid = getProxy().getGrid();
+            if (grid == null) return;
+            appeng.api.networking.storage.IStorageGrid storageGrid = grid.getCache(appeng.api.networking.storage.IStorageGrid.class);
+            if (storageGrid == null) return;
+            storageGrid.postAlterationOfStoredItems(
+                appeng.api.AEApi.instance().storage().getStorageChannel(thaumicenergistics.api.storage.IEssentiaStorageChannel.class),
+                java.util.Collections.singletonList(change), src);
+        } catch (Exception e) {
+            com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.warn("[AE2E] Failed to post essentia alteration", e);
+        }
+    }
+
     private void closeStorage() {
         if (storageFile != null) {
             storageFile.close();
@@ -351,6 +430,10 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
             itemAdapter = null;
             fluidAdapter = null;
             itemMonitor = null;
+        }
+        if (optionalStorage != null) {
+            optionalStorage.close();
+            optionalStorage = null;
         }
     }
 
@@ -381,7 +464,7 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
             networkActive = newActive;
             networkPowered = newPowered;
 
-            // 更新存储统计并同步到客户端（物品 + 流体）
+            // 更新存储统计并同步到客户端（物品 + 流体 + 可选存储）
             int newTypes = 0;
             java.math.BigInteger newTotal = java.math.BigInteger.ZERO;
             if (itemAdapter != null) {
@@ -391,6 +474,10 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
             if (fluidAdapter != null) {
                 newTypes += fluidAdapter.getStorageMap().size();
                 newTotal = newTotal.add(fluidAdapter.getTotalCount());
+            }
+            if (optionalStorage != null) {
+                newTypes += optionalStorage.getTotalTypeCount();
+                newTotal = newTotal.add(optionalStorage.getTotalCount());
             }
             String newTotalStr = formatBigNumber(newTotal);
             if (newTypes != clientStorageTypes || !newTotalStr.equals(clientStorageTotal)) {
@@ -429,7 +516,8 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
 
     public boolean isSafeMode() {
         return (itemAdapter != null && itemAdapter.isSafeMode())
-            || (fluidAdapter != null && fluidAdapter.isSafeMode());
+            || (fluidAdapter != null && fluidAdapter.isSafeMode())
+            || (optionalStorage != null && optionalStorage.isSafeMode());
     }
 
     public boolean getClientSafeMode() {

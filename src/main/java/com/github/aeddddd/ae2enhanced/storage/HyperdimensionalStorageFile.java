@@ -49,6 +49,8 @@ public class HyperdimensionalStorageFile {
     private volatile boolean safeMode = false;
     private Map<ItemDescriptor, BigInteger> storageRef = null;
     private Map<FluidDescriptor, BigInteger> fluidStorageRef = null;
+    private Map<GasDescriptor, BigInteger> gasStorageRef = null;
+    private Map<EssentiaDescriptor, BigInteger> essentiaStorageRef = null;
 
     public HyperdimensionalStorageFile(World world, UUID nexusId) {
         this.nexusId = nexusId;
@@ -160,6 +162,26 @@ public class HyperdimensionalStorageFile {
         }
         root.setTag("fluids", fluids);
 
+        NBTTagList gases = new NBTTagList();
+        if (gasStorageRef != null) {
+            for (Map.Entry<GasDescriptor, BigInteger> entry : gasStorageRef.entrySet()) {
+                NBTTagCompound tag = entry.getKey().toNBT();
+                tag.setString("Count", entry.getValue().toString());
+                gases.appendTag(tag);
+            }
+        }
+        root.setTag("gases", gases);
+
+        NBTTagList essentias = new NBTTagList();
+        if (essentiaStorageRef != null) {
+            for (Map.Entry<EssentiaDescriptor, BigInteger> entry : essentiaStorageRef.entrySet()) {
+                NBTTagCompound tag = entry.getKey().toNBT();
+                tag.setString("Count", entry.getValue().toString());
+                essentias.appendTag(tag);
+            }
+        }
+        root.setTag("essentias", essentias);
+
         File tmpFile = new File(file.getAbsolutePath() + ".tmp");
         try {
             CompressedStreamTools.write(root, tmpFile);
@@ -190,12 +212,86 @@ public class HyperdimensionalStorageFile {
         this.fluidStorageRef = ref;
     }
 
+    public void setGasStorageRef(Map<GasDescriptor, BigInteger> ref) {
+        this.gasStorageRef = ref;
+    }
+
+    public void setEssentiaStorageRef(Map<EssentiaDescriptor, BigInteger> ref) {
+        this.essentiaStorageRef = ref;
+    }
+
+    /**
+     * 从文件加载气体数据到目标 Map。若文件不存在则不做任何事（空存储）。
+     */
+    public void loadGases(Map<GasDescriptor, BigInteger> target) {
+        if (!file.exists()) return;
+        try {
+            NBTTagCompound root = CompressedStreamTools.read(file);
+            if (root == null) return;
+            int version = root.getInteger("version");
+            if (version > CURRENT_VERSION) {
+                return;
+            }
+            if (!root.hasKey("gases", 9)) return; // 旧版本可能没有 gases
+            NBTTagList gases = root.getTagList("gases", 10);
+            for (int i = 0; i < gases.tagCount(); i++) {
+                NBTTagCompound tag = gases.getCompoundTagAt(i);
+                GasDescriptor descriptor = GasDescriptor.fromNBT(tag);
+                if (descriptor == null) continue;
+                String countStr = tag.getString("Count");
+                BigInteger count;
+                try {
+                    count = new BigInteger(countStr);
+                } catch (NumberFormatException e) {
+                    continue;
+                }
+                target.put(descriptor, count);
+            }
+        } catch (Exception e) {
+            com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.error(
+                "[AE2E] Failed to load gas storage from file: {}.", file.getAbsolutePath(), e);
+        }
+    }
+
     private void flush() {
         if (!dirty || closed) return;
         if (save()) {
             dirty = false;
         }
         // save 失败时 dirty 保持 true，下次继续尝试
+    }
+
+    /**
+     * 从文件加载源质数据到目标 Map。若文件不存在则不做任何事（空存储）。
+     */
+    public void loadEssentias(Map<EssentiaDescriptor, BigInteger> target) {
+        if (!file.exists()) return;
+        try {
+            NBTTagCompound root = CompressedStreamTools.read(file);
+            if (root == null) return;
+            int version = root.getInteger("version");
+            if (version > CURRENT_VERSION) {
+                return;
+            }
+            if (!root.hasKey("essentias", 9)) return; // 旧版本可能没有 essentias
+            NBTTagList essentias = root.getTagList("essentias", 10);
+            for (int i = 0; i < essentias.tagCount(); i++) {
+                NBTTagCompound tag = essentias.getCompoundTagAt(i);
+                EssentiaDescriptor descriptor = EssentiaDescriptor.fromNBT(tag);
+                if (descriptor == null) continue;
+                String countStr = tag.getString("Count");
+                BigInteger count;
+                try {
+                    count = new BigInteger(countStr);
+                } catch (NumberFormatException e) {
+                    continue;
+                }
+                target.put(descriptor, count);
+            }
+        } catch (Exception e) {
+            com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.error(
+                "[AE2E] Failed to load essentia storage from file: {}.", file.getAbsolutePath(), e);
+        }
     }
 
     /**
