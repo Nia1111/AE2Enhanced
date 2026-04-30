@@ -234,27 +234,38 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
     // 缓存 AE2 NetworkMonitor 反射，避免高频 IO 时重复反射查找
     private static final java.lang.reflect.Field FORCE_UPDATE_FIELD;
     private static final java.lang.reflect.Method FORCE_UPDATE_METHOD;
+    private static final java.lang.reflect.Field SEND_EVENT_FIELD;
+    private static final java.lang.reflect.Method ON_TICK_METHOD;
     static {
         java.lang.reflect.Field f = null;
         java.lang.reflect.Method m = null;
+        java.lang.reflect.Field se = null;
+        java.lang.reflect.Method ot = null;
         try {
             Class<?> clazz = Class.forName("appeng.me.cache.NetworkMonitor");
             f = clazz.getDeclaredField("forceUpdate");
             f.setAccessible(true);
             m = clazz.getDeclaredMethod("forceUpdate");
             m.setAccessible(true);
+            se = clazz.getDeclaredField("sendEvent");
+            se.setAccessible(true);
+            ot = clazz.getDeclaredMethod("onTick");
+            ot.setAccessible(true);
         } catch (Exception e) {
             com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.error(
                 "[AE2E] Failed to cache NetworkMonitor reflection. ME terminal refresh will not work.", e);
         }
         FORCE_UPDATE_FIELD = f;
         FORCE_UPDATE_METHOD = m;
+        SEND_EVENT_FIELD = se;
+        ON_TICK_METHOD = ot;
     }
 
     /**
      * 强制刷新 AE2 NetworkMonitor 缓存，使终端立即显示最新存储内容。
-     * 由于 AE2-UEL 不监听 IMEMonitor 的 addListener，只能通过反射设置 forceUpdate
-     * 并立即调用 forceUpdate() 方法，避免 detectAndSendChanges 在同一 tick 发送旧数据。
+     * AE2-UEL 的 forceUpdate() 只刷新服务端缓存，不会触发客户端同步事件。
+     * 必须同时设置 sendEvent=true 并调用 onTick()，让 NetworkMonitor 发送
+     * MENetworkStorageEvent 到客户端，终端才会实时刷新。
      */
     private void refreshNetworkMonitor() {
         if (FORCE_UPDATE_FIELD == null || FORCE_UPDATE_METHOD == null) return;
@@ -270,7 +281,12 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
             );
             if (itemMonitor != null) {
                 FORCE_UPDATE_FIELD.setBoolean(itemMonitor, true);
-                FORCE_UPDATE_METHOD.invoke(itemMonitor);
+                if (SEND_EVENT_FIELD != null) SEND_EVENT_FIELD.setBoolean(itemMonitor, true);
+                if (ON_TICK_METHOD != null) {
+                    ON_TICK_METHOD.invoke(itemMonitor);
+                } else {
+                    FORCE_UPDATE_METHOD.invoke(itemMonitor);
+                }
             }
 
             // 刷新流体 monitor
@@ -279,7 +295,12 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
             );
             if (fluidMonitor != null) {
                 FORCE_UPDATE_FIELD.setBoolean(fluidMonitor, true);
-                FORCE_UPDATE_METHOD.invoke(fluidMonitor);
+                if (SEND_EVENT_FIELD != null) SEND_EVENT_FIELD.setBoolean(fluidMonitor, true);
+                if (ON_TICK_METHOD != null) {
+                    ON_TICK_METHOD.invoke(fluidMonitor);
+                } else {
+                    FORCE_UPDATE_METHOD.invoke(fluidMonitor);
+                }
             }
         } catch (Exception e) {
             com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.warn(
@@ -379,17 +400,26 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
         return clientSafeMode;
     }
 
+    private static final String[] NUMBER_UNITS = {"", "K", "M", "G", "T", "P", "E"};
     private static String formatBigNumber(java.math.BigInteger num) {
-        if (num.compareTo(java.math.BigInteger.valueOf(1_000_000_000_000L)) >= 0) {
-            return num.divide(java.math.BigInteger.valueOf(1_000_000_000_000L)) + " G";
-        } else if (num.compareTo(java.math.BigInteger.valueOf(1_000_000_000L)) >= 0) {
-            return num.divide(java.math.BigInteger.valueOf(1_000_000_000L)) + " B";
-        } else if (num.compareTo(java.math.BigInteger.valueOf(1_000_000L)) >= 0) {
-            return num.divide(java.math.BigInteger.valueOf(1_000_000L)) + " M";
-        } else if (num.compareTo(java.math.BigInteger.valueOf(1_000L)) >= 0) {
-            return num.divide(java.math.BigInteger.valueOf(1_000L)) + " K";
+        if (num.compareTo(java.math.BigInteger.valueOf(1000)) < 0) {
+            return num.toString();
         }
-        return num.toString();
+        java.math.BigInteger thousand = java.math.BigInteger.valueOf(1000);
+        int unitIndex = 0;
+        java.math.BigInteger whole = num;
+        java.math.BigInteger frac = java.math.BigInteger.ZERO;
+        while (whole.compareTo(thousand) >= 0 && unitIndex < NUMBER_UNITS.length - 1) {
+            frac = whole.mod(thousand);
+            whole = whole.divide(thousand);
+            unitIndex++;
+        }
+        // 保留一位小数（如 1.2K），当整数部分小于 100 时
+        if (whole.compareTo(java.math.BigInteger.valueOf(100)) < 0 && unitIndex > 0) {
+            int decimal = frac.multiply(java.math.BigInteger.valueOf(10)).divide(thousand).intValue();
+            return whole + "." + decimal + NUMBER_UNITS[unitIndex];
+        }
+        return whole + NUMBER_UNITS[unitIndex];
     }
 
     // ---- NBT ----

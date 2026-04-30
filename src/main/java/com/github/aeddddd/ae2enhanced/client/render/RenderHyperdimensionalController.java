@@ -20,9 +20,9 @@ import org.lwjgl.opengl.GL11;
 public class RenderHyperdimensionalController extends TileEntitySpecialRenderer<TileHyperdimensionalController> {
 
     // 外立方体半对角线长度（从中心到顶点）
-    private static final float OUTER_SIZE = 1.8f;
+    private static final float OUTER_SIZE = 2.4f;
     // 内立方体半对角线长度
-    private static final float INNER_SIZE = 0.9f;
+    private static final float INNER_SIZE = 1.2f;
     // 主旋转速度
     private static final float ROT_SPEED = 0.8f;
     // 内立方体反向旋转速度
@@ -75,20 +75,22 @@ public class RenderHyperdimensionalController extends TileEntitySpecialRenderer<
         GlStateManager.disableTexture2D();
         GlStateManager.shadeModel(GL11.GL_SMOOTH);
         GlStateManager.enableCull();
+        GL11.glEnable(GL11.GL_LINE_SMOOTH);
+        GL11.glHint(GL11.GL_LINE_SMOOTH_HINT, GL11.GL_NICEST);
 
         try {
             // 外立方体线框
             GlStateManager.pushMatrix();
             GlStateManager.rotate(time, 0, 1, 0);
             GlStateManager.rotate(time * 0.3f, 1, 0, 0);
-            drawCubeWireframe(OUTER_SIZE, COLOR_OUTER, 0.55f + 0.25f * pulse, 1.5f);
+            drawCubeWireframe(OUTER_SIZE, COLOR_OUTER, 0.55f + 0.25f * pulse, 2.5f);
             GlStateManager.popMatrix();
 
             // 内立方体线框（反向旋转）
             GlStateManager.pushMatrix();
             GlStateManager.rotate(innerTime, 0, 1, 0);
             GlStateManager.rotate(innerTime * 0.4f, 0, 0, 1);
-            drawCubeWireframe(INNER_SIZE, COLOR_INNER, 0.35f + 0.20f * pulse, 1.0f);
+            drawCubeWireframe(INNER_SIZE, COLOR_INNER, 0.35f + 0.20f * pulse, 1.5f);
             GlStateManager.popMatrix();
 
             // 连接内外立方体对应顶点的边（超立方体特征）
@@ -108,6 +110,7 @@ public class RenderHyperdimensionalController extends TileEntitySpecialRenderer<
                 GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO
             );
             GlStateManager.disableCull();
+            GL11.glDisable(GL11.GL_LINE_SMOOTH);
             GlStateManager.popMatrix();
         }
     }
