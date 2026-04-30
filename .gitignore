@@ -59,5 +59,10 @@ AGENTS_*.md
 
 ### Project Assets (source files) ###
 AssemblyTexture/
+Texture/
 Supercausal Assembly Hub.json
 Hyperdimensional Storage Nexus.json
+
+### Decompiled / Temp ###
+appeng/
+*.class
