@@ -37,6 +37,15 @@ public class FluidStorageAdapter implements IMEMonitor<IAEFluidStack> {
         this.channel = AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class);
         this.file = file;
         file.loadFluids(storage);
+        recalcTotal(); // 从文件加载后必须重新计算总数
+    }
+
+    private void recalcTotal() {
+        BigInteger sum = BigInteger.ZERO;
+        for (BigInteger v : storage.values()) {
+            sum = sum.add(v);
+        }
+        totalCount.set(sum);
     }
 
     public Map<FluidDescriptor, BigInteger> getStorageMap() {

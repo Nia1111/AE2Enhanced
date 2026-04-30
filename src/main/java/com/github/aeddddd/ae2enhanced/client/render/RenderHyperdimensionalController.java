@@ -20,9 +20,9 @@ import org.lwjgl.opengl.GL11;
 public class RenderHyperdimensionalController extends TileEntitySpecialRenderer<TileHyperdimensionalController> {
 
     // 外立方体半对角线长度（从中心到顶点）
-    private static final float OUTER_SIZE = 1.2f;
+    private static final float OUTER_SIZE = 1.8f;
     // 内立方体半对角线长度
-    private static final float INNER_SIZE = 0.6f;
+    private static final float INNER_SIZE = 0.9f;
     // 主旋转速度
     private static final float ROT_SPEED = 0.8f;
     // 内立方体反向旋转速度
