@@ -76,7 +76,6 @@ item.ae2enhanced.upgrade_card.parallel.name=时间折叠模块
 item.ae2enhanced.upgrade_card.parallel.tooltip=§b§l时间折叠模块 §r§8[类型: 并行]
 item.ae2enhanced.upgrade_card.parallel.tooltip.detail=§7通过将极大量的合成时间折叠为同一刻来提升批量合成任务的并行处理上限.\n§7阈值递进: §e64 §8| §e2,048 §8| §e65,536 §8| §e2,097,152 §8| §e67,108,864 §8| §e∞\n§7堆叠上限: §b%d §7张\n §b§l此刻即是古往今来
 item.ae2enhanced.upgrade_card.speed.name=时空膨胀模块
-item.ae2enhanced.upgrade_card.speed.name=时空膨胀模块
 item.ae2enhanced.upgrade_card.speed.tooltip=§b§l时空膨胀模块 §r§8[类型: 速度]
 item.ae2enhanced.upgrade_card.speed.tooltip.detail=§7利用所约束黑洞的相对论效应降低批量合成冷却间隔. 每级缩减 50%% 冷却时间.\n§7满级冷却: §e1 tick\n§7堆叠上限: §b%d §7张\n §b§l一日则春秋
 item.ae2enhanced.upgrade_card.efficiency.name=能量优化模块
