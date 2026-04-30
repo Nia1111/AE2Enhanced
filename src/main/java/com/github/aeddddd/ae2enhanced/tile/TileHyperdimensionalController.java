@@ -440,7 +440,20 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
     @Override
     public void update() {
         if (world == null) return;
-        if (world.isRemote) return;
+        if (world.isRemote) {
+            // Client-side: energy flow particles when formed and online
+            if (formed && networkActive && world.rand.nextInt(6) == 0) {
+                double px = pos.getX() + 0.5 + (world.rand.nextDouble() - 0.5) * 4.0;
+                double py = pos.getY() + 0.5 + world.rand.nextDouble() * 2.0;
+                double pz = pos.getZ() + 0.5 + (world.rand.nextDouble() - 0.5) * 4.0;
+                world.spawnParticle(net.minecraft.util.EnumParticleTypes.ENCHANTMENT_TABLE,
+                    px, py, pz,
+                    (pos.getX() + 0.5 - px) * 0.05,
+                    (pos.getY() + 1.5 - py) * 0.05,
+                    (pos.getZ() + 0.5 - pz) * 0.05);
+            }
+            return;
+        }
 
         if (needsReady && formed) {
             needsReady = false;

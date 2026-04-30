@@ -97,4 +97,9 @@ item.ae2enhanced.differential_form_stabilizer.tooltip=§e§lСтабилизат
 item.ae2enhanced.stable_spacetime_manifold.name=Стабильное пространственно-временное многообразие
 item.ae2enhanced.stable_spacetime_manifold.tooltip=§e§lСтабильное пространственно-временное многообразие §7\nСамостабилизирующаяся область пространства-времени, извлечённая из горизонта событий,\nсохраняющая топологическую целостность при экстремальной кривизне.\n§8Фрагмент стабильного пространственно-временного многообразия.\n§b§l"Где время замирает"
 
+tile.ae2enhanced.hyperdimensional_controller.name=Гиперпространственный контроллер хранения
+tile.ae2enhanced.hyperdimensional_me_interface.name=Гиперпространственный ME-интерфейс
+tile.ae2enhanced.hyperdimensional_casing.name=Гиперпространственный метрический якорь
+tile.ae2enhanced.hyperdimensional_singularity_core.name=Гиперпространственное ядро сингулярности
+
 death.spacetime.blackHole=%1$s навсегда потерян в горизонте событий
