@@ -89,6 +89,7 @@ public class RenderHyperdimensionalController extends TileEntitySpecialRenderer<
         GlStateManager.disableLighting();
         GlStateManager.disableTexture2D();
         GlStateManager.shadeModel(GL11.GL_SMOOTH);
+        boolean cullWasEnabled = GL11.glIsEnabled(GL11.GL_CULL_FACE);
         GlStateManager.enableCull();
         GL11.glEnable(GL11.GL_LINE_SMOOTH);
         GL11.glHint(GL11.GL_LINE_SMOOTH_HINT, GL11.GL_NICEST);
@@ -142,7 +143,11 @@ public class RenderHyperdimensionalController extends TileEntitySpecialRenderer<
                 GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
                 GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO
             );
-            GlStateManager.disableCull();
+            if (cullWasEnabled) {
+                GlStateManager.enableCull();
+            } else {
+                GlStateManager.disableCull();
+            }
             GL11.glDisable(GL11.GL_LINE_SMOOTH);
             GlStateManager.popMatrix();
         }
@@ -292,16 +297,18 @@ public class RenderHyperdimensionalController extends TileEntitySpecialRenderer<
         BufferBuilder buf = tess.getBuffer();
         buf.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_COLOR);
 
+        float[] ov = new float[3];
+        float[] iv = new float[3];
         for (float[] dir : dirs) {
             // 外顶点（应用外旋转）
-            float[] ov = rotatePoint(
+            rotatePoint(
                 dir[0] * outerHalf, dir[1] * outerHalf, dir[2] * outerHalf,
-                outerTime, outerTime * 0.3f, 0
+                outerTime, outerTime * 0.3f, 0, ov
             );
             // 内顶点（应用内旋转）
-            float[] iv = rotatePoint(
+            rotatePoint(
                 dir[0] * innerHalf, dir[1] * innerHalf, dir[2] * innerHalf,
-                0, 0, innerTime
+                0, 0, innerTime, iv
             );
 
             buf.pos(ov[0], ov[1], ov[2]).color(r, g, b, alpha).endVertex();
@@ -345,15 +352,17 @@ public class RenderHyperdimensionalController extends TileEntitySpecialRenderer<
         BufferBuilder buf = tess.getBuffer();
         buf.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_COLOR);
 
+        float[] ov = new float[3];
+        float[] iv = new float[3];
         for (int i = 0; i < 8; i++) {
-            float[] ov = rotatePoint(
+            rotatePoint(
                 dirs[i][0] * outerHalf, dirs[i][1] * outerHalf, dirs[i][2] * outerHalf,
-                outerTime, outerTime * 0.3f, 0
+                outerTime, outerTime * 0.3f, 0, ov
             );
             for (int j : diagMap[i]) {
-                float[] iv = rotatePoint(
+                rotatePoint(
                     dirs[j][0] * innerHalf, dirs[j][1] * innerHalf, dirs[j][2] * innerHalf,
-                    0, 0, innerTime
+                    0, 0, innerTime, iv
                 );
                 buf.pos(ov[0], ov[1], ov[2]).color(r, g, b, alpha).endVertex();
                 buf.pos(iv[0], iv[1], iv[2]).color(r, g, b, alpha).endVertex();
@@ -396,7 +405,7 @@ public class RenderHyperdimensionalController extends TileEntitySpecialRenderer<
     /**
      * 简单旋转：先绕 Y 轴旋转 ry，再绕 X 轴旋转 rx，再绕 Z 轴旋转 rz。
      */
-    private float[] rotatePoint(float x, float y, float z, float ry, float rx, float rz) {
+    private void rotatePoint(float x, float y, float z, float ry, float rx, float rz, float[] out) {
         // 绕 Y 轴
         float cosY = (float) Math.cos(Math.toRadians(ry));
         float sinY = (float) Math.sin(Math.toRadians(ry));
@@ -414,11 +423,9 @@ public class RenderHyperdimensionalController extends TileEntitySpecialRenderer<
         // 绕 Z 轴
         float cosZ = (float) Math.cos(Math.toRadians(rz));
         float sinZ = (float) Math.sin(Math.toRadians(rz));
-        float x3 = x2 * cosZ - y2 * sinZ;
-        float y3 = x2 * sinZ + y2 * cosZ;
-        float z3 = z2;
-
-        return new float[]{x3, y3, z3};
+        out[0] = x2 * cosZ - y2 * sinZ;
+        out[1] = x2 * sinZ + y2 * cosZ;
+        out[2] = z2;
     }
 
     /**

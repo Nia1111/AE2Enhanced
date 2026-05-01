@@ -18,34 +18,19 @@ public class ItemDescriptor {
     private final Item item;
     private final int meta;
     private final NBTTagCompound nbt;
-    private final int hash;
     // 缓存 AE2 的 IAEItemStack 模板，避免终端刷新时重复创建
-    private transient IAEItemStack aeTemplate;
+    private transient volatile IAEItemStack aeTemplate;
 
     public ItemDescriptor(ItemStack stack) {
         this.item = stack.getItem();
         this.meta = stack.getMetadata();
         this.nbt = stack.hasTagCompound() ? stack.getTagCompound().copy() : null;
-        this.hash = Objects.hash(
-            item != null ? item.getRegistryName() : null,
-            meta,
-            nbtString(nbt)
-        );
-    }
-
-    private static String nbtString(NBTTagCompound nbt) {
-        return nbt != null ? nbt.toString() : null;
     }
 
     private ItemDescriptor(Item item, int meta, NBTTagCompound nbt) {
         this.item = item;
         this.meta = meta;
         this.nbt = nbt != null ? nbt.copy() : null;
-        this.hash = Objects.hash(
-            item != null ? item.getRegistryName() : null,
-            meta,
-            nbtString(this.nbt)
-        );
     }
 
     public static ItemDescriptor fromNBT(NBTTagCompound tag) {
@@ -82,11 +67,17 @@ public class ItemDescriptor {
      * 首次调用时通过 channel 创建，后续直接复用。
      */
     public IAEItemStack getAETemplate(IItemStorageChannel channel) {
-        if (aeTemplate == null) {
-            ItemStack stack = toItemStack();
-            aeTemplate = channel.createStack(stack);
+        IAEItemStack result = aeTemplate;
+        if (result == null) {
+            synchronized (this) {
+                result = aeTemplate;
+                if (result == null) {
+                    ItemStack stack = toItemStack();
+                    result = aeTemplate = channel.createStack(stack);
+                }
+            }
         }
-        return aeTemplate;
+        return result;
     }
 
     public Item getItem() {

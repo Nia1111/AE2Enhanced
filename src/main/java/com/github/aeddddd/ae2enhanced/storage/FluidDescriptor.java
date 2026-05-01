@@ -20,7 +20,7 @@ public class FluidDescriptor {
     private final NBTTagCompound nbt;
     private final int hash;
     // 缓存 AE2 的 IAEFluidStack 模板，避免终端刷新时重复创建
-    private transient IAEFluidStack aeTemplate;
+    private transient volatile IAEFluidStack aeTemplate;
 
     public FluidDescriptor(FluidStack stack) {
         this.fluid = stack.getFluid();
@@ -76,12 +76,18 @@ public class FluidDescriptor {
      * 首次调用时通过 channel 创建，后续直接复用。
      */
     public IAEFluidStack getAETemplate(IFluidStorageChannel channel) {
-        if (aeTemplate == null) {
-            FluidStack stack = toFluidStack();
-            if (stack == null) return null;
-            aeTemplate = channel.createStack(stack);
+        IAEFluidStack result = aeTemplate;
+        if (result == null) {
+            synchronized (this) {
+                result = aeTemplate;
+                if (result == null) {
+                    FluidStack stack = toFluidStack();
+                    if (stack == null) return null;
+                    result = aeTemplate = channel.createStack(stack);
+                }
+            }
         }
-        return aeTemplate;
+        return result;
     }
 
     public Fluid getFluid() {

@@ -48,10 +48,13 @@ public class HyperdimensionalStorageFile {
     private volatile boolean dirty = false;
     private volatile boolean closed = false;
     private volatile boolean safeMode = false;
-    private Map<ItemDescriptor, BigInteger> storageRef = null;
-    private Map<FluidDescriptor, BigInteger> fluidStorageRef = null;
-    private Map<GasDescriptor, BigInteger> gasStorageRef = null;
-    private Map<EssentiaDescriptor, BigInteger> essentiaStorageRef = null;
+    private volatile Map<ItemDescriptor, BigInteger> storageRef = null;
+    private volatile Map<FluidDescriptor, BigInteger> fluidStorageRef = null;
+    private volatile Map<GasDescriptor, BigInteger> gasStorageRef = null;
+    private volatile Map<EssentiaDescriptor, BigInteger> essentiaStorageRef = null;
+
+    /** 初始化期间缓存读取的 NBT 根节点，避免 4 个 load* 方法重复读取同一文件 */
+    private NBTTagCompound loadCache = null;
 
     public HyperdimensionalStorageFile(World world, UUID nexusId) {
         this.nexusId = nexusId;
@@ -68,10 +71,24 @@ public class HyperdimensionalStorageFile {
     /**
      * 从文件加载物品数据到目标 Map。若文件不存在则不做任何事（空存储）。
      */
-    public void load(Map<ItemDescriptor, BigInteger> target) {
-        if (!file.exists()) return;
+    private NBTTagCompound readRoot() {
+        if (loadCache != null) return loadCache;
+        if (!file.exists()) return null;
         try {
-            NBTTagCompound root = CompressedStreamTools.read(file);
+            loadCache = CompressedStreamTools.read(file);
+            return loadCache;
+        } catch (Exception e) {
+            com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.error(
+                "[AE2E] Failed to read storage file: {}. Entering safe mode (read-only).", file.getAbsolutePath(), e);
+            safeMode = true;
+            return null;
+        }
+    }
+
+    public void load(Map<ItemDescriptor, BigInteger> target) {
+        NBTTagCompound root = readRoot();
+        if (root == null) return;
+        try {
             if (root == null) return;
             int version = root.getInteger("version");
             if (version > CURRENT_VERSION) {
@@ -106,9 +123,9 @@ public class HyperdimensionalStorageFile {
      * 从文件加载流体数据到目标 Map。若文件不存在则不做任何事（空存储）。
      */
     public void loadFluids(Map<FluidDescriptor, BigInteger> target) {
-        if (!file.exists()) return;
+        NBTTagCompound root = readRoot();
+        if (root == null) return;
         try {
-            NBTTagCompound root = CompressedStreamTools.read(file);
             if (root == null) return;
             int version = root.getInteger("version");
             if (version > CURRENT_VERSION) {
@@ -131,7 +148,8 @@ public class HyperdimensionalStorageFile {
             }
         } catch (Exception e) {
             com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.error(
-                "[AE2E] Failed to load fluid storage from file: {}.", file.getAbsolutePath(), e);
+                "[AE2E] Failed to load fluid storage from file: {}. Entering safe mode (read-only).", file.getAbsolutePath(), e);
+            safeMode = true;
         }
     }
 
@@ -187,9 +205,6 @@ public class HyperdimensionalStorageFile {
         File tmpFile = new File(file.getAbsolutePath() + ".tmp");
         try {
             CompressedStreamTools.write(root, tmpFile);
-            if (file.exists() && !file.delete()) {
-                throw new IOException("Failed to delete old storage file");
-            }
             Files.move(tmpFile.toPath(), file.toPath(),
                 StandardCopyOption.REPLACE_EXISTING,
                 StandardCopyOption.ATOMIC_MOVE);
@@ -226,9 +241,9 @@ public class HyperdimensionalStorageFile {
      * 从文件加载气体数据到目标 Map。若文件不存在则不做任何事（空存储）。
      */
     public void loadGases(Map<GasDescriptor, BigInteger> target) {
-        if (!file.exists()) return;
+        NBTTagCompound root = readRoot();
+        if (root == null) return;
         try {
-            NBTTagCompound root = CompressedStreamTools.read(file);
             if (root == null) return;
             int version = root.getInteger("version");
             if (version > CURRENT_VERSION) {
@@ -251,7 +266,8 @@ public class HyperdimensionalStorageFile {
             }
         } catch (Exception e) {
             com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.error(
-                "[AE2E] Failed to load gas storage from file: {}.", file.getAbsolutePath(), e);
+                "[AE2E] Failed to load gas storage from file: {}. Entering safe mode (read-only).", file.getAbsolutePath(), e);
+            safeMode = true;
         }
     }
 
@@ -267,9 +283,9 @@ public class HyperdimensionalStorageFile {
      * 从文件加载源质数据到目标 Map。若文件不存在则不做任何事（空存储）。
      */
     public void loadEssentias(Map<EssentiaDescriptor, BigInteger> target) {
-        if (!file.exists()) return;
+        NBTTagCompound root = readRoot();
+        if (root == null) return;
         try {
-            NBTTagCompound root = CompressedStreamTools.read(file);
             if (root == null) return;
             int version = root.getInteger("version");
             if (version > CURRENT_VERSION) {
@@ -292,7 +308,8 @@ public class HyperdimensionalStorageFile {
             }
         } catch (Exception e) {
             com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.error(
-                "[AE2E] Failed to load essentia storage from file: {}.", file.getAbsolutePath(), e);
+                "[AE2E] Failed to load essentia storage from file: {}. Entering safe mode (read-only).", file.getAbsolutePath(), e);
+            safeMode = true;
         }
     }
 

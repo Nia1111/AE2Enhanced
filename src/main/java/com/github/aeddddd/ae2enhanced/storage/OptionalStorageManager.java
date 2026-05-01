@@ -11,9 +11,11 @@ import net.minecraftforge.fml.common.Loader;
 import thaumicenergistics.api.storage.IEssentiaStorageChannel;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
 /**
@@ -33,6 +35,25 @@ public class OptionalStorageManager {
      * 元素类型为 Object，避免编译期对未知类型的强依赖。
      */
     private final List<Object> externalAdapters = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    /**
+     * 反射方法缓存，避免每次 getHandlers() 都重复 getMethod()。
+     * Key: 外部适配器类；Value: [getChannel 方法, getHandler 方法]
+     */
+    private final Map<Class<?>, Method[]> methodCache = new ConcurrentHashMap<>();
+
+    private Method[] getCachedMethods(Class<?> clazz) {
+        return methodCache.computeIfAbsent(clazz, k -> {
+            try {
+                return new Method[]{
+                    k.getMethod("getChannel"),
+                    k.getMethod("getHandler")
+                };
+            } catch (NoSuchMethodException e) {
+                return null;
+            }
+        });
+    }
 
     public void init(HyperdimensionalStorageFile file) {
         if (Loader.isModLoaded("mekeng")) {
@@ -85,12 +106,14 @@ public class OptionalStorageManager {
         if (channel instanceof IEssentiaStorageChannel && essentiaAdapter != null) {
             return Collections.singletonList(essentiaAdapter);
         }
-        // 外部扩展适配器（通过反射匹配 channel 类型）
+        // 外部扩展适配器（通过反射匹配 channel 类型，方法已缓存）
         for (Object ext : externalAdapters) {
+            Method[] methods = getCachedMethods(ext.getClass());
+            if (methods == null) continue;
             try {
-                Object extChannel = ext.getClass().getMethod("getChannel").invoke(ext);
+                Object extChannel = methods[0].invoke(ext);
                 if (extChannel == channel) {
-                    Object handler = ext.getClass().getMethod("getHandler").invoke(ext);
+                    Object handler = methods[1].invoke(ext);
                     if (handler instanceof IMEInventoryHandler) {
                         return Collections.singletonList((IMEInventoryHandler) handler);
                     }
@@ -151,5 +174,6 @@ public class OptionalStorageManager {
         gasAdapter = null;
         essentiaAdapter = null;
         externalAdapters.clear();
+        methodCache.clear();
     }
 }

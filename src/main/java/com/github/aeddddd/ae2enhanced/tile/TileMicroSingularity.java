@@ -23,7 +23,10 @@ import net.minecraft.util.text.TextComponentTranslation;
  */
 public class TileMicroSingularity extends TileEntity implements ITickable {
 
-    private int lifeTicks = 6000;
+    private static final int DEFAULT_LIFE_TICKS = 6000;
+    private static final int HORIZON_RADIUS = 1; // 3×3×3 范围：origin ± 1
+
+    private int lifeTicks = DEFAULT_LIFE_TICKS;
 
     private static final DamageSource SPACETIME = new DamageSource("spacetime") {
         @Override
@@ -55,8 +58,8 @@ public class TileMicroSingularity extends TileEntity implements ITickable {
         if (AE2EnhancedConfig.blackHole.damageMode != AE2EnhancedConfig.DamageMode.NONE) {
             BlockPos origin = pos;
             AxisAlignedBB horizon = new AxisAlignedBB(
-                    origin.getX() - 1, origin.getY() - 1, origin.getZ() - 1,
-                    origin.getX() + 2, origin.getY() + 2, origin.getZ() + 2
+                    origin.getX() - HORIZON_RADIUS, origin.getY() - HORIZON_RADIUS, origin.getZ() - HORIZON_RADIUS,
+                    origin.getX() + HORIZON_RADIUS + 1, origin.getY() + HORIZON_RADIUS + 1, origin.getZ() + HORIZON_RADIUS + 1
             );
             for (EntityLivingBase entity : world.getEntitiesWithinAABB(EntityLivingBase.class, horizon)) {
                 if (!entity.isEntityAlive()) continue;

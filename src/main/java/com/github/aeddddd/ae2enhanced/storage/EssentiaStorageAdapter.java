@@ -76,26 +76,36 @@ public class EssentiaStorageAdapter implements IMEMonitor<IAEEssentiaStack>, IME
     public IAEEssentiaStack extractItems(IAEEssentiaStack request, Actionable type, IActionSource src) {
         if (request == null || request.getStackSize() <= 0) return null;
         EssentiaDescriptor key = new EssentiaDescriptor(request);
-        BigInteger available = storage.getOrDefault(key, BigInteger.ZERO);
         BigInteger requested = BigInteger.valueOf(request.getStackSize());
-        BigInteger toExtract = available.min(requested);
-
-        if (toExtract.signum() <= 0) {
-            return null; // 无法提取任何
-        }
+        BigInteger toExtract;
 
         if (type == Actionable.MODULATE) {
-            BigInteger remaining = available.subtract(toExtract);
-            if (remaining.signum() <= 0) {
-                storage.remove(key);
-            } else {
-                storage.put(key, remaining);
+            final BigInteger[] extracted = new BigInteger[1];
+            storage.compute(key, (k, available) -> {
+                BigInteger avail = available == null ? BigInteger.ZERO : available;
+                BigInteger extract = avail.min(requested);
+                if (extract.signum() <= 0) {
+                    return available;
+                }
+                extracted[0] = extract;
+                BigInteger remaining = avail.subtract(extract);
+                return remaining.signum() <= 0 ? null : remaining;
+            });
+            toExtract = extracted[0];
+            if (toExtract == null) {
+                return null;
             }
             totalCount.updateAndGet(t -> t.subtract(toExtract));
             file.markDirty();
             IAEEssentiaStack change = request.copy();
             change.setStackSize(-toExtract.min(BigInteger.valueOf(Long.MAX_VALUE)).longValue());
             notifyPostChange(change, src);
+        } else {
+            BigInteger available = storage.getOrDefault(key, BigInteger.ZERO);
+            toExtract = available.min(requested);
+            if (toExtract.signum() <= 0) {
+                return null;
+            }
         }
 
         IAEEssentiaStack result = request.copy();

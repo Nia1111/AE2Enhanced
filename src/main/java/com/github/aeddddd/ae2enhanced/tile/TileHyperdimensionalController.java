@@ -183,6 +183,7 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
         if (proxy != null) {
             proxy.onChunkUnload();
         }
+        closeStorage();
     }
 
     public void assemble() {
@@ -338,7 +339,7 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
                             if (ON_TICK_METHOD != null) ON_TICK_METHOD.invoke(gasMonitor);
                         }
                     }
-                } catch (Exception e) {
+                } catch (ReflectiveOperationException | RuntimeException e) {
                     com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.warn("[AE2E] Failed to refresh gas monitor", e);
                 }
                 try {
@@ -352,11 +353,11 @@ public class TileHyperdimensionalController extends TileEntity implements IGridP
                             if (ON_TICK_METHOD != null) ON_TICK_METHOD.invoke(essentiaMonitor);
                         }
                     }
-                } catch (Exception e) {
+                } catch (ReflectiveOperationException | RuntimeException e) {
                     com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.warn("[AE2E] Failed to refresh essentia monitor", e);
                 }
             }
-        } catch (Exception e) {
+        } catch (ReflectiveOperationException | RuntimeException | appeng.me.GridAccessException e) {
             com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.warn(
                 "[AE2E] Failed to refresh NetworkMonitor cache", e);
         }

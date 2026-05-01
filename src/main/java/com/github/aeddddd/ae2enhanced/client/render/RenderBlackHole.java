@@ -1,6 +1,7 @@
 package com.github.aeddddd.ae2enhanced.client.render;
 
 import com.github.aeddddd.ae2enhanced.block.BlockAssemblyController;
+import com.github.aeddddd.ae2enhanced.config.AE2EnhancedConfig;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyController;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
@@ -49,6 +50,12 @@ public class RenderBlackHole extends TileEntitySpecialRenderer<TileAssemblyContr
             case EAST:  centerX -= 7.0; break;
             case WEST:  centerX += 7.0; break;
             default:    centerZ += 7.0; break;
+        }
+
+        double renderDist = AE2EnhancedConfig.render.renderDistance;
+        double distSq = centerX * centerX + centerY * centerY + centerZ * centerZ;
+        if (distSq > renderDist * renderDist) {
+            return;
         }
 
         float time = (te.getWorld().getTotalWorldTime() + partialTicks) * ROTATION_SPEED;
@@ -136,6 +143,11 @@ public class RenderBlackHole extends TileEntitySpecialRenderer<TileAssemblyContr
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_TRIANGLES, DefaultVertexFormats.POSITION_COLOR);
 
+        double[] v00 = new double[3];
+        double[] v01 = new double[3];
+        double[] v10 = new double[3];
+        double[] v11 = new double[3];
+
         for (int lat = 0; lat < LATITUDE_SEGMENTS; lat++) {
             double theta0 = Math.PI * lat / LATITUDE_SEGMENTS;
             double theta1 = Math.PI * (lat + 1) / LATITUDE_SEGMENTS;
@@ -144,10 +156,10 @@ public class RenderBlackHole extends TileEntitySpecialRenderer<TileAssemblyContr
                 double phi0 = 2 * Math.PI * lon / LONGITUDE_SEGMENTS;
                 double phi1 = 2 * Math.PI * (lon + 1) / LONGITUDE_SEGMENTS;
 
-                double[] v00 = sphereVertex(radius, theta0, phi0);
-                double[] v01 = sphereVertex(radius, theta0, phi1);
-                double[] v10 = sphereVertex(radius, theta1, phi0);
-                double[] v11 = sphereVertex(radius, theta1, phi1);
+                sphereVertex(radius, theta0, phi0, v00);
+                sphereVertex(radius, theta0, phi1, v01);
+                sphereVertex(radius, theta1, phi0, v10);
+                sphereVertex(radius, theta1, phi1, v11);
 
                 addTriangle(buffer, v00, v10, v01, r, g, b, alpha);
                 addTriangle(buffer, v01, v10, v11, r, g, b, alpha);
@@ -205,12 +217,10 @@ public class RenderBlackHole extends TileEntitySpecialRenderer<TileAssemblyContr
         GlStateManager.glLineWidth(1.0f);
     }
 
-    private double[] sphereVertex(double radius, double theta, double phi) {
-        return new double[]{
-            radius * Math.sin(theta) * Math.cos(phi),
-            radius * Math.cos(theta),
-            radius * Math.sin(theta) * Math.sin(phi)
-        };
+    private void sphereVertex(double radius, double theta, double phi, double[] out) {
+        out[0] = radius * Math.sin(theta) * Math.cos(phi);
+        out[1] = radius * Math.cos(theta);
+        out[2] = radius * Math.sin(theta) * Math.sin(phi);
     }
 
     private void addTriangle(BufferBuilder buffer, double[] a, double[] b, double[] c,

@@ -10,6 +10,7 @@ import appeng.api.storage.IMEMonitorHandlerReceiver;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 简单的 IMEMonitor 实现，包装 ItemStorageAdapter。
@@ -18,7 +19,7 @@ import java.util.List;
 public class SimpleMEMonitor implements IMEMonitor<IAEItemStack> {
 
     private final ItemStorageAdapter adapter;
-    private final List<IMEMonitorHandlerReceiver<IAEItemStack>> listeners = new ArrayList<>();
+    private final List<IMEMonitorHandlerReceiver<IAEItemStack>> listeners = new CopyOnWriteArrayList<>();
 
     public SimpleMEMonitor(ItemStorageAdapter adapter) {
         this.adapter = adapter;
@@ -110,7 +111,8 @@ public class SimpleMEMonitor implements IMEMonitor<IAEItemStack> {
 
     /**
      * 通知所有监听器存储发生变化。
-     * P1 阶段暂不主动触发实时更新，ME 终端刷新即可看到最新数据。
+     * 【预留】当前未被 getCellArray() 使用（直接返回 adapter），但若未来网络集成需要
+     * IMEMonitor 包装，此类已准备就绪。CopyOnWriteArrayList 避免并发修改异常。
      */
     public void notifyPostChange(Iterable<IAEItemStack> changes, IActionSource src) {
         for (IMEMonitorHandlerReceiver<IAEItemStack> listener : listeners) {

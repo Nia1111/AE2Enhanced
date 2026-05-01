@@ -16,7 +16,7 @@ import java.util.Objects;
 public class GasDescriptor {
     private final String gasName;
     private final int hash;
-    private transient IAEGasStack aeTemplate = null;
+    private transient volatile IAEGasStack aeTemplate = null;
 
     public GasDescriptor(IAEGasStack stack) {
         Gas gas = stack.getGas();
@@ -33,12 +33,18 @@ public class GasDescriptor {
      * 根据存储的 gasName 重建 IAEGasStack 模板（stackSize=1）。
      */
     public IAEGasStack getAETemplate() {
-        if (aeTemplate == null) {
-            Gas gas = GasRegistry.getGas(gasName);
-            if (gas == null) return null;
-            aeTemplate = AEGasStack.of(new GasStack(gas, 1));
+        IAEGasStack result = aeTemplate;
+        if (result == null) {
+            synchronized (this) {
+                result = aeTemplate;
+                if (result == null) {
+                    Gas gas = GasRegistry.getGas(gasName);
+                    if (gas == null) return null;
+                    result = aeTemplate = AEGasStack.of(new GasStack(gas, 1));
+                }
+            }
         }
-        return aeTemplate;
+        return result;
     }
 
     @Override

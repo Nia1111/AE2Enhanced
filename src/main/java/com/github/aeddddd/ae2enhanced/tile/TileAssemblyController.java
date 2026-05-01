@@ -24,6 +24,7 @@ import com.github.aeddddd.ae2enhanced.crafting.BlackHoleCraftingHelper;
 import com.github.aeddddd.ae2enhanced.crafting.BlackHoleRecipe;
 import com.github.aeddddd.ae2enhanced.crafting.BlackHoleRecipeRegistry;
 import com.github.aeddddd.ae2enhanced.item.ItemUpgradeCard;
+import com.github.aeddddd.ae2enhanced.storage.ItemDescriptor;
 import com.github.aeddddd.ae2enhanced.structure.AssemblyStructure;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityItem;
@@ -179,6 +180,7 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
     private final Map<ICraftingPatternDetails, Boolean> patternVirtualCache = new HashMap<>();
     private final List<ItemStack> pendingOutputs = new ArrayList<>();
     private static final int MAX_PENDING_OUTPUTS = 4096;
+    private static final int BLACK_HOLE_OVERFLOW_TYPES = 5;
 
     /** 真实合成 batch 信息缓存：配方、催化剂槽位、槽位物品模板 */
     public static class PatternBatchInfo {
@@ -192,6 +194,8 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
     // eventHorizonStrikes removed: banish-to-overworld fallback no longer exists
     private boolean patternsDirty = false;
     private int patternRefreshTicks = 0;
+    /** 事件视界实体扫描/物品吸入的 tick 节流计数器，每 5 tick 执行一次以减轻 TPS 压力 */
+    private int eventHorizonTickCounter = 0;
 
     /** 当前合成任务的 ActionSource（由 Mixin 在 pushPattern 前设置），用于让 AE2 正确追踪产物 */
     private IActionSource currentSource = null;
@@ -462,6 +466,14 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         }
     }
 
+    @Override
+    public void onChunkUnload() {
+        super.onChunkUnload();
+        if (proxy != null) {
+            proxy.onChunkUnload();
+        }
+    }
+
     public void assemble() {
         if (!formed) {
             formed = true;
@@ -529,8 +541,11 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             getProxy().onReady();
         }
 
-        // 黑洞事件视界：秒杀进入中心区域的生物
+        // 黑洞事件视界：秒杀进入中心区域的生物（每 5 tick 节流）
         if (formed) {
+            eventHorizonTickCounter++;
+            if (eventHorizonTickCounter < 5) return;
+            eventHorizonTickCounter = 0;
             if (!(world.getBlockState(pos).getBlock() instanceof BlockAssemblyController)) return;
             EnumFacing controllerFacing = world.getBlockState(pos).getValue(BlockAssemblyController.FACING);
             BlockPos origin = AssemblyStructure.getOriginFromController(pos, controllerFacing);
@@ -623,14 +638,15 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         }
 
         // 递减所有 job timer
-        for (int i = jobTimers.size() - 1; i >= 0; i--) {
-            int ticks = jobTimers.get(i) - 1;
-            if (ticks <= 0) {
-                jobTimers.remove(i);
-            } else {
-                jobTimers.set(i, ticks);
+        List<Integer> nextTimers = new ArrayList<>();
+        for (int ticks : jobTimers) {
+            int next = ticks - 1;
+            if (next > 0) {
+                nextTimers.add(next);
             }
         }
+        jobTimers.clear();
+        jobTimers.addAll(nextTimers);
 
         // 重置 batchBusy，允许下一 tick 继续 batch
         this.batchBusy = false;
@@ -673,18 +689,18 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         IMEMonitor<IAEItemStack> monitor = storage.getInventory(channel);
 
         // 合并相同物品的 stack，避免逐个注入
-        Map<String, Long> merged = new LinkedHashMap<>();
-        Map<String, ItemStack> prototypes = new HashMap<>();
+        Map<ItemDescriptor, Long> merged = new LinkedHashMap<>();
+        Map<ItemDescriptor, ItemStack> prototypes = new HashMap<>();
 
         for (ItemStack stack : pendingOutputs) {
             if (stack.isEmpty()) continue;
-            String key = getStackKey(stack);
+            ItemDescriptor key = new ItemDescriptor(stack);
             merged.merge(key, (long) stack.getCount(), Long::sum);
             prototypes.putIfAbsent(key, stack.copy());
         }
         pendingOutputs.clear();
 
-        for (Map.Entry<String, Long> entry : merged.entrySet()) {
+        for (Map.Entry<ItemDescriptor, Long> entry : merged.entrySet()) {
             ItemStack proto = prototypes.get(entry.getKey());
             long count = entry.getValue();
 
@@ -710,12 +726,12 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
         }
     }
 
-    private String getStackKey(ItemStack stack) {
-        String key = Objects.toString(stack.getItem().getRegistryName()) + "#" + stack.getMetadata();
-        if (stack.hasTagCompound()) {
-            key += "#" + stack.getTagCompound().toString();
-        }
-        return key;
+    /**
+     * 使用 ItemDescriptor 作为 key，避免 NBTTagCompound.toString() 产生长字符串导致 GC 压力。
+     * ItemDescriptor.equals() 已包含 NBT 比较，hashCode() 基于 item+meta（碰撞由 equals 解决）。
+     */
+    private ItemDescriptor getStackDescriptor(ItemStack stack) {
+        return new ItemDescriptor(stack);
     }
 
     // ---------- ICraftingMedium ----------
@@ -833,7 +849,7 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
                 uniqueTypes.add(BlackHoleRecipe.keyOf(stack));
             }
         }
-        if (uniqueTypes.size() > 5) {
+        if (uniqueTypes.size() > BLACK_HOLE_OVERFLOW_TYPES) {
             // 溢出销毁：清空缓存并释放特效
             blackHoleBuffer.clear();
             EnumFacing controllerFacing = world.getBlockState(pos).getValue(BlockAssemblyController.FACING);
@@ -1243,6 +1259,10 @@ public class TileAssemblyController extends TileEntity implements ICraftingProvi
             for (int i = 0; i < list.tagCount(); i++) {
                 NBTTagCompound tag = list.getCompoundTagAt(i);
                 Item item = Item.getByNameOrId(tag.getString("id"));
+                if (item == null) {
+                    AE2Enhanced.LOGGER.warn("[AE2E] Skipping orphaned item '{}' in blackHoleBuffer, mod may have been removed.", tag.getString("id"));
+                    continue;
+                }
                 int count = tag.getInteger("Count");
                 int meta = tag.getInteger("Damage");
                 ItemStack stack = new ItemStack(item, count, meta);

@@ -14,7 +14,7 @@ import java.util.Objects;
 public class EssentiaDescriptor {
     private final String aspectTag;
     private final int hash;
-    private transient IAEEssentiaStack aeTemplate = null;
+    private transient volatile IAEEssentiaStack aeTemplate = null;
 
     public EssentiaDescriptor(IAEEssentiaStack stack) {
         this.aspectTag = stack.getAspect() != null ? stack.getAspect().getTag() : "unknown";
@@ -30,11 +30,17 @@ public class EssentiaDescriptor {
      * 根据存储的 aspectTag 重建 IAEEssentiaStack 模板（stackSize=1）。
      */
     public IAEEssentiaStack getAETemplate() {
-        if (aeTemplate == null) {
-            EssentiaStack stack = new EssentiaStack(aspectTag, 1);
-            aeTemplate = AEEssentiaStack.fromEssentiaStack(stack);
+        IAEEssentiaStack result = aeTemplate;
+        if (result == null) {
+            synchronized (this) {
+                result = aeTemplate;
+                if (result == null) {
+                    EssentiaStack stack = new EssentiaStack(aspectTag, 1);
+                    result = aeTemplate = AEEssentiaStack.fromEssentiaStack(stack);
+                }
+            }
         }
-        return aeTemplate;
+        return result;
     }
 
     @Override
