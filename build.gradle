@@ -1,50 +1,68 @@
+// ============================================================================
+// AE2Enhanced —— Minecraft 1.12.2 / Forge Mod
+// 构建链: ForgeGradle 2.3-SNAPSHOT + MixinGradle 0.6 (Java 8 / Gradle 4.10.3)
+// 结构参照 Forge MDK / Cleanroom 1.12.2 模板: 所有版本常量集中在 gradle.properties
+// ============================================================================
+
 buildscript {
     repositories {
-        jcenter()
-        maven { url = "https://files.minecraftforge.net/maven" }
-        maven { url = "https://repo.spongepowered.org/repository/maven-public/" }
+        maven { url = 'https://files.minecraftforge.net/maven' }
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+        mavenCentral()
     }
     dependencies {
         classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
         classpath 'org.spongepowered:mixingradle:0.6-SNAPSHOT'
     }
 }
+
 apply plugin: 'net.minecraftforge.gradle.forge'
 apply plugin: 'org.spongepowered.mixin'
 
-version = '1.5.5fix2'
-group = 'com.github.aeddddd'
-archivesBaseName = 'AE2Enhanced'
+// ----------------------------------------------------------------------------
+// Mod 元数据（值见 gradle.properties）
+// ----------------------------------------------------------------------------
+version = project.mod_version
+group = project.maven_group
+archivesBaseName = project.archives_base_name
 
-sourceCompatibility = targetCompatibility = '1.8'
+// ----------------------------------------------------------------------------
+// Java 8 / UTF-8 编译
+// ----------------------------------------------------------------------------
+sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8
 compileJava {
-    sourceCompatibility = targetCompatibility = '1.8'
+    sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8
     options.encoding = 'UTF-8'
 }
 
-sourceSets {
-    main {
-        java {
-            srcDirs = ['src/main/java']
-        }
-    }
-}
-
+// ----------------------------------------------------------------------------
+// Minecraft / Forge / Mappings（值见 gradle.properties）
+// ----------------------------------------------------------------------------
 minecraft {
-    version = '1.12.2-14.23.5.2768'
+    version = "${project.minecraft_version}-${project.forge_version}"
     runDir = 'run'
-    mappings = 'stable_39'
+    mappings = project.mcp_mappings
 }
 
+// ----------------------------------------------------------------------------
+// 仓库
+// ----------------------------------------------------------------------------
 repositories {
     mavenCentral()
-    maven { url = 'https://maven.cleanroommc.com' }
-    maven { url = 'https://dvs1.progwml6.com/files/maven' }
-    maven { url = 'https://maven.blamejared.com' }
+    maven { url = 'https://repo.spongepowered.org/repository/maven-public/' } // Mixin
+    maven { url = 'https://dvs1.progwml6.com/files/maven' }                   // JEI
+    maven { url = 'https://maven.blamejared.com' }                            // CraftTweaker
 }
 
+// ----------------------------------------------------------------------------
+// 依赖
+// ----------------------------------------------------------------------------
 dependencies {
+    // 必需: AE2-UEL 主 mod
     compile files('libs/ae2-uel-v0.56.7.jar')
+
+    // 可选集成 (compileOnly): 第三方 mod 类一律通过反射隔离访问,
+    // 运行时按对应 mod 是否安装进行条件加载
     compileOnly files('libs/ae2fc-2.7.10-unofficial.jar')
     compileOnly files('libs/Mekanism-CE-Unofficial-All-10.0.0.450-dev.jar')
     compileOnly files('libs/Mekanism-1.12.2-9.8.3.390.jar')
@@ -68,19 +86,23 @@ dependencies {
     compileOnly files('libs/nuclearcraft-1.12.2-2o.9.7.jar')
     compileOnly files('libs/Draconic-Evolution-1.12.2-2.3.28.354-universal.jar')
     compileOnly files('libs/extendedcrafting-nomifactory-edition-1.7.0.6.jar')
-    // fastutil: 高性能集合库,打包进 jar
-    compile 'it.unimi.dsi:fastutil:8.5.12'
 
+    // Mixin: MixinBooter 本地 jar + 注解处理器
     compile files('libs/!mixinbooter-10.6.jar')
-    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    annotationProcessor "org.spongepowered:mixin:${project.mixin_version}:processor"
 
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
-    testImplementation 'org.junit.jupiter:junit-jupiter-params:5.10.0'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.0'
+    // fastutil: 高性能集合库, 打包进 jar (瘦身规则见下方 jar 块)
+    compile "it.unimi.dsi:fastutil:${project.fastutil_version}"
 
-    deobfProvided 'mezz.jei:jei_1.12.2:4.16.1.302:api'
-    deobfProvided 'mezz.jei:jei_1.12.2:4.16.1.302'
-    deobfProvided 'CraftTweaker2:CraftTweaker2-MC1120-Main:1.12-4.1.20.574'
+    // JEI / CraftTweaker: 开发期反混淆依赖, 不打包
+    deobfProvided "mezz.jei:jei_${project.minecraft_version}:${project.jei_version}:api"
+    deobfProvided "mezz.jei:jei_${project.minecraft_version}:${project.jei_version}"
+    deobfProvided "CraftTweaker2:CraftTweaker2-MC1120-Main:${project.crafttweaker_version}"
+
+    // JUnit 5
+    testImplementation "org.junit.jupiter:junit-jupiter-api:${project.junit_version}"
+    testImplementation "org.junit.jupiter:junit-jupiter-params:${project.junit_version}"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${project.junit_version}"
 }
 
 test {
@@ -91,27 +113,32 @@ mixin {
     add sourceSets.main, 'mixin.refmap.json'
 }
 
+// ----------------------------------------------------------------------------
+// 资源处理: 展开 mcmod.info 中的 ${version} / ${mcversion} 模板变量
+// ----------------------------------------------------------------------------
 processResources {
     inputs.property 'version', project.version
     inputs.property 'mcversion', project.minecraft.version
     from(sourceSets.main.resources.srcDirs) {
         include 'mcmod.info'
-        expand 'version':project.version, 'mcversion':project.minecraft.version
+        expand 'version': project.version, 'mcversion': project.minecraft.version
     }
     from(sourceSets.main.resources.srcDirs) {
         exclude 'mcmod.info'
     }
 }
 
-// runClient 时自动检测 HEI：若 mods 文件夹中存在 HEI,则排除原版 JEI jar,
-// 避免原版 JEI 与 HEI 的类冲突；若只有原版 JEI,则保持兼容.
+// ----------------------------------------------------------------------------
+// runClient 时自动检测 HEI: 若 mods 文件夹中存在 HEI, 则排除原版 JEI jar,
+// 避免原版 JEI 与 HEI 的类冲突; 若只有原版 JEI, 则保持兼容.
+// ----------------------------------------------------------------------------
 afterEvaluate {
     tasks.runClient {
         doFirst {
             def hasHEI = fileTree('run/mods').matching { include '**/HadEnoughItems*.jar' }.files.size() > 0
             if (hasHEI) {
                 classpath = classpath.filter { file ->
-                    !file.name.contains('jei_1.12.2-4.16.1')
+                    !file.name.contains("jei_${project.minecraft_version}")
                 }
                 println "[AE2Enhanced] Detected HEI in run/mods, excluded vanilla JEI from runtime classpath."
             }
@@ -119,15 +146,18 @@ afterEvaluate {
     }
 }
 
+// ----------------------------------------------------------------------------
+// 打包: 排除 JEI stub、打包并瘦身 fastutil、写入 FML CorePlugin manifest
+// ----------------------------------------------------------------------------
 jar {
-    // 排除 JEI 内部类的编译期 stub,避免与运行时 JEI/HEI 的类冲突
+    // 排除 JEI 内部类的编译期 stub, 避免与运行时 JEI/HEI 的类冲突
     exclude 'mezz/jei/**'
-    
-    // 打包 fastutil 并手动瘦身,排除不相关的原始类型包
+
+    // 打包 fastutil 并手动瘦身, 排除不相关的原始类型包
     from {
         configurations.compile.findAll { it.name.contains('fastutil') }.collect { zipTree(it) }
     }
-    
+
     // 排除 fastutil 中不相关的原始类型包
     exclude 'it/unimi/dsi/fastutil/doubles/**'
     exclude 'it/unimi/dsi/fastutil/shorts/**'
@@ -136,7 +166,7 @@ jar {
     exclude 'it/unimi/dsi/fastutil/bytes/**'
     exclude 'it/unimi/dsi/fastutil/booleans/**'
     exclude 'it/unimi/dsi/fastutil/io/**'
-    
+
     // 进一步排除 objects/longs/ints 包中与其他原始类型组合的类
     exclude 'it/unimi/dsi/fastutil/objects/Object2Double*'
     exclude 'it/unimi/dsi/fastutil/objects/Object2Float*'
@@ -150,7 +180,7 @@ jar {
     exclude 'it/unimi/dsi/fastutil/objects/*Char*'
     exclude 'it/unimi/dsi/fastutil/objects/*Byte*'
     exclude 'it/unimi/dsi/fastutil/objects/*Boolean*'
-    
+
     exclude 'it/unimi/dsi/fastutil/longs/Long2Double*'
     exclude 'it/unimi/dsi/fastutil/longs/Long2Float*'
     exclude 'it/unimi/dsi/fastutil/longs/Long2Short*'
@@ -163,7 +193,7 @@ jar {
     exclude 'it/unimi/dsi/fastutil/longs/*Char*'
     exclude 'it/unimi/dsi/fastutil/longs/*Byte*'
     exclude 'it/unimi/dsi/fastutil/longs/*Boolean*'
-    
+
     exclude 'it/unimi/dsi/fastutil/ints/Int2Double*'
     exclude 'it/unimi/dsi/fastutil/ints/Int2Float*'
     exclude 'it/unimi/dsi/fastutil/ints/Int2Short*'
@@ -176,7 +206,7 @@ jar {
     exclude 'it/unimi/dsi/fastutil/ints/*Char*'
     exclude 'it/unimi/dsi/fastutil/ints/*Byte*'
     exclude 'it/unimi/dsi/fastutil/ints/*Boolean*'
-    
+
     manifest {
         attributes([
             'FMLCorePluginContainsFMLMod': true,
