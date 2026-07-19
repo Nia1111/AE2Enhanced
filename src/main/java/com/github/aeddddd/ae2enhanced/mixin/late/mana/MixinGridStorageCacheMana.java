@@ -12,7 +12,7 @@ import appeng.me.cache.NetworkMonitor;
 import com.github.aeddddd.ae2enhanced.storage.mana.IAEManaStack;
 import com.github.aeddddd.ae2enhanced.storage.mana.IManaStorageChannel;
 import com.github.aeddddd.ae2enhanced.util.fakeitem.FakeMana;
-import com.github.aeddddd.ae2enhanced.mixin.MixinReflectionHelper;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.INetworkMonitorAccessor;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -86,7 +86,7 @@ public class MixinGridStorageCacheMana {
 
             if (fakeChanges.isEmpty()) return;
 
-            MixinReflectionHelper.postChange(itemMonitor, add, fakeChanges, src);
+            ((INetworkMonitorAccessor) itemMonitor).ae2e$postChange(add, fakeChanges, src);
         } catch (Exception e) {
             // 反射调用失败,静默处理
         }

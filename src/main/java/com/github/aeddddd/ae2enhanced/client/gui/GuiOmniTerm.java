@@ -27,7 +27,7 @@ import com.github.aeddddd.ae2enhanced.AE2Enhanced;
 import com.github.aeddddd.ae2enhanced.client.gui.jei.GhostIngredientTarget;
 import com.github.aeddddd.ae2enhanced.client.gui.slot.RCSlotFakeCraftingMatrix;
 import com.github.aeddddd.ae2enhanced.client.gui.slot.RCSlotPatternOutputs;
-import com.github.aeddddd.ae2enhanced.client.gui.util.GuiReflectionCache;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.IGuiMEMonitorableAccessor;
 import com.github.aeddddd.ae2enhanced.client.gui.util.GuiResourceCache;
 import com.github.aeddddd.ae2enhanced.client.gui.util.SlotPositionManager;
 import com.github.aeddddd.ae2enhanced.client.JEISearchKeyHandler;
@@ -57,31 +57,6 @@ import java.awt.Rectangle;
  * 全能无线终端 GUI —— 物品库 + 合成栏 + 81槽位编码样板 + 右侧存储
  */
 public class GuiOmniTerm extends GuiMEMonitorable implements IJEIGhostIngredients {
-
-    // 反射字段缓存(一次性查找,终身复用)
-    private static final java.lang.reflect.Field REPO_FIELD =
-            GuiReflectionCache.getField(GuiMEMonitorable.class, "repo");
-    private static final java.lang.reflect.Field VIEW_CELL_FIELD =
-            GuiReflectionCache.getField(GuiMEMonitorable.class, "viewCell");
-    private static final java.lang.reflect.Field SEARCH_FIELD =
-            GuiReflectionCache.getField(GuiMEMonitorable.class, "searchField");
-    private static final java.lang.reflect.Field AUTO_FOCUS_FIELD;
-    private static final java.lang.reflect.Field CRAFTING_STATUS_BTN_FIELD =
-            GuiReflectionCache.getField(GuiMEMonitorable.class, "craftingStatusBtn");
-    private static final java.lang.reflect.Field ROWS_FIELD =
-            GuiReflectionCache.getField(GuiMEMonitorable.class, "rows");
-    private static final java.lang.reflect.Field PER_ROW_FIELD =
-            GuiReflectionCache.getField(GuiMEMonitorable.class, "perRow");
-
-    static {
-        java.lang.reflect.Field temp;
-        try {
-            temp = GuiReflectionCache.getField(GuiMEMonitorable.class, "isAutoFocus");
-        } catch (Exception e) {
-            temp = null;
-        }
-        AUTO_FOCUS_FIELD = temp;
-    }
 
     private final ContainerOmniTerm container;
     private GuiScrollbar patternScrollBar;
@@ -131,9 +106,10 @@ public class GuiOmniTerm extends GuiMEMonitorable implements IJEIGhostIngredient
         this.container = (ContainerOmniTerm) this.inventorySlots;
         this.xSize = 357;
 
-        // 通过反射将 final repo 替换为 OmniItemRepo(支持合成置顶)
+        // 通过 accessor 将 final repo 替换为 OmniItemRepo(支持合成置顶)
         try {
-            REPO_FIELD.set(this, new com.github.aeddddd.ae2enhanced.client.me.OmniItemRepo(this.getScrollBar(), this));
+            ((IGuiMEMonitorableAccessor) this).ae2e$setRepo(
+                    new com.github.aeddddd.ae2enhanced.client.me.OmniItemRepo(this.getScrollBar(), this));
             this.isOmniRepo = true;
         } catch (Exception e) {
             AE2Enhanced.LOGGER.error("[AE2E] Failed to replace ItemRepo with OmniItemRepo", e);
@@ -204,16 +180,12 @@ public class GuiOmniTerm extends GuiMEMonitorable implements IJEIGhostIngredient
 
         // 5. 替换搜索框
         try {
-            MEGuiTextField oldField = (MEGuiTextField) SEARCH_FIELD.get(this);
+            IGuiMEMonitorableAccessor acc = (IGuiMEMonitorableAccessor) this;
+            MEGuiTextField oldField = acc.ae2e$getSearchField();
             String oldText = oldField != null ? oldField.getText() : "";
             boolean wasFocused = oldField != null && oldField.isFocused();
-            boolean autoFocus = false;
-            if (AUTO_FOCUS_FIELD != null) {
-                try {
-                    autoFocus = AUTO_FOCUS_FIELD.getBoolean(this);
-                } catch (Exception ignored) {}
-            }
-            
+            boolean autoFocus = acc.ae2e$isAutoFocus();
+
             MEGuiTextField newField = new MEGuiTextField(this.fontRenderer, this.guiLeft + 204, this.guiTop + 4, 125, 11);
             newField.setMaxStringLength(35);
             newField.setTextColor(0xFFFFFF);
@@ -221,7 +193,7 @@ public class GuiOmniTerm extends GuiMEMonitorable implements IJEIGhostIngredient
             newField.setEnableBackgroundDrawing(false);
             newField.setFocused(autoFocus || wasFocused);
             newField.setText(oldText);
-            SEARCH_FIELD.set(this, newField);
+            acc.ae2e$setSearchField(newField);
             this.omniSearchField = newField;
         } catch (Exception e) {
             e.printStackTrace();
@@ -236,7 +208,7 @@ public class GuiOmniTerm extends GuiMEMonitorable implements IJEIGhostIngredient
 
         // 7. 添加合成计划按钮(先移除 super.initGui() 在 viewCell=true 时创建的中间位置旧按钮)
         try {
-            GuiTabButton oldBtn = (GuiTabButton) CRAFTING_STATUS_BTN_FIELD.get(this);
+            GuiTabButton oldBtn = ((IGuiMEMonitorableAccessor) this).ae2e$getCraftingStatusBtn();
             if (oldBtn != null) {
                 this.buttonList.remove(oldBtn);
             }
@@ -246,7 +218,7 @@ public class GuiOmniTerm extends GuiMEMonitorable implements IJEIGhostIngredient
         craftingStatusBtn.setHideEdge(13);
         this.buttonList.add(craftingStatusBtn);
         try {
-            CRAFTING_STATUS_BTN_FIELD.set(this, craftingStatusBtn);
+            ((IGuiMEMonitorableAccessor) this).ae2e$setCraftingStatusBtn(craftingStatusBtn);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -259,20 +231,13 @@ public class GuiOmniTerm extends GuiMEMonitorable implements IJEIGhostIngredient
         this.patternScrollBar.setLeft(180).setTop(88 + this.extraHeight).setHeight(66);
         this.patternScrollBar.setRange(0, this.container.getMaxScrollOffset(), 1);
 
-        // 10. 反射修正 rows/perRow
-        try {
-            ROWS_FIELD.setInt(this, this.omniRows);
-            PER_ROW_FIELD.setInt(this, 18);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        // 10. 修正 rows/perRow
+        IGuiMEMonitorableAccessor guiAcc = (IGuiMEMonitorableAccessor) this;
+        guiAcc.ae2e$setRows(this.omniRows);
+        guiAcc.ae2e$setPerRow(18);
 
-        // 缓存 viewCell 状态,避免 drawBG / getJEIExclusionArea 每帧反射
-        try {
-            this.cachedHasViewCell = VIEW_CELL_FIELD.getBoolean(this);
-        } catch (Exception e) {
-            this.cachedHasViewCell = false;
-        }
+        // 缓存 viewCell 状态,避免 drawBG / getJEIExclusionArea 每帧重复读取
+        this.cachedHasViewCell = guiAcc.ae2e$getViewCell();
 
         // 11. 设置容器物品库更新回调
         this.container.setInventoryListener(list -> {
@@ -465,8 +430,7 @@ public class GuiOmniTerm extends GuiMEMonitorable implements IJEIGhostIngredient
         if (this.cachedHasViewCell) {
             try {
                 appeng.container.implementations.ContainerMEMonitorable monitorable =
-                        (appeng.container.implementations.ContainerMEMonitorable)
-                                GuiReflectionCache.getObject(this, GuiMEMonitorable.class, "monitorableContainer");
+                        ((IGuiMEMonitorableAccessor) this).ae2e$getMonitorableContainer();
                 boolean update = false;
                 for (int i = 0; i < 5; ++i) {
                     net.minecraft.item.ItemStack current = monitorable.getCellViewSlot(i).func_75211_c();

@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import thaumicenergistics.api.storage.IAEEssentiaStack;
 import thaumicenergistics.api.storage.IEssentiaStorageChannel;
 
-import com.github.aeddddd.ae2enhanced.mixin.MixinReflectionHelper;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.INetworkMonitorAccessor;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -86,7 +86,7 @@ public class MixinGridStorageCache {
 
             if (fakeChanges.isEmpty()) return;
 
-            MixinReflectionHelper.postChange(itemMonitor, true, fakeChanges, src);
+            ((INetworkMonitorAccessor) itemMonitor).ae2e$postChange(true, fakeChanges, src);
         } catch (Exception e) {
             // 反射调用失败,静默处理
         }

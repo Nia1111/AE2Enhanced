@@ -3,6 +3,7 @@ package com.github.aeddddd.ae2enhanced.integration.drawer.fsl;
 import appeng.api.config.AccessRestriction;
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
+import appeng.api.storage.IMEInventoryHandler;
 import appeng.api.storage.channels.IItemStorageChannel;
 import appeng.api.storage.data.IAEItemStack;
 import appeng.api.storage.data.IItemList;
@@ -28,8 +29,10 @@ import java.util.Map;
  *
  * <p>索引在首次使用时惰性构建,每次 MODULATE 操作后标记失效,下次使用时重建.
  * 所有 NPE 检查已封装在内部.</p>
+ * <p>同时实现 {@link IMEInventoryHandler}, 以便真正替换 DrawerMEMonitor 中
+ * {@code private final IMEInventoryHandler} 字段(原反射方案因类型不匹配一直静默失败).</p>
  */
-public class FSLAdapter implements IDrawerIndexAdapter {
+public class FSLAdapter implements IDrawerIndexAdapter, IMEInventoryHandler<IAEItemStack> {
 
     private final ControllerItemHandler handler;
     private final IItemStorageChannel channel;
@@ -249,6 +252,11 @@ public class FSLAdapter implements IDrawerIndexAdapter {
     @Override
     public AccessRestriction getAccess() {
         return AccessRestriction.READ_WRITE;
+    }
+
+    @Override
+    public IItemStorageChannel getChannel() {
+        return this.channel;
     }
 
     @Override

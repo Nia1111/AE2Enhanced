@@ -28,6 +28,7 @@ import com.github.aeddddd.ae2enhanced.storage.channel.ChannelRegistrationManager
 import com.github.aeddddd.ae2enhanced.storage.energy.EnergyChannelResolver;
 import com.github.aeddddd.ae2enhanced.storage.external.ExternalStorageAdapter;
 import com.github.aeddddd.ae2enhanced.storage.mana.ManaChannelResolver;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.INetworkMonitorAccessor;
 import appeng.api.AEApi;
 import appeng.api.storage.IMEInventoryHandler;
 import net.minecraft.block.state.IBlockState;
@@ -338,43 +339,11 @@ public class TileHyperdimensionalController extends TileAENetworkBase implements
         return null;
     }
 
-    // 缓存 AE2 NetworkMonitor 反射,避免高频 IO 时重复反射查找
-    private static final java.lang.reflect.Field FORCE_UPDATE_FIELD;
-    private static final java.lang.reflect.Method FORCE_UPDATE_METHOD;
-    private static final java.lang.reflect.Field SEND_EVENT_FIELD;
-    private static final java.lang.reflect.Method ON_TICK_METHOD;
-
     // 缓存可选存储通道的 Class 与实例,避免每次变更都反射查找
     private static final Class<?> GAS_STORAGE_CHANNEL_CLASS = optionalChannelClass("com.mekeng.github.common.me.storage.IGasStorageChannel");
     private static final Object GAS_STORAGE_CHANNEL = optionalChannelInstance(GAS_STORAGE_CHANNEL_CLASS);
     private static final Class<?> ESSENTIA_STORAGE_CHANNEL_CLASS = optionalChannelClass("thaumicenergistics.api.storage.IEssentiaStorageChannel");
     private static final Object ESSENTIA_STORAGE_CHANNEL = optionalChannelInstance(ESSENTIA_STORAGE_CHANNEL_CLASS);
-
-
-    static {
-        java.lang.reflect.Field f = null;
-        java.lang.reflect.Method m = null;
-        java.lang.reflect.Field se = null;
-        java.lang.reflect.Method ot = null;
-        try {
-            Class<?> clazz = Class.forName("appeng.me.cache.NetworkMonitor");
-            f = clazz.getDeclaredField("forceUpdate");
-            f.setAccessible(true);
-            m = clazz.getDeclaredMethod("forceUpdate");
-            m.setAccessible(true);
-            se = clazz.getDeclaredField("sendEvent");
-            se.setAccessible(true);
-            ot = clazz.getDeclaredMethod("onTick");
-            ot.setAccessible(true);
-        } catch (Exception e) {
-            com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.error(
-                "[AE2E] Failed to cache NetworkMonitor reflection. ME terminal refresh will not work.", e);
-        }
-        FORCE_UPDATE_FIELD = f;
-        FORCE_UPDATE_METHOD = m;
-        SEND_EVENT_FIELD = se;
-        ON_TICK_METHOD = ot;
-    }
 
     private static Class<?> optionalChannelClass(String name) {
         try {
@@ -416,7 +385,6 @@ public class TileHyperdimensionalController extends TileAENetworkBase implements
      * 缓存漂移.日常高频读写不会调用它.</p>
      */
     private void refreshNetworkMonitor() {
-        if (FORCE_UPDATE_FIELD == null || FORCE_UPDATE_METHOD == null) return;
         try {
             appeng.api.networking.IGrid grid = getProxy().getGrid();
             if (grid == null) return;
@@ -450,16 +418,14 @@ public class TileHyperdimensionalController extends TileAENetworkBase implements
     }
 
     private void refreshSingleMonitor(Object monitor) {
-        if (monitor == null) return;
+        if (!(monitor instanceof appeng.me.cache.NetworkMonitor)) return;
         try {
-            FORCE_UPDATE_FIELD.setBoolean(monitor, true);
-            if (SEND_EVENT_FIELD != null) SEND_EVENT_FIELD.setBoolean(monitor, true);
-            if (ON_TICK_METHOD != null) {
-                ON_TICK_METHOD.invoke(monitor);
-            } else {
-                FORCE_UPDATE_METHOD.invoke(monitor);
-            }
-        } catch (ReflectiveOperationException e) {
+            appeng.me.cache.NetworkMonitor nm = (appeng.me.cache.NetworkMonitor) monitor;
+            nm.forceUpdate = true;
+            INetworkMonitorAccessor acc = (INetworkMonitorAccessor) nm;
+            acc.ae2e$setSendEvent(true);
+            acc.ae2e$onTick();
+        } catch (RuntimeException e) {
             AE2Enhanced.LOGGER.warn("[AE2E] Failed to refresh monitor", e);
         }
     }

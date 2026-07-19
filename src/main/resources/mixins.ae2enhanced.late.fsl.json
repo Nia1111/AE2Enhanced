@@ -5,7 +5,10 @@
   "compatibilityLevel": "JAVA_8",
   "client": [],
   "mixins": [
-    "MixinAE2CapabilityHelper"
+    "MixinAE2CapabilityHelper",
+    "IDrawerStorageAccessorAccessor",
+    "IDrawerMEMonitorAccessor",
+    "IControllerMEItemHandlerAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

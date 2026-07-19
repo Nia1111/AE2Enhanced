@@ -20,6 +20,8 @@ import com.github.aeddddd.ae2enhanced.tile.TileAssemblyController;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyMeInterface;
 import com.github.aeddddd.ae2enhanced.tile.TileCentralMEInterface;
 import com.github.aeddddd.ae2enhanced.tile.TileComputationCore;
+import com.github.aeddddd.ae2enhanced.mixin.bridge.IComputationCoreAccess;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.ITaskProgressAccessor;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.NonNullList;
@@ -37,14 +39,12 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 @Mixin(value = CraftingCPUCluster.class, remap = false, priority = 1000)
-public class MixinCraftingCPUCluster {
+public class MixinCraftingCPUCluster implements IComputationCoreAccess {
 
     private static final boolean CRAZYAE_LOADED =
         net.minecraftforge.fml.common.Loader.isModLoaded("crazyae");
@@ -54,10 +54,12 @@ public class MixinCraftingCPUCluster {
     @Unique
     private TileComputationCore ae2enhanced$computationCore;
 
+    @Override
     public void ae2enhanced$setComputationCore(TileComputationCore core) {
         this.ae2enhanced$computationCore = core;
     }
 
+    @Override
     public TileComputationCore ae2enhanced$getComputationCore() {
         return this.ae2enhanced$computationCore;
     }
@@ -79,6 +81,36 @@ public class MixinCraftingCPUCluster {
 
     @Shadow
     private void updateCPU() {
+    }
+
+    @Shadow
+    private Map<ICraftingPatternDetails, Object> tasks;
+
+    @Shadow
+    private int remainingOperations;
+
+    @Shadow
+    private long remainingItemCount;
+
+    @Shadow
+    private boolean isComplete;
+
+    @Shadow
+    private IItemList<IAEItemStack> waitingFor;
+
+    @Shadow
+    private IAEItemStack finalOutput;
+
+    @Shadow
+    private void postChange(IAEItemStack diff, appeng.api.networking.security.IActionSource src) {
+    }
+
+    @Shadow
+    private void postCraftingStatusChange(IAEItemStack diff) {
+    }
+
+    @Shadow
+    private void completeJob() {
     }
 
     // ==================== Overwrites for Virtual Clusters ====================
@@ -197,19 +229,6 @@ public class MixinCraftingCPUCluster {
 
     // ==================== Batch Crafting (Assembly Hub) — retained ====================
 
-    private static Field tasksField;
-    private static Field remOpsField;
-    private static Field remItemCountField;
-    private static Field isCompleteField;
-    private static Field waitingForField;
-    private static Method postCraftingStatusChange;
-    private static Method postChange;
-    private static Field taskProgressValueField;
-    private static Method completeJobMethod;
-    private static Field finalOutputField;
-    private static boolean reflectionReady = false;
-    private static boolean reflectionFailed = false;
-
     private static int batchCallCount = 0;
     private static int batchSuccessCount = 0;
     private static int batchFailCount = 0;
@@ -246,38 +265,6 @@ public class MixinCraftingCPUCluster {
         return null;
     }
 
-    private static void tryInitReflection() {
-        if (reflectionReady || reflectionFailed) return;
-        try {
-            tasksField = CraftingCPUCluster.class.getDeclaredField("tasks");
-            tasksField.setAccessible(true);
-            remOpsField = CraftingCPUCluster.class.getDeclaredField("remainingOperations");
-            remOpsField.setAccessible(true);
-            remItemCountField = CraftingCPUCluster.class.getDeclaredField("remainingItemCount");
-            remItemCountField.setAccessible(true);
-            isCompleteField = CraftingCPUCluster.class.getDeclaredField("isComplete");
-            isCompleteField.setAccessible(true);
-            waitingForField = CraftingCPUCluster.class.getDeclaredField("waitingFor");
-            waitingForField.setAccessible(true);
-            postCraftingStatusChange = CraftingCPUCluster.class.getDeclaredMethod("postCraftingStatusChange", IAEItemStack.class);
-            postCraftingStatusChange.setAccessible(true);
-            postChange = CraftingCPUCluster.class.getDeclaredMethod("postChange", IAEItemStack.class, appeng.api.networking.security.IActionSource.class);
-            postChange.setAccessible(true);
-            Class<?> taskProgressClass = Class.forName("appeng.me.cluster.implementations.CraftingCPUCluster$TaskProgress");
-            taskProgressValueField = taskProgressClass.getDeclaredField("value");
-            taskProgressValueField.setAccessible(true);
-            completeJobMethod = CraftingCPUCluster.class.getDeclaredMethod("completeJob");
-            completeJobMethod.setAccessible(true);
-            finalOutputField = CraftingCPUCluster.class.getDeclaredField("finalOutput");
-            finalOutputField.setAccessible(true);
-            reflectionReady = true;
-        } catch (Exception e) {
-            reflectionFailed = true;
-            AE2Enhanced.LOGGER.error("[AE2E] Mixin reflection init failed, batch crafting disabled. " +
-                "This usually means AE2-UEL class/field names have changed. Details: {}", e.toString());
-        }
-    }
-
     @Redirect(
         method = "updateCraftingLogic",
         at = @At(
@@ -306,19 +293,9 @@ public class MixinCraftingCPUCluster {
         // CrazyAE 通过 ASM 大幅修改了 CraftingCPUCluster,虚拟集群的字段初始化
         // 与其状态机不兼容；跳过我们的 HEAD 注入以避免干扰 CrazyAE 逻辑.
         if (ae2enhanced$computationCore != null && CRAZYAE_LOADED) return;
-        if (reflectionFailed) return;
         try {
-            tryInitReflection();
-            if (!reflectionReady) return;
-            CraftingCPUCluster cpu = (CraftingCPUCluster) (Object) this;
-
-            @SuppressWarnings("unchecked")
-            Map<ICraftingPatternDetails, Object> tasks = (Map<ICraftingPatternDetails, Object>) tasksField.get(cpu);
-            boolean isComplete = isCompleteField.getBoolean(cpu);
-
-            if (!isComplete && tasks.isEmpty()) {
-                @SuppressWarnings("unchecked")
-                IItemList<IAEItemStack> waitingFor = (IItemList<IAEItemStack>) waitingForField.get(cpu);
+            if (!this.isComplete && this.tasks.isEmpty()) {
+                IItemList<IAEItemStack> waitingFor = this.waitingFor;
                 boolean waitingForEmpty = true;
                 if (waitingFor != null) {
                     for (IAEItemStack is : waitingFor) {
@@ -329,12 +306,10 @@ public class MixinCraftingCPUCluster {
                     }
                 }
                 if (waitingForEmpty) {
-                    completeJobMethod.invoke(cpu);
+                    this.completeJob();
                     // 修复：completeJob() 不重置 finalOutput 也不调用 updateCPU(),
                     // 导致 Crafting Monitor 在任务完成后不清空
-                    if (finalOutputField != null) {
-                        finalOutputField.set(cpu, null);
-                    }
+                    this.finalOutput = null;
                     updateCPU();
                 }
             }
@@ -347,7 +322,6 @@ public class MixinCraftingCPUCluster {
     private void batchProcessVirtualTasks(IEnergyGrid energy, CraftingGridCache cache, CallbackInfo ci) {
         // CrazyAE 兼容：跳过批量合成注入,避免与其修改后的 executeCrafting 冲突.
         if (ae2enhanced$computationCore != null && CRAZYAE_LOADED) return;
-        if (reflectionFailed) return;
 
         CraftingCPUCluster cpu;
         boolean anyOurTask = false;
@@ -355,16 +329,12 @@ public class MixinCraftingCPUCluster {
         int virtualTasksExecuted = 0;
 
         try {
-            tryInitReflection();
-            if (!reflectionReady) return;
             cpu = (CraftingCPUCluster) (Object) this;
 
-            @SuppressWarnings("unchecked")
-            Map<ICraftingPatternDetails, Object> tasks = (Map<ICraftingPatternDetails, Object>) tasksField.get(cpu);
+            Map<ICraftingPatternDetails, Object> tasks = this.tasks;
             if (tasks.isEmpty()) return;
 
-            @SuppressWarnings("unchecked")
-            IItemList<IAEItemStack> waitingFor = (IItemList<IAEItemStack>) waitingForField.get(cpu);
+            IItemList<IAEItemStack> waitingFor = this.waitingFor;
 
             boolean changed;
             int doWhileIterations = 0;
@@ -374,7 +344,7 @@ public class MixinCraftingCPUCluster {
                     ICraftingPatternDetails details = entry.getKey();
                     Object progress = entry.getValue();
 
-                    long remaining = taskProgressValueField.getLong(progress);
+                    long remaining = ((ITaskProgressAccessor) progress).ae2e$getValue();
                     if (remaining <= 0) continue;
 
                     List<ICraftingMedium> mediums = cache.getMediums(details);
@@ -475,8 +445,8 @@ public class MixinCraftingCPUCluster {
                                     if (extracted != null && extracted.getStackSize() > 0) {
                                         IAEItemStack diff = extracted.copy();
                                         diff.setStackSize(-diff.getStackSize());
-                                        postChange.invoke(cpu, diff, source);
-                                        postCraftingStatusChange.invoke(cpu, diff);
+                                        this.postChange(diff, source);
+                                        this.postCraftingStatusChange(diff);
                                     }
                                 }
 
@@ -517,16 +487,15 @@ public class MixinCraftingCPUCluster {
                                 }
 
                                 long newRemaining = remaining - actualBatchSize;
-                                taskProgressValueField.setLong(progress, newRemaining);
+                                ((ITaskProgressAccessor) progress).ae2e$setValue(newRemaining);
 
-                                long oldRemOps = remOpsField.getLong(cpu);
-                                remOpsField.setLong(cpu, oldRemOps - actualBatchSize);
-                                long oldRemItemCount = remItemCountField.getLong(cpu);
+                                this.remainingOperations = (int) (this.remainingOperations - actualBatchSize);
+                                long oldRemItemCount = this.remainingItemCount;
                                 long totalOutputCount = 0;
                                 for (IAEItemStack out : details.getCondensedOutputs()) {
                                     if (out != null) totalOutputCount += out.getStackSize() * actualBatchSize;
                                 }
-                                remItemCountField.setLong(cpu, oldRemItemCount - totalOutputCount);
+                                this.remainingItemCount = oldRemItemCount - totalOutputCount;
 
                                 controller.setBatchBusy(true);
                                 changed = true;
@@ -601,14 +570,15 @@ public class MixinCraftingCPUCluster {
                             for (IAEItemStack inputTemplate : details.getCondensedInputs()) {
                                 if (inputTemplate == null || inputTemplate.getStackSize() <= 0) continue;
                                 long totalNeed = inputTemplate.getStackSize() * batchSize;
+                                if (totalNeed <= 0) continue;
                                 IAEItemStack need = inputTemplate.copy();
                                 need.setStackSize(totalNeed);
                                 IAEItemStack extracted = meInv.extractItems(need, MODULATE, source);
                                 if (extracted != null && extracted.getStackSize() > 0) {
                                     IAEItemStack diff = extracted.copy();
                                     diff.setStackSize(-diff.getStackSize());
-                                    postChange.invoke(cpu, diff, source);
-                                    postCraftingStatusChange.invoke(cpu, diff);
+                                    this.postChange(diff, source);
+                                    this.postCraftingStatusChange(diff);
                                 }
                             }
 
@@ -622,8 +592,8 @@ public class MixinCraftingCPUCluster {
                                 IAEItemStack product = outputTemplate.copy();
                                 product.setStackSize(totalCount);
                                 itemList.add(product);
-                                postChange.invoke(cpu, product.copy(), source);
-                                postCraftingStatusChange.invoke(cpu, product.copy());
+                                this.postChange(product.copy(), source);
+                                this.postCraftingStatusChange(product.copy());
 
                                 if (waitingFor != null) {
                                     IAEItemStack waiting = waitingFor.findPrecise(outputTemplate);
@@ -637,7 +607,7 @@ public class MixinCraftingCPUCluster {
                             }
 
                             long newRemaining = remaining - batchSize;
-                            taskProgressValueField.setLong(progress, newRemaining);
+                            ((ITaskProgressAccessor) progress).ae2e$setValue(newRemaining);
 
                             controller.setBatchBusy(true);
 
@@ -694,15 +664,10 @@ public class MixinCraftingCPUCluster {
             DualityCentralInterface duality = ((TileCentralMEInterface) medium).getInterfaceDuality();
             long pending = -1;
             try {
-                tryInitReflection();
-                if (reflectionReady) {
-                    CraftingCPUCluster cpu = (CraftingCPUCluster) (Object) this;
-                    @SuppressWarnings("unchecked")
-                    Map<ICraftingPatternDetails, Object> tasks = (Map<ICraftingPatternDetails, Object>) tasksField.get(cpu);
-                    Object progress = tasks == null ? null : tasks.get(details);
-                    if (progress != null) {
-                        pending = taskProgressValueField.getLong(progress);
-                    }
+                Map<ICraftingPatternDetails, Object> tasks = this.tasks;
+                Object progress = tasks == null ? null : tasks.get(details);
+                if (progress != null) {
+                    pending = ((ITaskProgressAccessor) progress).ae2e$getValue();
                 }
             } catch (Exception ignored) {
             }
@@ -733,53 +698,42 @@ public class MixinCraftingCPUCluster {
         }
 
         try {
-            tryInitReflection();
-            if (!reflectionReady) {
-                return true;
-            }
-
-            CraftingCPUCluster cpu = (CraftingCPUCluster) (Object) this;
-            @SuppressWarnings("unchecked")
-            Map<ICraftingPatternDetails, Object> tasks = (Map<ICraftingPatternDetails, Object>) tasksField.get(cpu);
+            Map<ICraftingPatternDetails, Object> tasks = this.tasks;
             Object progress = tasks == null ? null : tasks.get(details);
             if (progress == null) {
                 return true;
             }
 
-            long remaining = taskProgressValueField.getLong(progress);
+            long remaining = ((ITaskProgressAccessor) progress).ae2e$getValue();
             long extra = Math.min(batchSize - 1, remaining - 1);
             if (extra <= 0) {
                 return true;
             }
 
             // 减少任务剩余数（原方法还会再减 1，因此这里只减 extra）
-            taskProgressValueField.setLong(progress, remaining - extra);
+            ((ITaskProgressAccessor) progress).ae2e$setValue(remaining - extra);
 
             // 同步减少 remainingItemCount
-            if (remItemCountField != null) {
-                long oldRemItemCount = remItemCountField.getLong(cpu);
-                long totalOutputCount = 0;
-                for (IAEItemStack out : details.getCondensedOutputs()) {
-                    if (out != null) {
-                        totalOutputCount += out.getStackSize() * extra;
-                    }
+            long oldRemItemCount = this.remainingItemCount;
+            long totalOutputCount = 0;
+            for (IAEItemStack out : details.getCondensedOutputs()) {
+                if (out != null) {
+                    totalOutputCount += out.getStackSize() * extra;
                 }
-                remItemCountField.setLong(cpu, oldRemItemCount - totalOutputCount);
             }
+            this.remainingItemCount = oldRemItemCount - totalOutputCount;
 
             // 把额外的预期产出加入 waitingFor，使 CPU 认为这些产物也已经被发出
-            if (waitingForField != null && postCraftingStatusChange != null) {
-                IItemList<IAEItemStack> waitingFor = (IItemList<IAEItemStack>) waitingForField.get(cpu);
-                if (waitingFor != null) {
-                    for (IAEItemStack out : details.getCondensedOutputs()) {
-                        if (out == null || out.getStackSize() <= 0) {
-                            continue;
-                        }
-                        IAEItemStack extraOut = out.copy();
-                        extraOut.setStackSize(out.getStackSize() * extra);
-                        waitingFor.add(extraOut);
-                        postCraftingStatusChange.invoke(cpu, extraOut.copy());
+            IItemList<IAEItemStack> waitingFor = this.waitingFor;
+            if (waitingFor != null) {
+                for (IAEItemStack out : details.getCondensedOutputs()) {
+                    if (out == null || out.getStackSize() <= 0) {
+                        continue;
                     }
+                    IAEItemStack extraOut = out.copy();
+                    extraOut.setStackSize(out.getStackSize() * extra);
+                    waitingFor.add(extraOut);
+                    this.postCraftingStatusChange(extraOut.copy());
                 }
             }
 

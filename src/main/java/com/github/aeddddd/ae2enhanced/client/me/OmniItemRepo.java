@@ -5,11 +5,11 @@ import appeng.client.gui.widgets.IScrollSource;
 import appeng.client.gui.widgets.ISortSource;
 import appeng.client.me.ItemRepo;
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.IItemRepoAccessor;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniPageRequest;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniPageResult;
 import com.github.aeddddd.ae2enhanced.storage.ItemDescriptor;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,33 +33,6 @@ public class OmniItemRepo extends ItemRepo {
     public static final int CACHE_PAGES = 3;             // 当前页 + 上一页 + 下一页
     public static final int MAX_CACHE_SIZE = 540;        // 18 col * 30 row，覆盖 TALL 模式下的 3 页
     private static final long REFRESH_COOLDOWN_MS = 200;
-
-    // ==================== 反射字段 ====================
-    private static final Field VIEW_FIELD;
-    private static final Field LIST_FIELD;
-    private static final Field CHANGED_FIELD;
-    private static final Field RESORT_FIELD;
-    private static final Field SORT_SRC_FIELD;
-    private static final Field SEARCH_STRING_FIELD;
-
-    static {
-        try {
-            VIEW_FIELD = ItemRepo.class.getDeclaredField("view");
-            VIEW_FIELD.setAccessible(true);
-            LIST_FIELD = ItemRepo.class.getDeclaredField("list");
-            LIST_FIELD.setAccessible(true);
-            CHANGED_FIELD = ItemRepo.class.getDeclaredField("changed");
-            CHANGED_FIELD.setAccessible(true);
-            RESORT_FIELD = ItemRepo.class.getDeclaredField("resort");
-            RESORT_FIELD.setAccessible(true);
-            SORT_SRC_FIELD = ItemRepo.class.getDeclaredField("sortSrc");
-            SORT_SRC_FIELD.setAccessible(true);
-            SEARCH_STRING_FIELD = ItemRepo.class.getDeclaredField("searchString");
-            SEARCH_STRING_FIELD.setAccessible(true);
-        } catch (NoSuchFieldException e) {
-            throw new RuntimeException("Failed to access ItemRepo fields", e);
-        }
-    }
 
     // ==================== R3: 三页缓存 ====================
     private final IAEItemStack[] cache = new IAEItemStack[MAX_CACHE_SIZE];
@@ -319,14 +292,11 @@ public class OmniItemRepo extends ItemRepo {
     }
 
     private void syncToParentView() {
-        try {
-            List<IAEItemStack> viewList = Arrays.asList(this.cache);
-            VIEW_FIELD.set(this, viewList);
-            CHANGED_FIELD.set(this, false);
-            RESORT_FIELD.set(this, false);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
+        IItemRepoAccessor acc = (IItemRepoAccessor) this;
+        List<IAEItemStack> viewList = Arrays.asList(this.cache);
+        acc.ae2e$setView(viewList);
+        acc.ae2e$setChanged(false);
+        acc.ae2e$setResort(false);
     }
 
     // ==================== activeCrafting / normalView ====================
@@ -357,11 +327,7 @@ public class OmniItemRepo extends ItemRepo {
     }
 
     private void setChanged(boolean value) {
-        try {
-            CHANGED_FIELD.set(this, value);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
+        ((IItemRepoAccessor) this).ae2e$setChanged(value);
     }
 
     // ==================== 旧协议兼容（废弃）====================

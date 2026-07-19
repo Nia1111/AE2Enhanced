@@ -21,6 +21,8 @@ import com.github.aeddddd.ae2enhanced.registry.content.BlockRegistry;
 import com.github.aeddddd.ae2enhanced.block.BlockComputationCore;
 import com.github.aeddddd.ae2enhanced.block.BlockSuperCraftingInterface;
 import com.github.aeddddd.ae2enhanced.structure.SupercausalStructure;
+import com.github.aeddddd.ae2enhanced.mixin.bridge.IComputationCoreAccess;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.ICraftingCPUClusterAccessor;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -325,30 +327,22 @@ public class TileComputationCore extends TileAENetworkBase implements IActionHos
         );
 
         try {
+            ICraftingCPUClusterAccessor acc = (ICraftingCPUClusterAccessor) (Object) cluster;
+
             // 设置 machineSrc 指向本 TileEntity(IActionHost)
-            Field machineSrcField = CraftingCPUCluster.class.getDeclaredField("machineSrc");
-            machineSrcField.setAccessible(true);
-            machineSrcField.set(cluster, new MachineSource(this));
+            acc.ae2e$setMachineSrc(new MachineSource(this));
 
             // 设置无限存储
-            Field availableStorageField = CraftingCPUCluster.class.getDeclaredField("availableStorage");
-            availableStorageField.setAccessible(true);
-            availableStorageField.setLong(cluster, Long.MAX_VALUE);
+            acc.ae2e$setAvailableStorage(Long.MAX_VALUE);
 
             // 设置 16384 协处理器
-            Field acceleratorField = CraftingCPUCluster.class.getDeclaredField("accelerator");
-            acceleratorField.setAccessible(true);
-            acceleratorField.setInt(cluster, MAX_PARALLEL);
+            acc.ae2e$setAccelerator(MAX_PARALLEL);
 
             // 设置固定名称
-            Field myNameField = CraftingCPUCluster.class.getDeclaredField("myName");
-            myNameField.setAccessible(true);
-            myNameField.set(cluster, DEFAULT_NAME);
+            acc.ae2e$setMyName(DEFAULT_NAME);
 
             // 设置 Mixin 字段,标记该集群属于本计算核心
-            Field mixinCoreField = CraftingCPUCluster.class.getDeclaredField("ae2enhanced$computationCore");
-            mixinCoreField.setAccessible(true);
-            mixinCoreField.set(cluster, this);
+            ((IComputationCoreAccess) (Object) cluster).ae2enhanced$setComputationCore(this);
 
             // CrazyAE 兼容：初始化任何未初始化的集合字段(CrazyAE 通过 ASM 添加的字段
             // 可能未在构造函数中初始化,虚拟集群会导致 NPE)

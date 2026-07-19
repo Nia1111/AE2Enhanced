@@ -1,9 +1,11 @@
 package com.github.aeddddd.ae2enhanced.mixin.late.cells;
 
+import appeng.tile.inventory.AppEngInternalInventory;
 import com.github.aeddddd.ae2enhanced.item.ItemChannelReceiverCard;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.items.IItemHandler;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -16,15 +18,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(targets = "com.cells.blocks.interfacebase.managers.InterfaceUpgradeManager", remap = false)
 public class MixinInterfaceUpgradeManager {
 
+    @Shadow
+    private AppEngInternalInventory upgradeInventory;
+
     @Inject(method = "isValidUpgrade", at = @At("HEAD"), cancellable = true, remap = false)
     private void ae2e$allowChannelReceiverCard(ItemStack stack, CallbackInfoReturnable<Boolean> cir) {
         if (stack == null || stack.isEmpty() || !(stack.getItem() instanceof ItemChannelReceiverCard)) {
             return;
         }
         try {
-            java.lang.reflect.Field f = this.getClass().getDeclaredField("upgradeInventory");
-            f.setAccessible(true);
-            IItemHandler inv = (IItemHandler) f.get(this);
+            IItemHandler inv = this.upgradeInventory;
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack existing = inv.getStackInSlot(i);
                 if (!existing.isEmpty() && existing.getItem() instanceof ItemChannelReceiverCard) {

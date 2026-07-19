@@ -19,6 +19,7 @@ import com.github.aeddddd.ae2enhanced.network.packet.PacketPlacementUndo;
 import com.github.aeddddd.ae2enhanced.util.placement.PlacementConfig;
 import com.github.aeddddd.ae2enhanced.tile.TileAdvancedMECollector;
 import com.github.aeddddd.ae2enhanced.util.ForceKillHelper;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.IEntityLivingBaseAccessor;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
@@ -54,18 +55,6 @@ import java.util.Optional;
 public final class ModEventHandler {
 
     private ModEventHandler() {}
-
-    private static final java.lang.reflect.Method DAMAGE_ENTITY_METHOD;
-    static {
-        java.lang.reflect.Method m = null;
-        try {
-            m = EntityLivingBase.class.getDeclaredMethod("func_70665_d", DamageSource.class, float.class);
-            m.setAccessible(true);
-        } catch (Exception e) {
-            AE2Enhanced.LOGGER.error("[AE2E] Failed to cache damageEntity method", e);
-        }
-        DAMAGE_ENTITY_METHOD = m;
-    }
 
     public static void register() {
         MinecraftForge.EVENT_BUS.register(new ModEventHandler());
@@ -262,27 +251,21 @@ public final class ModEventHandler {
             }
         }
 
-        // ② 处决伤害：反射调用 damageEntity 绕过 Forge 事件系统
-        if (DAMAGE_ENTITY_METHOD != null) {
-            try {
-                DamageSource exec = new DamageSource("ae2enhanced_conformal");
-                exec.setDamageIsAbsolute();
-                DAMAGE_ENTITY_METHOD.invoke(entity, exec, Float.MAX_VALUE);
-            } catch (Exception e) {
-                AE2Enhanced.LOGGER.warn("[AE2E] Conformal damage reflection failed, falling back", e);
-                entity.setHealth(0.0f);
-            }
-        } else {
+        // ② 处决伤害：通过 invoker 调用 damageEntity 绕过 Forge 事件系统
+        try {
+            DamageSource exec = new DamageSource("ae2enhanced_conformal");
+            exec.setDamageIsAbsolute();
+            ((IEntityLivingBaseAccessor) entity).ae2e$damageEntity(exec, Float.MAX_VALUE);
+        } catch (Exception e) {
+            AE2Enhanced.LOGGER.warn("[AE2E] Conformal damage invoker failed, falling back", e);
             entity.setHealth(0.0f);
         }
 
         // ③ 虚空伤害
-        if (DAMAGE_ENTITY_METHOD != null) {
-            try {
-                DAMAGE_ENTITY_METHOD.invoke(entity, DamageSource.OUT_OF_WORLD, Float.MAX_VALUE);
-            } catch (Exception e) {
-                AE2Enhanced.LOGGER.warn("[AE2E] Void damage reflection failed", e);
-            }
+        try {
+            ((IEntityLivingBaseAccessor) entity).ae2e$damageEntity(DamageSource.OUT_OF_WORLD, Float.MAX_VALUE);
+        } catch (Exception e) {
+            AE2Enhanced.LOGGER.warn("[AE2E] Void damage invoker failed", e);
         }
 
         // ④ 击退

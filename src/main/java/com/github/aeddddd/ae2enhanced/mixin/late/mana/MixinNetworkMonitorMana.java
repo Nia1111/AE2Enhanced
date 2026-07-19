@@ -16,7 +16,7 @@ import com.github.aeddddd.ae2enhanced.storage.mana.AEManaStack;
 import com.github.aeddddd.ae2enhanced.storage.mana.IAEManaStack;
 import com.github.aeddddd.ae2enhanced.storage.mana.IManaStorageChannel;
 import com.github.aeddddd.ae2enhanced.util.fakeitem.FakeMana;
-import com.github.aeddddd.ae2enhanced.mixin.MixinReflectionHelper;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.INetworkMonitorAccessor;
 import net.minecraft.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -125,6 +125,6 @@ public class MixinNetworkMonitorMana {
     }
 
     private void ae2enhanced$notifyListeners(Iterable<IAEItemStack> diff, IActionSource source) {
-        MixinReflectionHelper.notifyListenersOfChange((NetworkMonitor)(Object)this, diff, source);
+        ((INetworkMonitorAccessor)(Object)this).ae2e$notifyListenersOfChange(diff, source);
     }
 }

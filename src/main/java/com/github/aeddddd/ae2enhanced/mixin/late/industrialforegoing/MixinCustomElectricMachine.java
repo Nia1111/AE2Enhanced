@@ -2,6 +2,7 @@ package com.github.aeddddd.ae2enhanced.mixin.late.industrialforegoing;
 
 import com.github.aeddddd.ae2enhanced.recycler.MachineOutputRedirector;
 import net.minecraft.item.ItemStack;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.items.IItemHandler;
@@ -34,35 +35,6 @@ import java.util.Set;
 @Mixin(targets = "com.buuz135.industrial.tile.CustomElectricMachine", remap = false)
 public class MixinCustomElectricMachine {
 
-    private static final Field FIELD_WORLD;
-    private static final Field FIELD_POS;
-
-    static {
-        Field worldField = null;
-        Field posField = null;
-        try {
-            Class<?> clazz = Class.forName("com.buuz135.industrial.tile.CustomElectricMachine");
-            worldField = findField(clazz, "field_145850_b");
-            posField = findField(clazz, "field_174879_c");
-        } catch (Exception ignored) {
-        }
-        FIELD_WORLD = worldField;
-        FIELD_POS = posField;
-    }
-
-    private static Field findField(Class<?> clazz, String name) {
-        while (clazz != null) {
-            try {
-                Field field = clazz.getDeclaredField(name);
-                field.setAccessible(true);
-                return field;
-            } catch (NoSuchFieldException e) {
-                clazz = clazz.getSuperclass();
-            }
-        }
-        return null;
-    }
-
     private static boolean isOutputFieldName(String name) {
         String lower = name.toLowerCase(Locale.ROOT);
         if (lower.contains("input") || lower.contains("import") || lower.contains("material") || lower.contains("fuel")) {
@@ -76,15 +48,13 @@ public class MixinCustomElectricMachine {
             at = @At(value = "INVOKE",
                     target = "Lcom/buuz135/industrial/tile/CustomElectricMachine;workTransferAddon(Lnet/minecraft/tileentity/TileEntity;Lnet/minecraftforge/items/ItemStackHandler;)V"))
     private void ae2enhanced$redirectOutputsBeforeTransfer(CallbackInfo ci) {
-        if (FIELD_WORLD == null || FIELD_POS == null) {
-            return;
-        }
         try {
-            World world = (World) FIELD_WORLD.get(this);
+            TileEntity tile = (TileEntity) (Object) this;
+            World world = tile.getWorld();
             if (world == null || world.isRemote) {
                 return;
             }
-            BlockPos pos = (BlockPos) FIELD_POS.get(this);
+            BlockPos pos = tile.getPos();
 
             Set<IItemHandler> visited = new HashSet<>();
             Class<?> clazz = this.getClass();
@@ -122,7 +92,7 @@ public class MixinCustomElectricMachine {
                 }
                 clazz = clazz.getSuperclass();
             }
-        } catch (IllegalAccessException ignored) {
+        } catch (RuntimeException ignored) {
         }
     }
 

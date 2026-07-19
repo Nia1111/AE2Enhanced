@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import thaumicenergistics.api.storage.IAEEssentiaStack;
 
-import com.github.aeddddd.ae2enhanced.mixin.MixinReflectionHelper;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.INetworkMonitorAccessor;
 import java.util.Collections;
 
 /**
@@ -162,6 +162,6 @@ public class MixinNetworkMonitor {
     }
 
     private void ae2enhanced$notifyListeners(Iterable<IAEItemStack> diff, IActionSource source) {
-        MixinReflectionHelper.notifyListenersOfChange((NetworkMonitor)(Object)this, diff, source);
+        ((INetworkMonitorAccessor)(Object)this).ae2e$notifyListenersOfChange(diff, source);
     }
 }

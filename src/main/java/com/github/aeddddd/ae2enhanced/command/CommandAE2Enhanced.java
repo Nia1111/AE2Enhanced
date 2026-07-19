@@ -19,6 +19,7 @@ import com.github.aeddddd.ae2enhanced.dimension.PersonalDimensionManager;
 import com.github.aeddddd.ae2enhanced.dimension.PlayerDimEntry;
 import com.github.aeddddd.ae2enhanced.registry.content.BlockRegistry;
 import com.github.aeddddd.ae2enhanced.crafting.smartpattern.SmartPatternGarbageCollector;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.IAEConfigAccessor;
 import com.github.aeddddd.ae2enhanced.item.ItemFluidDrop;
 import com.github.aeddddd.ae2enhanced.storage.ItemStorageAdapter;
 import com.github.aeddddd.ae2enhanced.tile.TileHyperdimensionalController;
@@ -50,7 +51,6 @@ import appeng.util.item.AEItemStack;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.File;
-import java.lang.reflect.Field;
 import java.math.BigInteger;
 import java.util.*;
 
@@ -613,10 +613,8 @@ public class CommandAE2Enhanced extends CommandBase {
     private void setChannelsEnabled(boolean enabled) {
         try {
             AEConfig config = AEConfig.instance();
-            Field field = AEConfig.class.getDeclaredField("featureFlags");
-            field.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            EnumSet<AEFeature> flags = (EnumSet<AEFeature>) field.get(config);
+            // AEConfig 为 final 类, 需经 (Object) 中转强转 accessor 接口
+            EnumSet<AEFeature> flags = ((IAEConfigAccessor)(Object) config).ae2e$getFeatureFlags();
             if (enabled) {
                 flags.add(AEFeature.CHANNELS);
             } else {

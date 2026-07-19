@@ -4,14 +4,17 @@ import appeng.api.storage.data.IAEItemStack;
 import appeng.api.storage.data.IItemList;
 import appeng.container.implementations.ContainerMEMonitorable;
 import appeng.util.Platform;
+import appeng.util.inv.ItemListIgnoreCrafting;
+import appeng.util.item.ItemList;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.IItemListAccessor;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.IItemListIgnoreCraftingAccessor;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.IItemVariantListAccessor;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -23,7 +26,7 @@ import java.util.Map;
  * <ul>
  *   <li>若 items 与 monitor 的 storageList 是同一对象则跳过，避免误改网络缓存；</li>
  *   <li>每 20 tick 最多执行一次清理，降低并发修改风险；</li>
- *   <li>所有反射操作包裹 try-catch，失败时静默回退。</li>
+ *   <li>所有 accessor 操作包裹 try-catch，失败时静默回退。</li>
  * </ul>
  */
 @Mixin(value = ContainerMEMonitorable.class, remap = false)
@@ -63,32 +66,23 @@ public class MixinContainerMEMonitorable {
             Object target = itemList;
 
             // Unwrap ItemListIgnoreCrafting if present
-            if (target.getClass().getName().equals("appeng.util.inv.ItemListIgnoreCrafting")) {
-                Field targetField = target.getClass().getDeclaredField("target");
-                targetField.setAccessible(true);
-                target = targetField.get(target);
+            if (target instanceof ItemListIgnoreCrafting) {
+                target = ((IItemListIgnoreCraftingAccessor) target).ae2e$getTarget();
             }
 
-            if (!target.getClass().getName().equals("appeng.util.item.ItemList")) {
+            if (!(target instanceof ItemList)) {
                 return;
             }
 
-            Field recordsField = target.getClass().getDeclaredField("records");
-            recordsField.setAccessible(true);
-            Map<?, ?> records = (Map<?, ?>) recordsField.get(target);
+            Map<?, ?> records = ((IItemListAccessor) target).ae2e$getRecords();
             if (records == null || records.isEmpty()) {
                 return;
             }
 
-            Method getRecordsMethod = null;
             Iterator<?> it = records.values().iterator();
             while (it.hasNext()) {
                 Object variantList = it.next();
-                if (getRecordsMethod == null) {
-                    getRecordsMethod = variantList.getClass().getDeclaredMethod("getRecords");
-                    getRecordsMethod.setAccessible(true);
-                }
-                Map<?, ?> variantRecords = (Map<?, ?>) getRecordsMethod.invoke(variantList);
+                Map<?, ?> variantRecords = ((IItemVariantListAccessor) variantList).ae2e$invokeGetRecords();
                 if (variantRecords != null && variantRecords.isEmpty()) {
                     it.remove();
                 }

@@ -52,7 +52,9 @@
     "terminal.MixinItemRepo",
     "terminal.MixinGuiInterfaceTerminal",
     "terminal.MixinGuiScreenHelper",
-    "world.MixinPlayerControllerMP"
+    "world.MixinPlayerControllerMP",
+    "accessor.IGuiMEMonitorableAccessor",
+    "accessor.IItemRepoAccessor"
   ],
   "server": []
 }

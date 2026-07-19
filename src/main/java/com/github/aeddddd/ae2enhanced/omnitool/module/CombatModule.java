@@ -6,6 +6,7 @@ import com.github.aeddddd.ae2enhanced.item.ItemAdvancedMEOmniTool;
 import com.github.aeddddd.ae2enhanced.omnitool.OmniToolNBT;
 import com.github.aeddddd.ae2enhanced.util.BossDropHelper;
 import com.github.aeddddd.ae2enhanced.util.ForceKillHelper;
+import com.github.aeddddd.ae2enhanced.mixin.late.accessor.IEntityLivingBaseAccessor;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.MultiPartEntityPart;
@@ -214,23 +215,12 @@ public class CombatModule implements IOmniToolModule {
     }
 
     /**
-     * 反射设置 EntityLivingBase 的玩家击杀标记，帮助依赖该标记的 Boss 掉落逻辑正常触发。
+     * 通过 accessor 设置 EntityLivingBase 的玩家击杀标记，帮助依赖该标记的 Boss 掉落逻辑正常触发。
      */
     private static void markAsPlayerKill(EntityLivingBase target, EntityPlayer player) {
-        try {
-            java.lang.reflect.Field attackingPlayer = EntityLivingBase.class.getDeclaredField("attackingPlayer");
-            attackingPlayer.setAccessible(true);
-            attackingPlayer.set(target, player);
-        } catch (Exception e) {
-            AE2Enhanced.LOGGER.debug("[AE2E] Failed to set attackingPlayer", e);
-        }
-        try {
-            java.lang.reflect.Field recentlyHit = EntityLivingBase.class.getDeclaredField("recentlyHit");
-            recentlyHit.setAccessible(true);
-            recentlyHit.setInt(target, 100);
-        } catch (Exception e) {
-            AE2Enhanced.LOGGER.debug("[AE2E] Failed to set recentlyHit", e);
-        }
+        IEntityLivingBaseAccessor acc = (IEntityLivingBaseAccessor) target;
+        acc.ae2e$setAttackingPlayer(player);
+        acc.ae2e$setRecentlyHit(100);
     }
 
     // ==================== Anti-Heal ====================
