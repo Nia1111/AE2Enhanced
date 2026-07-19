@@ -709,9 +709,19 @@ public class MixinCraftingCPUCluster {
             if (pending > 0) {
                 duality.setNextVirtualBatchLimit(pending);
             }
+            // 把 CPU 内部缓存（任务提交时已预提整单材料）设为虚拟批量的物品来源，
+            // 虚拟并行的额外物品从该缓存核算/提取，而非从已被预留掏空的网络提取。
+            duality.setVirtualItemSource(((CraftingCPUCluster) (Object) this).getInventory());
         }
 
-        boolean result = original.call(medium, details, table);
+        boolean result;
+        try {
+            result = original.call(medium, details, table);
+        } finally {
+            if (medium instanceof TileCentralMEInterface) {
+                ((TileCentralMEInterface) medium).getInterfaceDuality().setVirtualItemSource(null);
+            }
+        }
         if (!result || !(medium instanceof TileCentralMEInterface)) {
             return result;
         }

@@ -4,6 +4,7 @@ import appeng.api.networking.crafting.ICraftingPatternDetails;
 import appeng.api.networking.energy.IEnergySource;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.storage.IStorageGrid;
+import appeng.api.storage.IMEInventory;
 import appeng.api.storage.data.IAEItemStack;
 import appeng.api.storage.data.IAEStack;
 import appeng.util.item.AEItemStack;
@@ -30,17 +31,19 @@ import java.util.Map;
  * 虚拟批量合成引擎.
  *
  * <p>安装虚拟并行卡后，对支持 {@link HandlerCapabilities#VIRTUAL_BATCH} 的目标
- * 直接从网络扣除资源并返回产物，不占用物理设备。</p>
+ * 直接从 AE2 存储体系扣除资源并返回产物，不占用物理设备。</p>
  *
- * <p>资源核算策略：
+ * <p>资源核算策略（双池模型）：
  * <ul>
- *   <li>物品：AE2 CPU 在调用 pushPattern 前已经预提取 1 份到 InventoryCrafting，
- *       因此额外需要从网络提取 {@code parallel - 1} 份。</li>
+ *   <li>物品：AE2 CPU 在 submitJob 时已把整单材料从网络预提到 CPU 内部缓存
+ *       （MECraftingInventory），调用 pushPattern 前又提取 1 份到 InventoryCrafting。
+ *       因此虚拟批量从 <b>CPU 内部缓存</b>核算并提取额外的 {@code parallel - 1} 份；
+ *       不能从网络核算——网络已被任务预留掏空，从网络核算并行数会恒退化为 1。</li>
  *   <li>非物品（流体、能量、Mana、Starlight、气体、源质等）：CPU 不会预提取，
- *       因此需要从网络提取完整 {@code parallel} 份。</li>
+ *       因此从网络提取完整 {@code parallel} 份。</li>
  * </ul>
  * 催化剂/非消耗项由具体 handler 的 {@link IVirtualBatchCraftingHandler#getVirtualCost}
- * 决定是否排除，不再依赖原版 IRecipe.getRemainingItems。</p>
+ * 决定是否排除。</p>
  */
 public class VirtualBatchEngine {
 
@@ -118,8 +121,12 @@ public class VirtualBatchEngine {
                 return 0;
             }
 
+            // CPU 内部物品缓存：任务提交时整单材料已预提到此处，虚拟并行的额外物品
+            // 必须从该缓存核算/提取。可能为 null（非 CPU 直推场景），此时回退到网络核算。
+            IMEInventory<IAEItemStack> itemSource = owner.getVirtualItemSource();
+
             long actualParallel = computeActualParallel(storage, energy, handler, world, target,
-                    virtualTable, outputs, maxParallel, patternDetails);
+                    virtualTable, outputs, maxParallel, patternDetails, itemSource);
             if (actualParallel <= 0) {
                 logFail(world, target, "computeActualParallel returned 0");
                 return 0;
@@ -133,7 +140,7 @@ public class VirtualBatchEngine {
                 return 0;
             }
 
-            if (!VirtualCostExtractor.simulateExtract(storage, netCosts, source, null)) {
+            if (!VirtualCostExtractor.simulateExtract(storage, netCosts, source, itemSource)) {
                 logFail(world, target, "simulateExtract failed for parallel=" + actualParallel);
                 return 0;
             }
@@ -144,14 +151,14 @@ public class VirtualBatchEngine {
                 return 0;
             }
 
-            List<IAEStack> extracted = VirtualCostExtractor.extractAll(storage, netCosts, source, null);
+            List<IAEStack> extracted = VirtualCostExtractor.extractAll(storage, netCosts, source, itemSource);
             if (extracted == null) {
                 logFail(world, target, "extractAll failed");
                 return 0;
             }
 
             if (!VirtualCostExtractor.extractEnergy(energy, energyCost, source)) {
-                VirtualCostExtractor.rollbackExtracted(storage, extracted, source, null);
+                VirtualCostExtractor.rollbackExtracted(storage, extracted, source, itemSource);
                 logFail(world, target, "extractEnergy failed after resources extracted");
                 return 0;
             }
@@ -159,6 +166,9 @@ public class VirtualBatchEngine {
             List<ItemStack> products = handler.virtualCraftBatch(world, target.pos, virtualTable,
                     outputs, actualParallel, source, patternDetails);
             if (products == null || products.isEmpty()) {
+                // handler 未能产出：回滚已提取资源，避免材料被吞。
+                // 已扣除的 AE 能量无法经 IEnergySource 返还，属可接受的微小损耗。
+                VirtualCostExtractor.rollbackExtracted(storage, extracted, source, itemSource);
                 logFail(world, target, "virtualCraftBatch returned no products");
                 return 0;
             }
@@ -214,13 +224,16 @@ public class VirtualBatchEngine {
     }
 
     /**
-     * 计算当前网络资源可支撑的最大虚拟并行数。
+     * 计算当前资源可支撑的最大虚拟并行数。
      *
      * <p>直接按“单份成本 × 可用量”计算，不再使用 binary search，
      * 因此对 Long.MAX_VALUE 级别的并行卡也没有性能问题。</p>
      *
-     * <p>物品成本会额外加 1（来自 CPU 已预提取到 InventoryCrafting 的第一份）；
-     * 非物品成本不加 1，因为 CPU 不会预提取流体/能量/气体等。</p>
+     * <p>物品可用量取自 CPU 内部缓存（任务已预留整单材料），并额外加 1
+     * （CPU 已预提取 1 份到 InventoryCrafting）；非物品可用量取自网络，
+     * 不加 1，因为 CPU 不会预提取流体/能量/气体等。</p>
+     *
+     * @param itemSource CPU 内部物品缓存；为 null 时物品回退到网络核算
      */
     private long computeActualParallel(IStorageGrid storage,
                                        IEnergySource energy,
@@ -230,7 +243,8 @@ public class VirtualBatchEngine {
                                        InventoryCrafting virtualTable,
                                        IAEItemStack[] outputs,
                                        long maxParallel,
-                                       ICraftingPatternDetails details) {
+                                       ICraftingPatternDetails details,
+                                       IMEInventory<IAEItemStack> itemSource) {
         MachineSource source = new MachineSource(owner.host);
         List<IAEStack> perCopy = handler.getVirtualCost(world, target.pos, virtualTable, outputs, 1, details);
         if (perCopy == null || perCopy.isEmpty()) {
@@ -249,13 +263,15 @@ public class VirtualBatchEngine {
         for (IAEStack cost : mergedCosts) {
             if (cost == null || cost.getStackSize() <= 0) continue;
             long perCopySize = cost.getStackSize();
-            long networkAvailable = VirtualCostExtractor.queryAvailable(storage, cost, source, null);
             long supported;
             if (cost instanceof IAEItemStack) {
-                // CPU 已预提取 1 份物品到 table，因此网络只需额外提供 parallel - 1 份
-                supported = (networkAvailable / perCopySize) + 1;
+                // 物品：从 CPU 内部缓存核算（任务已预留整单材料）；
+                // CPU 已预提取 1 份到 table，缓存只需支撑 parallel - 1 份
+                long cpuAvailable = VirtualCostExtractor.queryAvailable(storage, cost, source, itemSource);
+                supported = (cpuAvailable / perCopySize) + 1;
             } else {
                 // 非物品资源 CPU 不会预提取，网络需提供完整 parallel 份
+                long networkAvailable = VirtualCostExtractor.queryAvailable(storage, cost, source, null);
                 supported = networkAvailable / perCopySize;
             }
             if (supported <= 0) return 0;
@@ -273,14 +289,14 @@ public class VirtualBatchEngine {
     }
 
     /**
-     * 获取需要从网络额外提取的资源清单。
+     * 获取需要额外提取的资源清单。
      *
      * <p>策略：以 handler 返回的 {@code parallel} 份总成本为权威值。
-     * 物品成本减去 CPU 已预提取到 table 的第一份；
-     * 非物品成本不减，因为 CPU 不会预提取流体/能量/气体等。</p>
+     * 物品成本按物品身份对齐后减去 CPU 已预提取到 table 的第一份（其余份数由
+     * 调用方从 CPU 内部缓存提取）；非物品成本不减（CPU 不预提取，由网络全额提供）。</p>
      *
-     * <p>催化剂、耐久物品等是否扣除由 handler 的 {@code getVirtualCost} 自行决定，
-     * 本方法不再额外排除。</p>
+     * <p>物品对齐按 {@link ItemCostKey} 聚合而非 List 下标，避免依赖 handler
+     * 在 count=1 与 count=parallel 两次调用中返回相同的条目顺序。</p>
      */
     private List<IAEStack> getNetCosts(IVirtualBatchCraftingHandler handler,
                                        World world,
@@ -293,25 +309,34 @@ public class VirtualBatchEngine {
             return Collections.emptyList();
         }
 
-        List<IAEStack> perCopy = handler.getVirtualCost(world, target.pos, virtualTable, outputs, 1, details);
         List<IAEStack> fullCosts = handler.getVirtualCost(world, target.pos, virtualTable, outputs, parallel, details);
         if (fullCosts == null || fullCosts.isEmpty()) {
             return Collections.emptyList();
         }
+        List<IAEStack> perCopy = handler.getVirtualCost(world, target.pos, virtualTable, outputs, 1, details);
+
+        // 单份物品成本按物品类型聚合，用于扣除 CPU 已预提取的第一份
+        Map<ItemCostKey, Long> perCopyByItem = new HashMap<>();
+        if (perCopy != null) {
+            for (IAEStack cost : mergeItemCosts(perCopy)) {
+                if (cost instanceof IAEItemStack && cost.getStackSize() > 0) {
+                    perCopyByItem.merge(new ItemCostKey(((IAEItemStack) cost).createItemStack()),
+                            cost.getStackSize(), Long::sum);
+                }
+            }
+        }
 
         List<IAEStack> net = new ArrayList<>();
-        for (int i = 0; i < fullCosts.size(); i++) {
-            IAEStack full = fullCosts.get(i);
-            if (full == null) continue;
-            long perCopySize = (perCopy != null && i < perCopy.size() && perCopy.get(i) != null)
-                    ? perCopy.get(i).getStackSize()
-                    : (full.getStackSize() / parallel);
+        for (IAEStack full : mergeItemCosts(fullCosts)) {
+            if (full == null || full.getStackSize() <= 0) continue;
             long extra;
             if (full instanceof IAEItemStack) {
-                // 物品：CPU 已预提取 1 份，只需从网络提取剩余份数
-                extra = full.getStackSize() - perCopySize;
+                // 物品：CPU 已预提取 1 份，只需额外提取剩余份数
+                Long perCopySize = perCopyByItem.get(new ItemCostKey(((IAEItemStack) full).createItemStack()));
+                long firstCopy = perCopySize != null ? perCopySize : (full.getStackSize() / parallel);
+                extra = full.getStackSize() - firstCopy;
             } else {
-                // 非物品：CPU 未预提取，网络需提供全部份数
+                // 非物品：CPU 未预提取，需全额提取
                 extra = full.getStackSize();
             }
             if (extra > 0) {

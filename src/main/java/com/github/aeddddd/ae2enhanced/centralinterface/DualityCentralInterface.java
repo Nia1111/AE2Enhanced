@@ -99,6 +99,11 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
     // Mixin 传入的下一次虚拟批量上限（通常为 CPU 任务剩余数），0 表示未设置
     private long nextVirtualBatchLimit = 0;
 
+    // Mixin 传入的 CPU 内部物品缓存（MECraftingInventory）。虚拟批量所需的额外物品
+    // 必须从此处核算/提取：AE2 CPU 在 submitJob 时已把整单材料从网络预提到 CPU 缓存，
+    // 网络通常已被任务预留掏空，若从网络核算并行数会恒退化为 1。
+    private appeng.api.storage.IMEInventory<appeng.api.storage.data.IAEItemStack> virtualItemSource = null;
+
     private final PhysicalDispatcher physicalDispatcher;
     private final VirtualBatchEngine virtualBatchEngine;
 
@@ -362,6 +367,19 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
      */
     public void setNextVirtualBatchLimit(long limit) {
         this.nextVirtualBatchLimit = Math.max(0, limit);
+    }
+
+    /**
+     * 设置虚拟批量合成时额外物品份数的来源。
+     * 由 MixinCraftingCPUCluster 在调用 pushPattern 前传入 CPU 的 MECraftingInventory，
+     * 调用结束后复位为 null。虚拟批量从 CPU 缓存提取物品，而非从网络提取。
+     */
+    public void setVirtualItemSource(appeng.api.storage.IMEInventory<appeng.api.storage.data.IAEItemStack> source) {
+        this.virtualItemSource = source;
+    }
+
+    appeng.api.storage.IMEInventory<appeng.api.storage.data.IAEItemStack> getVirtualItemSource() {
+        return this.virtualItemSource;
     }
 
     /**
