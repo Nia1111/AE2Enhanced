@@ -229,6 +229,88 @@ public class DEEnergyAdapter implements IEnergyAdapter {
         return fallbackInject(cap, amount, simulate);
     }
 
+    // === 能源存储总线支持:long 级读取与提取(龙球适配) ===
+
+    /**
+     * 龙研能量核心(TileEnergyStorageCore)不一定暴露 FE capability,
+     * 通过 IExtendedRFStorage 原生识别为可挂载目标.
+     * 聚合注入器(TileCraftingInjector,持有 currentCraftingInventory 字段)被排除:
+     * 其内部能量属于合成过程,不应被网络读取或提取.
+     */
+    @Override
+    public boolean canHandleTile(TileEntity tile, IEnergyStorage cap) {
+        if (interfaceReflectionReady && isExtendedRFStorage(tile)) {
+            return getCraftingInventoryField(tile.getClass()) == null;
+        }
+        return cap != null;
+    }
+
+    @Override
+    public long getStoredEnergy(TileEntity tile, IEnergyStorage cap) {
+        if (interfaceReflectionReady && isExtendedRFStorage(tile)) {
+            try {
+                return (Long) getExtendedStorageMethod.invoke(tile);
+            } catch (Exception e) {
+                // 反射失败,回退
+            }
+        }
+        return IEnergyAdapter.super.getStoredEnergy(tile, cap);
+    }
+
+    @Override
+    public long getCapacityEnergy(TileEntity tile, IEnergyStorage cap) {
+        if (interfaceReflectionReady && isExtendedRFStorage(tile)) {
+            try {
+                long capacity = (Long) getExtendedCapacityMethod.invoke(tile);
+                if (capacity > 0) {
+                    return capacity;
+                }
+            } catch (Exception e) {
+                // 反射失败,回退
+            }
+        }
+        return IEnergyAdapter.super.getCapacityEnergy(tile, cap);
+    }
+
+    @Override
+    public long getExtractableEnergy(TileEntity tile, IEnergyStorage cap) {
+        if (interfaceReflectionReady && isExtendedRFStorage(tile)
+                && getCraftingInventoryField(tile.getClass()) == null) {
+            try {
+                return Math.max(0L, (Long) getExtendedStorageMethod.invoke(tile));
+            } catch (Exception e) {
+                // 反射失败,回退
+            }
+        }
+        return IEnergyAdapter.super.getExtractableEnergy(tile, cap);
+    }
+
+    @Override
+    public long extractEnergy(TileEntity tile, IEnergyStorage cap, long amount, boolean simulate) {
+        if (amount <= 0) {
+            return 0;
+        }
+        if (interfaceReflectionReady && isExtendedRFStorage(tile)
+                && getCraftingInventoryField(tile.getClass()) == null) {
+            Field energyField = getEnergyField(tile);
+            if (energyField != null && managedLongValueField != null) {
+                try {
+                    long stored = (Long) getExtendedStorageMethod.invoke(tile);
+                    long toExtract = Math.min(amount, Math.max(0L, stored));
+                    if (toExtract > 0 && !simulate) {
+                        Object managedLong = energyField.get(tile);
+                        managedLongValueField.setLong(managedLong, stored - toExtract);
+                        tile.markDirty();
+                    }
+                    return toExtract;
+                } catch (Exception e) {
+                    // 反射失败,回退
+                }
+            }
+        }
+        return IEnergyAdapter.super.extractEnergy(tile, cap, amount, simulate);
+    }
+
     private boolean isExtendedRFStorage(TileEntity tile) {
         return tile != null && extendedRFStorageClass.isInstance(tile);
     }

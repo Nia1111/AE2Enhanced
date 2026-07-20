@@ -68,7 +68,12 @@ public class BlockEMCInterface extends Block {
             if (!world.isRemote) {
                 TileEntity te = world.getTileEntity(pos);
                 if (te instanceof TileEMCInterface) {
-                    ((TileEMCInterface) te).setOwner(player);
+                    TileEMCInterface tile = (TileEMCInterface) te;
+                    if (!tile.canManage(player)) {
+                        player.sendMessage(new net.minecraft.util.text.TextComponentTranslation("chat.ae2enhanced.emc_interface.no_permission"));
+                        return true;
+                    }
+                    tile.setOwner(player);
                     player.sendMessage(new net.minecraft.util.text.TextComponentTranslation("chat.ae2enhanced.emc_interface.bound", player.getName()));
                 }
             }
@@ -77,11 +82,22 @@ public class BlockEMCInterface extends Block {
         if (!world.isRemote) {
             TileEntity te = world.getTileEntity(pos);
             if (te instanceof TileEMCInterface) {
+                TileEMCInterface tile = (TileEMCInterface) te;
+                if (!tile.canManage(player)) {
+                    player.sendMessage(new net.minecraft.util.text.TextComponentTranslation("chat.ae2enhanced.emc_interface.no_permission"));
+                    return true;
+                }
                 player.openGui(AE2Enhanced.instance, GuiHandler.GUI_EMC_INTERFACE,
                         world, pos.getX(), pos.getY(), pos.getZ());
             }
         }
         return true;
+    }
+
+    @Override
+    @net.minecraftforge.fml.relauncher.SideOnly(net.minecraftforge.fml.relauncher.Side.CLIENT)
+    public void addInformation(ItemStack stack, @Nullable World world, java.util.List<String> tooltip, net.minecraft.client.util.ITooltipFlag flag) {
+        tooltip.add(net.minecraft.client.resources.I18n.format("tile.ae2enhanced.emc_interface.tooltip"));
     }
 
     @Override

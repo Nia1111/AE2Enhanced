@@ -49,6 +49,9 @@ public final class ProjectEHelper {
     private static Class<?> playerKnowledgeChangeEventClass;
     private static Class<?> emcRemapEventClass;
 
+    // NBTWhitelist
+    private static Method nbtWhitelistShouldDupeMethod;
+
     public static boolean isAvailable() {
         ensureInit();
         return available;
@@ -265,6 +268,21 @@ public final class ProjectEHelper {
             syncMethod.invoke(provider, player);
         } catch (Exception e) {
             AE2Enhanced.LOGGER.warn("[AE2E] Failed to sync knowledge provider", e);
+        }
+    }
+
+    /**
+     * ProjectE NBTWhitelist.shouldDupeWithNBT: 学习知识时是否保留 NBT.
+     * 失败或不可用时返回 false(即剥离 NBT,与 ProjectE 默认行为一致).
+     */
+    public static boolean shouldDupeWithNBT(@Nonnull ItemStack stack) {
+        if (!isAvailable() || stack.isEmpty() || nbtWhitelistShouldDupeMethod == null) return false;
+        try {
+            Object result = nbtWhitelistShouldDupeMethod.invoke(null, stack);
+            return result instanceof Boolean && (Boolean) result;
+        } catch (Exception e) {
+            AE2Enhanced.LOGGER.warn("[AE2E] Failed to check NBT whitelist for {}", stack, e);
+            return false;
         }
     }
 

@@ -75,6 +75,7 @@ public class GuiHandler implements IGuiHandler {
     public static final int GUI_OMNI_TERMINAL = 11;
     public static final int GUI_CENTRAL_ME_INTERFACE = 12;
     public static final int GUI_SMART_PATTERN_INTERFACE = 13;
+    public static final int GUI_ENERGY_STORAGE_BUS = 14;
     public static final int GUI_OMNI_TOOL_CONFIG = 26;
 
     public static final int GUI_ADVANCED_ME_COLLECTOR = 27;
@@ -182,6 +183,27 @@ public class GuiHandler implements IGuiHandler {
                 IPart part = ((IPartHost) te).getPart(side);
                 if (part instanceof PartStockingBus) {
                     return new ContainerStockingBus(player.inventory, (PartStockingBus) part);
+                }
+            }
+        }
+        if (baseId == GUI_ENERGY_STORAGE_BUS) {
+            int sideOrdinal = (ID >> 8) & 0xFF;
+            AEPartLocation side = AEPartLocation.fromOrdinal(sideOrdinal);
+            if (te instanceof IPartHost) {
+                IPart part = ((IPartHost) te).getPart(side);
+                if (part instanceof com.github.aeddddd.ae2enhanced.part.PartEnergyStorageBus) {
+                    com.github.aeddddd.ae2enhanced.container.ContainerEnergyStorageBus container =
+                            new com.github.aeddddd.ae2enhanced.container.ContainerEnergyStorageBus(
+                                    player.inventory, (com.github.aeddddd.ae2enhanced.part.PartEnergyStorageBus) part);
+                    // 设置 OpenContext,使 AE2 原生优先级 GUI(PacketSwitchGuis)能回链到本 Part
+                    appeng.container.ContainerOpenContext context = new appeng.container.ContainerOpenContext(part);
+                    context.setWorld(world);
+                    context.setX(x);
+                    context.setY(y);
+                    context.setZ(z);
+                    context.setSide(side);
+                    container.setOpenContext(context);
+                    return container;
                 }
             }
         }
@@ -304,6 +326,17 @@ public class GuiHandler implements IGuiHandler {
                 IPart part = ((IPartHost) te).getPart(side);
                 if (part instanceof PartStockingBus) {
                     return new GuiStockingBus(player.inventory, (PartStockingBus) part);
+                }
+            }
+        }
+        if (baseId == GUI_ENERGY_STORAGE_BUS) {
+            int sideOrdinal = (ID >> 8) & 0xFF;
+            AEPartLocation side = AEPartLocation.fromOrdinal(sideOrdinal);
+            if (te instanceof IPartHost) {
+                IPart part = ((IPartHost) te).getPart(side);
+                if (part instanceof com.github.aeddddd.ae2enhanced.part.PartEnergyStorageBus) {
+                    return new com.github.aeddddd.ae2enhanced.client.gui.GuiEnergyStorageBus(
+                            player.inventory, (com.github.aeddddd.ae2enhanced.part.PartEnergyStorageBus) part);
                 }
             }
         }

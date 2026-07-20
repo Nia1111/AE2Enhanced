@@ -37,7 +37,16 @@
     "world.MixinEntityPlayerDropItem",
     "world.MixinInventoryHelperDropItems",
     "world.MixinPlayerInteractionManager",
-    "world.MixinGameRegistry"
+    "world.MixinGameRegistry",
+    "accessor.INetworkMonitorAccessor",
+    "accessor.IEntityLivingBaseAccessor",
+    "accessor.IEntityAccessor",
+    "accessor.IAEConfigAccessor",
+    "accessor.ICraftingCPUClusterAccessor",
+    "accessor.ITaskProgressAccessor",
+    "accessor.IItemListAccessor",
+    "accessor.IItemListIgnoreCraftingAccessor",
+    "accessor.IItemVariantListAccessor"
   ],
   "client": [
     "terminal.MixinGuiCellWorkbench",

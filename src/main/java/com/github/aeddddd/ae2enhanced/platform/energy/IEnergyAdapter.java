@@ -45,4 +45,74 @@ public interface IEnergyAdapter {
      * @return 实际成功注入(或模拟可注入)的能量量
      */
     long injectEnergy(TileEntity tile, IEnergyStorage cap, long amount, boolean simulate);
+
+    /**
+     * 判断目标是否可作为能源存储总线的暴露对象.
+     * 默认要求存在 Forge IEnergyStorage capability;各适配器可扩展为原生支持
+     * (如龙之研究的 IExtendedRFStorage 不一定暴露 FE capability).
+     *
+     * @param tile 目标 TileEntity
+     * @param cap  标准 Forge IEnergyStorage(可能为 null)
+     * @return true 表示该目标可以被能源存储总线挂载
+     */
+    default boolean canHandleTile(TileEntity tile, IEnergyStorage cap) {
+        return cap != null;
+    }
+
+    /**
+     * 查询目标当前存储的能量(long 级).
+     * 默认通过 {@link IEnergyStorage#getEnergyStored()}(int 级).
+     */
+    default long getStoredEnergy(TileEntity tile, IEnergyStorage cap) {
+        return cap != null ? cap.getEnergyStored() : 0;
+    }
+
+    /**
+     * 查询目标的能量容量(long 级).
+     * 默认通过 {@link IEnergyStorage#getMaxEnergyStored()}(int 级).
+     */
+    default long getCapacityEnergy(TileEntity tile, IEnergyStorage cap) {
+        return cap != null ? cap.getMaxEnergyStored() : 0;
+    }
+
+    /**
+     * 查询目标当前可提取的能量总量(模拟模式).
+     * 默认通过 {@link IEnergyStorage#extractEnergy(int, boolean)} 模拟.
+     */
+    default long getExtractableEnergy(TileEntity tile, IEnergyStorage cap) {
+        if (cap == null || !cap.canExtract()) {
+            return 0;
+        }
+        return cap.extractEnergy(Integer.MAX_VALUE, true);
+    }
+
+    /**
+     * 从目标提取能量.
+     * 默认使用标准 FE 多调用策略突破单次 int 上限.
+     *
+     * @param tile     目标 TileEntity
+     * @param cap      标准 Forge IEnergyStorage(可能为 null)
+     * @param amount   要提取的能量量(已保证 &gt; 0)
+     * @param simulate true=仅模拟,false=实际提取
+     * @return 实际成功提取(或模拟可提取)的能量量
+     */
+    default long extractEnergy(TileEntity tile, IEnergyStorage cap, long amount, boolean simulate) {
+        if (cap == null || !cap.canExtract() || amount <= 0) {
+            return 0;
+        }
+        if (simulate) {
+            return cap.extractEnergy((int) Math.min(amount, Integer.MAX_VALUE), true);
+        }
+        long total = 0;
+        while (amount > 0) {
+            int toExtract = (int) Math.min(amount, Integer.MAX_VALUE);
+            int extracted = cap.extractEnergy(toExtract, false);
+            if (extracted <= 0) {
+                break;
+            }
+            total += extracted;
+            amount -= extracted;
+        }
+        return total;
+    }
 }

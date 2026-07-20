@@ -168,6 +168,9 @@ gui.ae2enhanced.universal_export_bus.name=通用输出总线
 
 item.ae2enhanced.part_stocking_bus.name=库存维持总线
 item.ae2enhanced.part_stocking_bus.tooltip=§e库存维持总线 §7— 将外部容器维持在指定数量
+item.ae2enhanced.part_energy_storage_bus.name=能源存储总线
+item.ae2enhanced.part_energy_storage_bus.tooltip=§e能源存储总线 §7— 将相邻能量存储(RF)暴露给 ME 网络
+gui.ae2enhanced.energy_storage_bus.name=能源存储总线
 gui.ae2enhanced.stocking_bus.name=库存维持总线
 gui.ae2enhanced.stocking_bus.tooltip.mode=模式: %s
 gui.ae2enhanced.stocking_bus.mode.bidirectional=双向维持
@@ -451,7 +454,7 @@ gui.ae2enhanced.emc_interface.shift_to_bind=§eShift+左键标题绑定当前玩
 gui.ae2enhanced.emc_interface.prev=上一页
 gui.ae2enhanced.emc_interface.next=下一页
 chat.ae2enhanced.emc_interface.bound=EMC 接口已绑定至 %s
-chat.ae2enhanced.emc_interface.duplicate=§e警告: 你的 EMC 接口在网络中有多个副本,实际提取由 EMC 余额兜底.
+chat.ae2enhanced.emc_interface.no_permission=§c你没有权限管理此 EMC 接口
 
 # ME 放置工具
 item.ae2enhanced.me_placement_tool.name=ME 放置工具

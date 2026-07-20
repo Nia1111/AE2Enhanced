@@ -1,0 +1,5 @@
+{
+    "conditions": {
+        "projecte_loaded": "com.github.aeddddd.ae2enhanced.integration.projecte.ProjectELoadedCondition"
+    }
+}

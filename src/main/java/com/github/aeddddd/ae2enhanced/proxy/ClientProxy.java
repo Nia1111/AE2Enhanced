@@ -287,6 +287,13 @@ public class ClientProxy extends CommonProxy {
         registerItemModel(ItemRegistry.UNIVERSAL_MEMORY_CARD);
         }
 
+        // 能源存储总线的 Part 模型和物品模型(双注册缺一不可)
+        if (PartRegistry.PART_ENERGY_STORAGE_BUS != null) {
+            AEApi.instance().registries().partModels().registerModels(
+                    com.github.aeddddd.ae2enhanced.part.PartEnergyStorageBus.MODELS);
+            registerItemModel(PartRegistry.PART_ENERGY_STORAGE_BUS);
+        }
+
         // Omni 无线终端物品模型
         registerItemModel(ItemRegistry.OMNI_WIRELESS_TERMINAL);
         registerItemModel(ItemRegistry.SMART_BLANK_PATTERN);

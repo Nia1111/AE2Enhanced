@@ -1,4 +1,5 @@
 {
+    "conditions": ["ae2enhanced:projecte_loaded"],
     "type": "minecraft:crafting_shaped",
     "pattern": [
         "IMI",

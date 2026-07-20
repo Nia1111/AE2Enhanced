@@ -57,6 +57,7 @@ public final class GameRegistryManager {
         PartRegistry.PART_UNIVERSAL_IMPORT_BUS = new ItemPartUniversalImportBus();
         PartRegistry.PART_UNIVERSAL_EXPORT_BUS = new ItemPartUniversalExportBus();
         PartRegistry.PART_STOCKING_BUS = new ItemPartStockingBus();
+        PartRegistry.PART_ENERGY_STORAGE_BUS = new ItemPartEnergyStorageBus();
         ItemRegistry.CHANNEL_RECEIVER_CARD = new ItemChannelReceiverCard();
         ItemRegistry.UNIVERSAL_MEMORY_CARD = new ItemUniversalMemoryCard();
         ItemRegistry.OMNI_WIRELESS_TERMINAL = new ItemOmniWirelessTerminal();
@@ -105,7 +106,8 @@ public final class GameRegistryManager {
             BlockRegistry.ME_NETWORK_RECYCLER = new BlockMENetworkRecycler(),
             BlockRegistry.YELLOW_STRIPES_BLOCK_B = new BlockYellowStripesBlockB()
         );
-        if (AE2EnhancedConfig.emcInterface.enabled) {
+        // EMC 接口：仅在配置启用且 ProjectE 已安装时注册（未安装时完全隐藏）
+        if (AE2EnhancedConfig.emcInterface.enabled && Loader.isModLoaded("projecte")) {
             BlockRegistry.EMC_INTERFACE = new BlockEMCInterface();
             event.getRegistry().register(BlockRegistry.EMC_INTERFACE);
         }
@@ -201,6 +203,7 @@ public final class GameRegistryManager {
         event.getRegistry().register(PartRegistry.PART_UNIVERSAL_IMPORT_BUS);
         event.getRegistry().register(PartRegistry.PART_UNIVERSAL_EXPORT_BUS);
         event.getRegistry().register(PartRegistry.PART_STOCKING_BUS);
+        event.getRegistry().register(PartRegistry.PART_ENERGY_STORAGE_BUS);
         event.getRegistry().register(ItemRegistry.CHANNEL_RECEIVER_CARD);
         event.getRegistry().register(ItemRegistry.UNIVERSAL_MEMORY_CARD);
         event.getRegistry().register(ItemRegistry.OMNI_WIRELESS_TERMINAL);

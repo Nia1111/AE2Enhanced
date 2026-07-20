@@ -40,6 +40,7 @@ import com.github.aeddddd.ae2enhanced.network.packet.PacketOpenOmniToolGui;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOpenOmniToolGuiHandler;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketChunkPowerHighlight;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketEMCInterfaceBind;
+import com.github.aeddddd.ae2enhanced.network.packet.PacketEnergyStorageBusAction;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketChunkPowerHighlightHandler;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketVirtualCraftingParticles;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniToolConfig;
@@ -115,5 +116,6 @@ public final class ModNetwork {
         nw.registerMessage(PacketPersonalDimensionRulesHandler.class, PacketPersonalDimensionRules.class, 50, Side.SERVER);
         nw.registerMessage(PacketPersonalDimensionRulesSync.Handler.class, PacketPersonalDimensionRulesSync.class, 51, Side.CLIENT);
         nw.registerMessage(PacketPersonalDimensionRegistrySync.Handler.class, PacketPersonalDimensionRegistrySync.class, 52, Side.CLIENT);
+        nw.registerMessage(PacketEnergyStorageBusAction.Handler.class, PacketEnergyStorageBusAction.class, 53, Side.SERVER);
     }
 }

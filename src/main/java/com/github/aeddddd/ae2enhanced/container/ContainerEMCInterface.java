@@ -96,7 +96,8 @@ public class ContainerEMCInterface extends Container {
     @Override
     public boolean canInteractWith(@Nonnull EntityPlayer playerIn) {
         return tile.getWorld().getTileEntity(tile.getPos()) == tile
-                && playerIn.getDistanceSq(tile.getPos().add(0.5, 0.5, 0.5)) <= 64.0;
+                && playerIn.getDistanceSq(tile.getPos().add(0.5, 0.5, 0.5)) <= 64.0
+                && tile.canManage(playerIn);
     }
 
     @Override

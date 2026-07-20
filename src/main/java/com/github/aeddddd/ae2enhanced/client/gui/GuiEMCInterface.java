@@ -88,11 +88,14 @@ public class GuiEMCInterface extends GuiContainer {
         drawButtonText(prevText, PREV_X, PREV_Y, isPrevEnabled() ? 0xFFFFFFFF : 0xFF888888);
         drawButtonText(nextText, NEXT_X, NEXT_Y, isNextEnabled() ? 0xFFFFFFFF : 0xFF888888);
 
+        // 所有者与重绑定提示同行显示(左/右对齐),避免与玩家背包区域(y=145)重叠
         String owner = tile.isBound() ? tile.getOwnerName() : I18n.format("gui.ae2enhanced.emc_interface.unbound");
-        this.fontRenderer.drawString(I18n.format("gui.ae2enhanced.emc_interface.owner", owner), 8, 138, 0x404040);
+        this.fontRenderer.drawString(I18n.format("gui.ae2enhanced.emc_interface.owner", owner), 8, 136, 0x404040);
 
         if (tile.isBound()) {
-            this.fontRenderer.drawString(I18n.format("gui.ae2enhanced.emc_interface.shift_to_bind"), 8, 148, 0xFFAA00);
+            String hint = I18n.format("gui.ae2enhanced.emc_interface.shift_to_bind");
+            this.fontRenderer.drawString(hint,
+                    this.xSize - 8 - this.fontRenderer.getStringWidth(hint), 136, 0xFFAA00);
         }
     }
 

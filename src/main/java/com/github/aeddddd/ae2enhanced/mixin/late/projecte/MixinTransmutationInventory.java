@@ -149,12 +149,13 @@ public abstract class MixinTransmutationInventory {
 
     /**
      * @author AE2Enhanced
-     * @reason 按 BigInteger 计算后 clamp 到 long 返回值。
+     * @reason 按 BigInteger 计算后 clamp 到 long 返回值。与 ae2e$removeEmc 一致,不统计锁定槽(8)。
      */
     @Overwrite(remap = false)
     public long getAvailableEMC() {
         BigInteger total = ProjectEBigEmcHelper.getEmcBig(this.provider);
         for (int i = 0; i < this.inputLocks.getSlots(); ++i) {
+            if (i == 8) continue;
             ItemStack stack = this.inputLocks.getStackInSlot(i);
             if (stack.isEmpty() || !(stack.getItem() instanceof IItemEmc)) continue;
             IItemEmc itemEmc = (IItemEmc) stack.getItem();
@@ -167,12 +168,13 @@ public abstract class MixinTransmutationInventory {
     }
 
     /**
-     * 供 GUI 使用的精确 BigInteger 可用 EMC。
+     * 供 GUI 使用的精确 BigInteger 可用 EMC。与 ae2e$removeEmc 一致,不统计锁定槽(8)。
      */
     @SuppressWarnings("unused")
     public BigInteger ae2e$getAvailableEMCBig() {
         BigInteger total = ProjectEBigEmcHelper.getEmcBig(this.provider);
         for (int i = 0; i < this.inputLocks.getSlots(); ++i) {
+            if (i == 8) continue;
             ItemStack stack = this.inputLocks.getStackInSlot(i);
             if (stack.isEmpty() || !(stack.getItem() instanceof IItemEmc)) continue;
             IItemEmc itemEmc = (IItemEmc) stack.getItem();

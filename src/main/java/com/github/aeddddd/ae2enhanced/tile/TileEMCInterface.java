@@ -61,6 +61,8 @@ public class TileEMCInterface extends TileAENetworkBase implements ICellContaine
 
     public void invalidateHandlerCache() {
         handler.invalidateAvailableCache();
+        // 知识/EMC remap 变化会改变可用物品集合,同步刷新网络存储视图
+        notifyCellArrayUpdate();
     }
 
     public void invalidateEmcCache() {
@@ -94,10 +96,7 @@ public class TileEMCInterface extends TileAENetworkBase implements ICellContaine
     @Override
     public void securityBreak() {
         // 安全破坏时不掉落,仅解绑
-        ownerUUID = null;
-        ownerName = "";
-        handler.invalidateAvailableCache();
-        markDirty();
+        setOwner(null);
     }
 
     // ---- 玩家绑定 ----
@@ -126,6 +125,50 @@ public class TileEMCInterface extends TileAENetworkBase implements ICellContaine
         handler.invalidateAvailableCache();
         markDirty();
         notifyCellArrayUpdate();
+        syncToClient();
+    }
+
+    /**
+     * 玩家是否有权管理(重新绑定/打开 GUI/编辑白名单)此接口.
+     * 未绑定时任何人可认领;已绑定时仅所有者或 OP(权限等级 2).
+     */
+    public boolean canManage(@Nonnull EntityPlayer player) {
+        if (ownerUUID == null) return true;
+        if (player.getUniqueID().equals(ownerUUID)) return true;
+        return player.canUseCommand(2, "");
+    }
+
+    /**
+     * 绑定玩家当前是否在线.
+     * 离线时 ProjectE 返回的 TransmutationOffline 包装 provider 为只读快照,
+     * 无法扣减 EMC,因此离线期间必须禁止提取.
+     */
+    public boolean isOwnerOnline() {
+        if (ownerUUID == null) return false;
+        net.minecraft.server.MinecraftServer server =
+                net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance();
+        return server != null && server.getPlayerList().getPlayerByUUID(ownerUUID) != null;
+    }
+
+    /**
+     * 规范化白名单物品: count=1, 且对齐 ProjectE 学习知识时的 NBT 修剪规则
+     * (非 NBTWhitelist 物品剥离 NBT),保证与已学知识列表可匹配.
+     */
+    @Nonnull
+    private static ItemStack normalizeWhitelistStack(@Nonnull ItemStack stack) {
+        if (stack.isEmpty()) return ItemStack.EMPTY;
+        ItemStack copy = stack.copy();
+        copy.setCount(1);
+        if (copy.hasTagCompound() && !ProjectEHelper.shouldDupeWithNBT(copy)) {
+            copy.setTagCompound(null);
+        }
+        return copy;
+    }
+
+    private void syncToClient() {
+        if (world != null && !world.isRemote) {
+            world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 3);
+        }
     }
 
     @Nullable
@@ -145,8 +188,7 @@ public class TileEMCInterface extends TileAENetworkBase implements ICellContaine
     }
 
     public void setWhitelistSlot(int index, @Nonnull ItemStack stack) {
-        whitelist[index] = stack.isEmpty() ? ItemStack.EMPTY : stack.copy();
-        whitelist[index].setCount(1);
+        whitelist[index] = normalizeWhitelistStack(stack);
         config.setStackInSlot(index, whitelist[index]);
         rebuildWhitelistSet();
         handler.invalidateAvailableCache();
@@ -368,8 +410,13 @@ public class TileEMCInterface extends TileAENetworkBase implements ICellContaine
     @Override
     public void onChangeInventory(net.minecraftforge.items.IItemHandler inv, int slot, InvOperation mc, ItemStack removed, ItemStack added) {
         if (inv == config && slot >= 0 && slot < WHITELIST_SIZE) {
-            whitelist[slot] = added.isEmpty() ? ItemStack.EMPTY : added.copy();
-            whitelist[slot].setCount(1);
+            ItemStack normalized = normalizeWhitelistStack(added);
+            if (!ItemStack.areItemStacksEqual(added, normalized)) {
+                // 回写规范化后的物品; 再次触发本回调时 added 已规范化,不再进入此分支
+                config.setStackInSlot(slot, normalized);
+                return;
+            }
+            whitelist[slot] = normalized;
             rebuildWhitelistSet();
             handler.invalidateAvailableCache();
             markDirty();

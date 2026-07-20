@@ -21,6 +21,12 @@ public class MixinGUITransmutation {
     @Shadow
     private TransmutationInventory inv;
 
+    @org.spongepowered.asm.mixin.Unique
+    private static java.lang.reflect.Method ae2e$cachedAvailBigMethod;
+
+    @org.spongepowered.asm.mixin.Unique
+    private static boolean ae2e$methodResolved;
+
     @Redirect(
             method = "func_146979_b",
             at = @At(
@@ -47,14 +53,24 @@ public class MixinGUITransmutation {
 
     private BigInteger getAvailableBig() {
         if (this.inv == null || this.inv.provider == null) return BigInteger.ZERO;
-        try {
-            java.lang.reflect.Method m = this.inv.getClass().getMethod("ae2e$getAvailableEMCBig");
-            Object result = m.invoke(this.inv);
-            if (result instanceof BigInteger) {
-                return (BigInteger) result;
+        // 缓存反射 Method,避免每帧两次 getMethod 查询
+        if (!ae2e$methodResolved) {
+            ae2e$methodResolved = true;
+            try {
+                ae2e$cachedAvailBigMethod = this.inv.getClass().getMethod("ae2e$getAvailableEMCBig");
+            } catch (Exception e) {
+                AE2Enhanced.LOGGER.debug("[AE2E] TransmutationInventory does not expose ae2e$getAvailableEMCBig, falling back to provider", e);
             }
-        } catch (Exception e) {
-            AE2Enhanced.LOGGER.debug("[AE2E] Failed to reflect TransmutationInventory BigInteger EMC, falling back to provider", e);
+        }
+        if (ae2e$cachedAvailBigMethod != null) {
+            try {
+                Object result = ae2e$cachedAvailBigMethod.invoke(this.inv);
+                if (result instanceof BigInteger) {
+                    return (BigInteger) result;
+                }
+            } catch (Exception e) {
+                AE2Enhanced.LOGGER.debug("[AE2E] Failed to reflect TransmutationInventory BigInteger EMC, falling back to provider", e);
+            }
         }
         // 兜底：直接读取 knowledge provider 的 BigInteger EMC（兼容离线/包装提供者）
         return ProjectEBigEmcHelper.getEmcBig(this.inv.provider);

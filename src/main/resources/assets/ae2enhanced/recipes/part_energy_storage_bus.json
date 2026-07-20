@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {
+      "item": "appliedenergistics2:part",
+      "data": 220
+    },
+    {
+      "item": "appliedenergistics2:energy_cell"
+    }
+  ],
+  "result": {
+    "item": "ae2enhanced:part_energy_storage_bus"
+  }
+}

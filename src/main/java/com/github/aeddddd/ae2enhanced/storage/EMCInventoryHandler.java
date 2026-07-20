@@ -67,6 +67,8 @@ public class EMCInventoryHandler implements IMEInventoryHandler<IAEItemStack>, I
     @Override
     public IAEItemStack extractItems(IAEItemStack request, Actionable type, IActionSource src) {
         if (request == null || request.getStackSize() <= 0 || !tile.isBound()) return null;
+        // 绑定玩家离线时 provider 为只读快照,无法扣减 EMC,禁止提取
+        if (!tile.isOwnerOnline()) return null;
         ItemStack definition = request.getDefinition();
         if (definition.isEmpty()) return null;
 
@@ -107,6 +109,8 @@ public class EMCInventoryHandler implements IMEInventoryHandler<IAEItemStack>, I
         IAEItemStack result = AEItemStack.fromItemStack(real);
         if (result != null) {
             result.setStackSize(extractCount);
+            // 向网络监视器上报负变化,使终端实时刷新
+            postAlterationToNetwork(result, src);
         }
         return result;
     }
@@ -114,6 +118,8 @@ public class EMCInventoryHandler implements IMEInventoryHandler<IAEItemStack>, I
     @Override
     public IItemList<IAEItemStack> getAvailableItems(IItemList<IAEItemStack> out) {
         if (!tile.isBound()) return out;
+        // 离线时不暴露任何物品(与 extractItems 的门控一致)
+        if (!tile.isOwnerOnline()) return out;
         Object provider = tile.getKnowledgeProvider();
         if (provider == null) return out;
 
@@ -248,6 +254,25 @@ public class EMCInventoryHandler implements IMEInventoryHandler<IAEItemStack>, I
         long value = ProjectEHelper.getEmcValue(stack);
         emcValueCache.put(key, value);
         return value;
+    }
+
+    /**
+     * 通过 IStorageGrid.postAlterationOfStoredItems 上报提取产生的负变化.
+     * AE2-UEL 中网格不会向 cell handler 注册监听器,这是规范的变更上报入口.
+     */
+    private void postAlterationToNetwork(@Nonnull IAEItemStack extracted, @Nonnull IActionSource src) {
+        try {
+            appeng.api.networking.IGrid grid = tile.getProxy().getGrid();
+            if (grid == null) return;
+            appeng.api.networking.storage.IStorageGrid storageGrid =
+                    grid.getCache(appeng.api.networking.storage.IStorageGrid.class);
+            IAEItemStack delta = extracted.copy();
+            delta.setStackSize(-extracted.getStackSize());
+            storageGrid.postAlterationOfStoredItems(getChannel(),
+                    java.util.Collections.singletonList(delta), src);
+        } catch (appeng.me.GridAccessException e) {
+            // grid 尚未就绪,忽略本次上报
+        }
     }
 
     private void syncOwnerIfOnline() {

@@ -42,7 +42,13 @@ public class PacketEMCInterfaceBind implements IMessage {
                 World world = player.world;
                 TileEntity te = world.getTileEntity(message.pos);
                 if (te instanceof TileEMCInterface) {
-                    ((TileEMCInterface) te).setOwner(player);
+                    TileEMCInterface tile = (TileEMCInterface) te;
+                    if (!tile.canManage(player)) {
+                        player.sendMessage(new net.minecraft.util.text.TextComponentTranslation(
+                                "chat.ae2enhanced.emc_interface.no_permission"));
+                        return;
+                    }
+                    tile.setOwner(player);
                     player.sendMessage(new net.minecraft.util.text.TextComponentTranslation(
                             "chat.ae2enhanced.emc_interface.bound", player.getName()));
                 }

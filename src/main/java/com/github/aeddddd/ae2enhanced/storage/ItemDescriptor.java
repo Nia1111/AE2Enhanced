@@ -42,6 +42,8 @@ public class ItemDescriptor implements Descriptor {
     private int computeHash() {
         int result = item != null ? item.hashCode() : 0;
         result = 31 * result + meta;
+        // NBT 参与哈希分布,减少不同 NBT 物品的碰撞(equals 语义不变)
+        result = 31 * result + (nbt != null ? nbt.hashCode() : 0);
         return result;
     }
 

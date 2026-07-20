@@ -126,6 +126,13 @@ public final class ModContent {
             Upgrades.CRAFTING.registerItem(busStack, 1);
         }
 
+        // 能源存储总线升级卡:双向过滤卡(反转黑白名单) + 容量卡(解锁过滤槽)
+        if (PartRegistry.PART_ENERGY_STORAGE_BUS != null) {
+            ItemStack busStack = new ItemStack(PartRegistry.PART_ENERGY_STORAGE_BUS);
+            Upgrades.INVERTER.registerItem(busStack, 1);
+            Upgrades.CAPACITY.registerItem(busStack, 5);
+        }
+
         // 中枢 ME 接口升级卡
         if (BlockRegistry.CENTRAL_ME_INTERFACE != null) {
             ItemStack centralInterface = new ItemStack(BlockRegistry.CENTRAL_ME_INTERFACE);

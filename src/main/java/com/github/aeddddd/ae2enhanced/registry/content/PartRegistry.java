@@ -12,4 +12,5 @@ public final class PartRegistry {
     public static ItemPartUniversalImportBus PART_UNIVERSAL_IMPORT_BUS;
     public static ItemPartUniversalExportBus PART_UNIVERSAL_EXPORT_BUS;
     public static ItemPartStockingBus PART_STOCKING_BUS;
+    public static ItemPartEnergyStorageBus PART_ENERGY_STORAGE_BUS;
 }

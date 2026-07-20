@@ -1,0 +1,14 @@
+{
+  "package": "com.github.aeddddd.ae2enhanced.mixin.late.mmce",
+  "plugin": "com.github.aeddddd.ae2enhanced.mixin.MMCEMixinPlugin",
+  "refmap": "mixin.refmap.json",
+  "target": "@env(DEFAULT)",
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "MixinMEPatternProvider",
+    "MixinPatternItemFilter"
+  ],
+  "client": [],
+  "server": []
+}

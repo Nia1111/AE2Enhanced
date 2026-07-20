@@ -170,6 +170,9 @@ gui.ae2enhanced.universal_export_bus.name=Universal Export Bus
 
 item.ae2enhanced.part_stocking_bus.name=Stocking Bus
 item.ae2enhanced.part_stocking_bus.tooltip=§eStocking Bus §7— Maintains target quantities in external inventory
+item.ae2enhanced.part_energy_storage_bus.name=Energy Storage Bus
+item.ae2enhanced.part_energy_storage_bus.tooltip=§eEnergy Storage Bus §7— Exposes adjacent energy storage (RF) to the ME network
+gui.ae2enhanced.energy_storage_bus.name=Energy Storage Bus
 gui.ae2enhanced.stocking_bus.name=Stocking Bus
 gui.ae2enhanced.stocking_bus.tooltip.mode=Mode: %s
 gui.ae2enhanced.stocking_bus.mode.bidirectional=Bidirectional
@@ -453,7 +456,7 @@ gui.ae2enhanced.emc_interface.shift_to_bind=§eShift+Click title to bind current
 gui.ae2enhanced.emc_interface.prev=Prev
 gui.ae2enhanced.emc_interface.next=Next
 chat.ae2enhanced.emc_interface.bound=EMC Interface bound to %s
-chat.ae2enhanced.emc_interface.duplicate=§eWarning: You have multiple EMC Interfaces on this network; extraction is limited by your real EMC balance.
+chat.ae2enhanced.emc_interface.no_permission=§cYou don't have permission to manage this EMC Interface
 
 # ME Placement Tool
 item.ae2enhanced.me_placement_tool.name=ME Placement Tool

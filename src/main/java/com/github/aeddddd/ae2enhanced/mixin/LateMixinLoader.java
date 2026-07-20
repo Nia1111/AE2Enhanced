@@ -65,6 +65,9 @@ public class LateMixinLoader implements ILateMixinLoader {
         if (Loader.isModLoaded("projecte")) {
             configs.add("mixins.ae2enhanced.late.projecte.json");
         }
+        if (Loader.isModLoaded("modularmachinery")) {
+            configs.add("mixins.ae2enhanced.late.mmce.json");
+        }
         return configs;
     }
 

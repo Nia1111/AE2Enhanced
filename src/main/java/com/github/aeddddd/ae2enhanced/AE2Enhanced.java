@@ -31,7 +31,7 @@ import org.apache.logging.log4j.Logger;
     modid = AE2Enhanced.MOD_ID,
     name = AE2Enhanced.MOD_NAME,
     version = AE2Enhanced.VERSION,
-    dependencies = "required-after:appliedenergistics2;after:terminal_interaction_integration"
+    dependencies = "required-after:appliedenergistics2;after:terminal_interaction_integration;after:projecte"
 )
 public class AE2Enhanced {
 
