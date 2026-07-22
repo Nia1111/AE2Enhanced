@@ -47,6 +47,7 @@ public class PacketMEMonitorableAction implements IMessage {
     public static final byte FLUID_OPERATE = 2;    // 空手点击流体槽位(获取装满的桶)
     public static final byte GAS_OPERATE = 3;      // 空手点击气体槽位(获取装满的气体容器)
     public static final byte RESOURCE_ACTION = 4;  // RF/Mana/Starlight 统一资源动作（无 TII fallback）
+    public static final byte ESSENTIA_WORK = 5;    // 手持源质容器(安瓿/源质罐)点击槽位(装填/倾倒)
 
     private byte type;
     private NBTTagCompound nbt;
@@ -129,6 +130,11 @@ public class PacketMEMonitorableAction implements IMessage {
                         com.github.aeddddd.ae2enhanced.terminal.UnifiedResourceTerminalServer.handle(
                                 player, cme, grid, source, message.getNbt());
                         break;
+                    case ESSENTIA_WORK:
+                        if (!held.isEmpty()) {
+                            essentiaWorkReflect(message, ch, grid, source, player);
+                        }
+                        break;
                 }
             });
             return null;
@@ -200,6 +206,19 @@ public class PacketMEMonitorableAction implements IMessage {
             try {
                 Class<?> helperClass = Class.forName("com.github.aeddddd.ae2enhanced.network.packet.PacketMEMonitorableActionGasHelper");
                 java.lang.reflect.Method method = helperClass.getMethod("gasWork",
+                        PacketMEMonitorableAction.class, ItemStack.class,
+                        IStorageGrid.class, PlayerSource.class, EntityPlayerMP.class);
+                method.invoke(null, message, singleHeld, grid, source, player);
+            } catch (Exception e) {
+                AELog.error(e);
+            }
+        }
+
+        private static void essentiaWorkReflect(PacketMEMonitorableAction message, ItemStack singleHeld,
+                                                   IStorageGrid grid, PlayerSource source, EntityPlayerMP player) {
+            try {
+                Class<?> helperClass = Class.forName("com.github.aeddddd.ae2enhanced.network.packet.PacketMEMonitorableActionEssentiaHelper");
+                java.lang.reflect.Method method = helperClass.getMethod("essentiaWork",
                         PacketMEMonitorableAction.class, ItemStack.class,
                         IStorageGrid.class, PlayerSource.class, EntityPlayerMP.class);
                 method.invoke(null, message, singleHeld, grid, source, player);

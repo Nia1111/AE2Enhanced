@@ -46,7 +46,7 @@ public final class TerminalTooltipBridge {
             if (UnifiedResourceTerminalBridge.onRenderHoveredToolTip(gui, slot, mouseX, mouseY)) {
                 return true;
             }
-            return renderContainerToolTip(gui, mouseX, mouseY);
+            return renderContainerToolTip(gui, slot, mouseX, mouseY);
         }
 
         IAEItemStack aeStack = ((SlotME) slot).getAEStack();
@@ -152,46 +152,84 @@ public final class TerminalTooltipBridge {
             return false;
         }
         String aspectTag = EssentiaFakeItemChecks.tryGetAspectTag(aeStack.createItemStack());
-        String aspectName = aspectTag != null ? aspectTag : "Unknown";
+        if (aspectTag == null) return false;
         List<String> tooltip = new ArrayList<>();
-        tooltip.add("\u00A7b" + "Essentia: " + aspectName);
+        tooltip.add(formatAspectName(aspectTag));
+        tooltip.add(TextFormatting.BLUE.toString() + TextFormatting.ITALIC + "Thaumcraft");
         long amount = aeStack.getStackSize();
-        tooltip.add("\u00A77" + "Amount: " + amount);
+        tooltip.add(TextFormatting.DARK_GRAY + I18n.format("tooltip.ae2enhanced.stored")
+                + " : " + NumberFormat.getNumberInstance(Locale.US).format(amount));
+        if (aeStack.isCraftable()) {
+            tooltip.add(TextFormatting.GRAY + I18n.format("gui.tooltips.appliedenergistics2.ItemsCraftable"));
+        }
         gui.drawHoveringText(tooltip, mouseX, mouseY);
         return true;
     }
 
+    /**
+     * 获取 aspect 的本地化名称(使用 Thaumcraft 自带的 tc.aspect.* 语言键).
+     */
+    private static String formatAspectName(String aspectTag) {
+        String key = "tc.aspect." + aspectTag;
+        String name = I18n.format(key);
+        return key.equals(name) ? aspectTag : name;
+    }
+
     /* ========================= Container (held item) ========================= */
 
-    private static boolean renderContainerToolTip(GuiContainer gui, int mouseX, int mouseY) {
-        if (Ae2fcCompat.AE2FC_LOADED) {
-            return false;
-        }
+    private static boolean renderContainerToolTip(GuiContainer gui, Slot slot, int mouseX, int mouseY) {
         ItemStack mouseItem = gui.mc.player.inventory.getItemStack();
         if (mouseItem.isEmpty()) return false;
 
-        FluidStack fluidInContainer = getFluidFromItem(mouseItem);
-        if (fluidInContainer != null) {
-            renderInjectTooltip(gui, mouseX, mouseY, fluidInContainer.getLocalizedName(), mouseItem.getDisplayName());
-            return true;
-        }
+        if (!Ae2fcCompat.AE2FC_LOADED) {
+            FluidStack fluidInContainer = getFluidFromItem(mouseItem);
+            if (fluidInContainer != null) {
+                renderInjectTooltip(gui, mouseX, mouseY, fluidInContainer.getLocalizedName(), mouseItem.getDisplayName());
+                return true;
+            }
 
-        try {
-            Class<?> iGasItemClass = Class.forName("mekanism.api.gas.IGasItem");
-            if (iGasItemClass.isInstance(mouseItem.getItem())) {
-                Object gas = iGasItemClass.getMethod("getGas", ItemStack.class).invoke(mouseItem.getItem(), mouseItem);
-                if (gas != null) {
-                    int amount = (int) gas.getClass().getField("amount").get(gas);
-                    if (amount > 0) {
-                        Object gasObj = gas.getClass().getMethod("getGas").invoke(gas);
-                        String gasName = (String) gasObj.getClass().getMethod("getLocalizedName").invoke(gasObj);
-                        renderInjectTooltip(gui, mouseX, mouseY, gasName, mouseItem.getDisplayName());
-                        return true;
+            try {
+                Class<?> iGasItemClass = Class.forName("mekanism.api.gas.IGasItem");
+                if (iGasItemClass.isInstance(mouseItem.getItem())) {
+                    Object gas = iGasItemClass.getMethod("getGas", ItemStack.class).invoke(mouseItem.getItem(), mouseItem);
+                    if (gas != null) {
+                        int amount = (int) gas.getClass().getField("amount").get(gas);
+                        if (amount > 0) {
+                            Object gasObj = gas.getClass().getMethod("getGas").invoke(gas);
+                            String gasName = (String) gasObj.getClass().getMethod("getLocalizedName").invoke(gasObj);
+                            renderInjectTooltip(gui, mouseX, mouseY, gasName, mouseItem.getDisplayName());
+                            return true;
+                        }
                     }
                 }
+            } catch (Exception e) {
+                AE2Enhanced.LOGGER.warn("[AE2E] Failed to get gas from container in tooltip", e);
             }
-        } catch (Exception e) {
-            AE2Enhanced.LOGGER.warn("[AE2E] Failed to get gas from container in tooltip", e);
+        }
+
+        // 源质容器(安瓿/源质罐)提示:ae2fc 不处理源质,不受 AE2FC_LOADED 影响
+        if (ItemRegistry.ESSENTIA_DROP != null
+                && EssentiaFakeItemChecks.getEssentiaContainerCapacity(mouseItem) > 0) {
+            String contained = EssentiaFakeItemChecks.tryGetContainerAspectTag(mouseItem);
+            if (contained != null) {
+                // 容器内有源质 → 提示可倾倒回网络
+                renderInjectTooltip(gui, mouseX, mouseY, formatAspectName(contained), mouseItem.getDisplayName());
+                return true;
+            }
+            // 空容器悬停源质条目 → 提示可装填
+            IAEItemStack aeStack = ((SlotME) slot).getAEStack();
+            if (aeStack != null && aeStack.getItem() == ItemRegistry.ESSENTIA_DROP) {
+                String aspectTag = EssentiaFakeItemChecks.tryGetAspectTag(aeStack.createItemStack());
+                if (aspectTag != null) {
+                    String s = " : " + I18n.format("tooltip.ae2enhanced.essentia.fill", formatAspectName(aspectTag))
+                            + TextFormatting.RESET;
+                    List<String> tooltip = new ArrayList<>();
+                    tooltip.add(TextFormatting.DARK_GRAY
+                            + net.minecraft.client.settings.GameSettings.getKeyDisplayString(-100) + s);
+                    gui.drawHoveringText(tooltip, mouseX, mouseY);
+                    return true;
+                }
+            }
         }
 
         return false;

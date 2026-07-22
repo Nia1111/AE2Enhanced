@@ -40,6 +40,49 @@ public final class EssentiaFakeItemChecks {
     }
 
     /**
+     * 获取源质容器(安瓿/源质罐)的容量.
+     * 仅通过注册名字符串判断,不加载任何 Thaumcraft 类.
+     * 硬编码容量:thaumcraft:phial=10,jar_normal/jar_void=250(与 ThE 默认一致).
+     *
+     * @return 容量;不支持的物品返回 0
+     */
+    public static int getEssentiaContainerCapacity(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return 0;
+        net.minecraft.util.ResourceLocation rl = stack.getItem().getRegistryName();
+        if (rl == null) return 0;
+        String name = rl.toString();
+        switch (name) {
+            case "thaumcraft:phial":
+                return 10;
+            case "thaumcraft:jar_normal":
+            case "thaumcraft:jar_void":
+                return 250;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * 反射方法：读取源质容器(IEssentiaContainerItem)中当前存储的 aspect 标签.
+     *
+     * @return 容器内第一个 aspect 的标签;容器为空或不支持时返回 null
+     */
+    public static String tryGetContainerAspectTag(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return null;
+        try {
+            Class<?> containerItemClass = Class.forName("thaumcraft.api.aspects.IEssentiaContainerItem");
+            if (!containerItemClass.isInstance(stack.getItem())) return null;
+            Object aspectList = containerItemClass.getMethod("getAspects", ItemStack.class).invoke(stack.getItem(), stack);
+            if (aspectList == null) return null;
+            Object[] aspects = (Object[]) aspectList.getClass().getMethod("getAspects").invoke(aspectList);
+            if (aspects == null || aspects.length == 0) return null;
+            return (String) aspects[0].getClass().getMethod("getTag").invoke(aspects[0]);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
      * 反射方法：从源质容器(IEssentiaContainerItem)转换为 ItemEssentiaDrop.
      * 本方法不依赖 ThaumicEnergistics 类存在于常量池,全部通过反射访问.
      */

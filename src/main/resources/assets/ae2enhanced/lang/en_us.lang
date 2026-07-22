@@ -554,3 +554,4 @@ tooltip.ae2enhanced.stored=Stored
 tooltip.ae2enhanced.energy.container=%s / %s FE
 tooltip.ae2enhanced.mana.container=%s / %s Mana
 tooltip.ae2enhanced.left_click_network=Left-click to exchange with ME network
+tooltip.ae2enhanced.essentia.fill=Fill with %s

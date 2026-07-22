@@ -553,3 +553,4 @@ tooltip.ae2enhanced.stored=存储
 tooltip.ae2enhanced.energy.container=%s / %s FE
 tooltip.ae2enhanced.mana.container=%s / %s Mana
 tooltip.ae2enhanced.left_click_network=左键与 ME 网络交换
+tooltip.ae2enhanced.essentia.fill=装填 %s

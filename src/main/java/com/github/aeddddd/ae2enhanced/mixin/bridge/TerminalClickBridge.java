@@ -89,6 +89,11 @@ public final class TerminalClickBridge {
                 }
             }
 
+            // 源质容器(安瓿/源质罐)点击:ae2fc 不处理源质,不受 AE2FC_LOADED 影响
+            if (ItemRegistry.ESSENTIA_DROP != null && handleEssentiaMouseClick(s, mouseItem)) {
+                return true;
+            }
+
             if (ItemRegistry.ESSENTIA_DROP != null && EssentiaFakeItemChecks.isEssentiaFakeItem(mouseItem)) {
                 return true;
             }
@@ -123,6 +128,30 @@ public final class TerminalClickBridge {
         }
 
         return false;
+    }
+
+    /**
+     * 手持源质容器(安瓿/源质罐)左键点击槽位.
+     * 点击源质条目 → 装填(容器为空)或倾倒(容器非空);容器非空时点击任意条目也可倾倒.
+     */
+    private static boolean handleEssentiaMouseClick(SlotME s, ItemStack mouseItem) {
+        if (EssentiaFakeItemChecks.getEssentiaContainerCapacity(mouseItem) <= 0) {
+            return false;
+        }
+        boolean isEssentiaSlot = s.getAEStack() != null && s.getAEStack().getItem() == ItemRegistry.ESSENTIA_DROP;
+        boolean hasEssentiaInHand = EssentiaFakeItemChecks.tryGetContainerAspectTag(mouseItem) != null;
+        if (!isEssentiaSlot && !hasEssentiaInHand) {
+            return false;
+        }
+        NBTTagCompound nbt = new NBTTagCompound();
+        if (isEssentiaSlot) {
+            String aspectTag = EssentiaFakeItemChecks.tryGetAspectTag(s.getAEStack().createItemStack());
+            if (aspectTag != null) {
+                nbt.setString("Aspect", aspectTag);
+            }
+        }
+        AE2Enhanced.network.sendToServer(new PacketMEMonitorableAction(PacketMEMonitorableAction.ESSENTIA_WORK, nbt));
+        return true;
     }
 
     private static boolean handleGasMouseClick(SlotME s, ItemStack mouseItem) {
