@@ -15,8 +15,9 @@ out/
 !**/src/test/**/out/
 
 ### Local Libraries ###
-libs/
-!libs/.gitkeep
+# libs/ 中的 jar 为编译依赖, 加入版本控制
+# 非编译依赖的 jar 存放于 libs-unused/, 不加入版本控制
+libs-unused/
 
 ### Eclipse ###
 .apt_generated

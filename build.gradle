@@ -88,6 +88,9 @@ dependencies {
     compileOnly files('libs/extendedcrafting-nomifactory-edition-1.7.0.6.jar')
     compileOnly files('libs/ProjectE-1.12.2-PE1.4.1.jar')
     compileOnly files('libs/ModularMachinery-CE-2.2.2.jar')
+    compileOnly files('libs/FunctionalStorageLegacy-1.0.3-beta.jar')
+    compileOnly files('libs/StorageDrawers-1.12.2-5.5.0.jar')
+    compileOnly files('libs/cells-0.6.2-alpha3.jar')
 
     // Mixin: MixinBooter 本地 jar + 注解处理器
     compile files('libs/!mixinbooter-10.6.jar')
