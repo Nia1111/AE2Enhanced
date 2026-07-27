@@ -8,7 +8,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -22,12 +21,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = AbstractPoweredTaskEntity.class, remap = false)
 public class MixinAbstractPoweredTaskEntity {
 
-    @Shadow
-    protected SlotDefinition slotDefinition;
-
-    @Shadow
-    protected ItemStack[] inventory;
-
     @Inject(method = "taskComplete", at = @At("TAIL"))
     private void ae2enhanced$redirectOutputsAfterTaskComplete(CallbackInfo ci) {
         try {
@@ -36,8 +29,10 @@ public class MixinAbstractPoweredTaskEntity {
             if (world == null || world.isRemote) {
                 return;
             }
-            SlotDefinition slotDefinition = this.slotDefinition;
-            ItemStack[] inventory = this.inventory;
+            // slotDefinition / inventory 声明在父类 AbstractInventoryMachineEntity 上，
+            // 通过 Accessor Mixin 获取（@Shadow 无法跨父类解析字段）.
+            SlotDefinition slotDefinition = ((IAbstractInventoryMachineAccessor) tile).ae2e$getSlotDefinition();
+            ItemStack[] inventory = ((IAbstractInventoryMachineAccessor) tile).ae2e$getInventory();
             BlockPos pos = tile.getPos();
             if (slotDefinition == null || inventory == null) {
                 return;

@@ -34,6 +34,10 @@ compileJava {
     sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8
     options.encoding = 'UTF-8'
 }
+compileTestJava {
+    sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8
+    options.encoding = 'UTF-8'
+}
 
 // ----------------------------------------------------------------------------
 // Minecraft / Forge / Mappings（值见 gradle.properties）
@@ -108,10 +112,40 @@ dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter-api:${project.junit_version}"
     testImplementation "org.junit.jupiter:junit-jupiter-params:${project.junit_version}"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${project.junit_version}"
+
+    // 测试断言与 mock(Java 8 兼容版本)
+    testImplementation "org.assertj:assertj-core:3.11.1"
+    testImplementation "org.mockito:mockito-core:2.23.4"
 }
 
 test {
     useJUnitPlatform()
+    dependsOn 'remapAe2ForTest'
+}
+
+// ----------------------------------------------------------------------------
+// 单元测试环境: 本开发环境运行时 MC 为 MCP 命名(Cleanroom 风格),而 AE2-UEL jar
+// 保留 SRG 名(field_*/func_*),普通 JVM 测试无运行时重映射器,需预先用
+// SpecialSource 将 AE2 jar 从 SRG 重映射到 MCP,并替换 test 运行时 classpath 中的
+// 原始 jar(编译 classpath 不变——javac 不解析 jar 内部的 MC 成员名).
+// ----------------------------------------------------------------------------
+def srgToMcpSrg = "${gradle.gradleUserHomeDir}/caches/minecraft/de/oceanlabs/mcp/mcp_stable/39/1.12.2/srgs/srg-mcp.srg"
+def specialSourceJar = "${gradle.gradleUserHomeDir}/caches/forge_gradle/maven_downloader/net/md-5/SpecialSource/1.8.3/SpecialSource-1.8.3-shaded.jar"
+def ae2McpJar = file("$buildDir/testLibs/ae2-uel-mcp.jar")
+
+task remapAe2ForTest(type: JavaExec) {
+    inputs.file 'libs/ae2-uel-v0.56.7.jar'
+    inputs.file srgToMcpSrg
+    outputs.file ae2McpJar
+    main = 'net.md_5.specialsource.SpecialSource'
+    classpath = files(specialSourceJar)
+    args = ['-i', 'libs/ae2-uel-v0.56.7.jar', '-o', ae2McpJar.absolutePath, '-m', srgToMcpSrg]
+}
+
+afterEvaluate {
+    // 以 MCP 重映射版替换 test 运行时 classpath 中的 SRG 版 AE2 jar
+    sourceSets.test.runtimeClasspath = sourceSets.test.runtimeClasspath
+            .filter { it.name != 'ae2-uel-v0.56.7.jar' } + files(ae2McpJar)
 }
 
 mixin {

@@ -16,7 +16,8 @@ import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
  *   <li>"lock" — 锁定指定排序索引的配方</li>
  *   <li>"unlock" — 解除锁定</li>
  *   <li>"keepPrimary" — 只保留主产物</li>
- *   <li>"doubleAmounts" — 所有数量翻倍</li>
+ *   <li>"deleteDisabled" — 删除所有已禁用配方</li>
+ *   <li>其他 — 直接转发给 Tile 的小按钮操作(multiply2, divide2, clearInputs 等)</li>
  * </ul>
  */
 public class PacketSmartPatternModify implements IMessage {
@@ -85,9 +86,6 @@ public class PacketSmartPatternModify implements IMessage {
                             break;
                         case "keepPrimary":
                             tile.modifyLockedRecipe("keepPrimary");
-                            break;
-                        case "doubleAmounts":
-                            tile.modifyLockedRecipe("doubleAmounts");
                             break;
                         case "deleteDisabled":
                             tile.deleteDisabledRecipes();

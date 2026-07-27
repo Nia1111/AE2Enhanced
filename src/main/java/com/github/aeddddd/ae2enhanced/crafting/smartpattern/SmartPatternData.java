@@ -174,22 +174,34 @@ public class SmartPatternData {
     }
 
     /**
-     * 对指定排序索引的配方执行修改操作.
-     * 操作后会立刻重新检测冲突并刷新显示顺序.
+     * 追加一个新配方(合并已编码样板时使用).
+     * 完全重复(输入输出逐项相同)的配方会被跳过.
+     *
+     * @return true 表示已追加,false 表示重复被跳过
      */
-    public void modifyRecipe(int sortedIndex, @Nonnull String action) {
-        int original = getDisplayIndex(sortedIndex);
-        if (original < 0 || original >= recipes.size()) return;
-        SmartRecipe recipe = recipes.get(original);
-        switch (action) {
-            case "keepPrimary":
-                recipe.keepPrimary();
-                break;
-            case "doubleAmounts":
-                recipe.doubleAmounts();
-                break;
+    public boolean appendRecipe(@Nonnull SmartRecipe recipe) {
+        for (SmartRecipe existing : recipes) {
+            if (recipesEqual(existing, recipe)) {
+                return false;
+            }
         }
+        recipes.add(recipe);
         detectConflicts();
+        return true;
+    }
+
+    private static boolean recipesEqual(@Nonnull SmartRecipe a, @Nonnull SmartRecipe b) {
+        return stacksEqual(a.getInputs(), b.getInputs()) && stacksEqual(a.getOutputs(), b.getOutputs());
+    }
+
+    private static boolean stacksEqual(@Nonnull IAEItemStack[] a, @Nonnull IAEItemStack[] b) {
+        if (a.length != b.length) return false;
+        for (int i = 0; i < a.length; i++) {
+            if (a[i] == null && b[i] == null) continue;
+            if (a[i] == null || b[i] == null) return false;
+            if (!a[i].equals(b[i]) || a[i].getStackSize() != b[i].getStackSize()) return false;
+        }
+        return true;
     }
 
     /**

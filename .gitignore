@@ -1,81 +1,29 @@
-.gradle
-build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
-*md
+# ============================================================================
+# AE2Enhanced .gitignore
+# 策略: 白名单 —— 仅编译所需内容 + 两份 README + LICENSE 纳入版本控制
+# 文档(docs/, github-wiki/)、研究资料(research/)、构建产物(build/, run*/),
+# IDE 配置(.idea/, .vscode/, .trae/)、运行时日志等一律排除
+# ============================================================================
 
-### IntelliJ IDEA ###
-.idea/
-*.iws
-*.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
+# 默认忽略根目录下所有内容
+/*
 
-### Local Libraries ###
-# libs/ 中的 jar 为编译依赖, 加入版本控制
-# 非编译依赖的 jar 存放于 libs-unused/, 不加入版本控制
-libs-unused/
+# --- 构建系统 ---
+!/.gitignore
+!/build.gradle
+!/settings.gradle
+!/gradle.properties
+!/gradlew
+!/gradlew.bat
+!/gradle/
 
-### Eclipse ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
+# --- 源码与资源 ---
+!/src/
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
+# --- 本地编译依赖 (libs/ 中的 jar 为编译依赖, 加入版本控制) ---
+!/libs/
 
-### VS Code ###
-.vscode/
-*.code-workspace
-
-
-!README.md
-!README_zh.md
-### Minecraft Modding ###
-run/
-*.log
-hs_err_pid*
-replay_pid*
-eclipse/
-runClient/
-runServer/
-
-xml/
-*.css
-*.js
-*.html
-zone/
-*.txt
-
-
-### Bytecode / Decompiled classes ###
-*.class
-
-### Inspection Reports ###
-inspection_reports/
-
-### Decompiled / Temp ###
-*decompile*/
-
-
-### Runtime generated (Mixin refmaps / decompiled classes) ###
-
-log/
-
-
-docs/
-research/
+# --- 项目说明与许可 ---
+!/README.md
+!/README_zh.md
+!/LICENSE

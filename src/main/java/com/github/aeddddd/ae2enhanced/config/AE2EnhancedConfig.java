@@ -227,6 +227,17 @@ public class AE2EnhancedConfig {
         })
         @Config.RangeInt(min = 1, max = Integer.MAX_VALUE)
         public int maxActiveOrders = 8;
+
+        @Config.Comment({
+            "Enable special crafting plan support (self-referencing and cyclic",
+            "productive recipes such as A+2B -> 2A or A -> 2B, B -> A).",
+            "Uses a closed-form solver instead of the vanilla per-craft expansion",
+            "that would hang on such recipes. Plans are executed exclusively on",
+            "Supercausal Computation Core CPUs.",
+            "Toggle at runtime with: /ae2e specialcrafting <enable|disable|status>",
+            "Default: true"
+        })
+        public boolean specialCrafting = true;
     }
 
     public static class Terminal {
@@ -386,24 +397,6 @@ public class AE2EnhancedConfig {
             "minecraft:furnace",
             "extendedcrafting:crafting_table_base"
         };
-
-        @Config.Comment({
-            "Garbage collection interval for orphaned Smart Pattern files (minutes).",
-            "The collector scans ME interfaces for referenced patterns and deletes",
-            "files that are both unreferenced and older than the newest file by gcMaxAgeDays.",
-            "Set to 0 to disable automatic garbage collection entirely.",
-            "Range: 0 ~ 10080, Default: 1440 (24 hours)"
-        })
-        @Config.RangeInt(min = 0, max = 10080)
-        public int gcIntervalMinutes = 1440;
-
-        @Config.Comment({
-            "Maximum age of an unreferenced Smart Pattern file before deletion (days).",
-            "Files referenced by any loaded ME interface are exempt from age checks.",
-            "Range: 1 ~ 365, Default: 7"
-        })
-        @Config.RangeInt(min = 1, max = 365)
-        public int gcMaxAgeDays = 7;
     }
 
     public static class BlackHole {

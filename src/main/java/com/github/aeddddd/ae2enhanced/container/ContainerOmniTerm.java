@@ -7,7 +7,6 @@ import appeng.api.storage.ITerminalHost;
 import appeng.api.storage.channels.IItemStorageChannel;
 import appeng.api.implementations.ICraftingPatternItem;
 import appeng.api.networking.crafting.ICraftingPatternDetails;
-import appeng.api.networking.storage.IStorageGrid;
 import appeng.api.storage.data.IAEItemStack;
 import appeng.container.guisync.GuiSync;
 import appeng.container.implementations.ContainerMEMonitorable;
@@ -30,7 +29,6 @@ import appeng.tile.inventory.AppEngInternalInventory;
 import appeng.util.Platform;
 import appeng.util.inv.IAEAppEngInventory;
 import appeng.util.inv.InvOperation;
-import appeng.util.prioritylist.IPartitionList;
 import com.github.aeddddd.ae2enhanced.client.gui.slot.RCSlotFakeCraftingMatrix;
 import com.github.aeddddd.ae2enhanced.client.gui.slot.RCSlotPatternOutputs;
 import com.github.aeddddd.ae2enhanced.client.gui.slot.SlotHighCapacity;
@@ -55,7 +53,6 @@ import net.minecraftforge.items.wrapper.PlayerInvWrapper;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniInventoryUpdate;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniSearchRequest;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniSearchResult;
-import com.github.aeddddd.ae2enhanced.storage.ItemDescriptor;
 import com.github.aeddddd.ae2enhanced.storage.ItemStorageAdapter;
 import com.github.aeddddd.ae2enhanced.storage.SimpleMEMonitor;
 import com.github.aeddddd.ae2enhanced.tile.TileHyperdimensionalController;
@@ -66,10 +63,8 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * 全能无线终端 Container —— 物品库 + 合成栏 + 81槽位编码样板 + 右侧存储
@@ -134,13 +129,13 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
     // === 本地 monitor 引用（父类 monitor 为 private，无法直接访问）===
     private final appeng.api.storage.IMEMonitor<IAEItemStack> omniMonitor;
 
-    // === 缓存 adapter 引用，避免 postChange 高频触发时反复遍历网格节点 ===
-    private ItemStorageAdapter cachedAdapter = null;
-
     // === Omni Terminal 自定义物品同步状态 ===
     private final appeng.api.storage.data.IItemList<IAEItemStack> omniItems =
             AEApi.instance().storage().getStorageChannel(IItemStorageChannel.class).createList();
     private boolean omniNeedsFullSync = false;
+    private boolean omniIsFullSyncing = false;
+    private int omniFullSyncOffset = 0;
+    private static final int OMNI_FULL_SYNC_BATCH = 500;
 
     // === Item ID 映射表（per-session）===
     private final Object2IntOpenHashMap<IAEItemStack> omniItemToId = new Object2IntOpenHashMap<>();
@@ -180,14 +175,6 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
         }
 
         this.rightPatternStorage = this.omniStorage.getRightStorageInventory();
-
-        // R3: 注册打开的玩家到 ItemStorageAdapter（用于 UPDATE_NOTIFY）
-        if (ip.player instanceof net.minecraft.entity.player.EntityPlayerMP) {
-            ItemStorageAdapter adapter = findItemStorageAdapter();
-            if (adapter != null) {
-                adapter.addOpenPlayer((net.minecraft.entity.player.EntityPlayerMP) ip.player);
-            }
-        }
         this.rightUpgradeStorage = this.omniStorage.getUpgradeInventory();
 
         this.setupCraftingArea(ip, host);
@@ -669,36 +656,6 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
         encodedValue.setTag("out", tagOut);
         encodedValue.setBoolean("crafting", this.patternCraftMode);
         encodedValue.setBoolean("substitute", this.substitute);
-
-        // ae2fc processing 流体样板使用 FluidPatternDetails，它读取 Inputs/Outputs tag
-        // 必须使用 AEItemStack NBT 格式（包含 "Cnt" 字段），否则 stackSize 会被解析为 0
-        if (hasFluid && !this.patternCraftMode && com.github.aeddddd.ae2enhanced.util.compat.Ae2fcFluidHelper.isLoaded()) {
-            NBTTagList inputsTag = new NBTTagList();
-            NBTTagList outputsTag = new NBTTagList();
-            for (ItemStack i : in) {
-                if (!i.isEmpty()) {
-                    appeng.util.item.AEItemStack aeStack = appeng.util.item.AEItemStack.fromItemStack(i);
-                    if (aeStack != null) {
-                        NBTTagCompound stackTag = new NBTTagCompound();
-                        aeStack.writeToNBT(stackTag);
-                        inputsTag.appendTag(stackTag);
-                    }
-                }
-            }
-            for (ItemStack i : out) {
-                if (!i.isEmpty()) {
-                    appeng.util.item.AEItemStack aeStack = appeng.util.item.AEItemStack.fromItemStack(i);
-                    if (aeStack != null) {
-                        NBTTagCompound stackTag = new NBTTagCompound();
-                        aeStack.writeToNBT(stackTag);
-                        outputsTag.appendTag(stackTag);
-                    }
-                }
-            }
-            encodedValue.setTag("Inputs", inputsTag);
-            encodedValue.setTag("Outputs", outputsTag);
-        }
-
         output.setTagCompound(encodedValue);
 
         if (moveToInventory) {
@@ -710,10 +667,10 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
         }
 
         // 装配枢纽自动上传：如果 patternSlotOUT 中有合成样板,尝试上传到同一 ME 网络中的装配枢纽
+        // shift 点击（moveToInventory）路径不上传；不能用 isSneaking() 判定，潜行状态与点击包存在同步竞态
         ItemStack patternInSlot = this.patternSlotOUT.getStack();
-        if (!patternInSlot.isEmpty() && this.getPlayerInv().player != null
-                && !this.getPlayerInv().player.world.isRemote
-                && !this.getPlayerInv().player.isSneaking()) {
+        if (!moveToInventory && !patternInSlot.isEmpty() && this.getPlayerInv().player != null
+                && !this.getPlayerInv().player.world.isRemote) {
             appeng.api.networking.IGridNode node = this.getNetworkNode();
             appeng.api.networking.IGrid grid = (node != null) ? node.getGrid() : null;
             if (com.github.aeddddd.ae2enhanced.util.compat.AssemblyAutoUploadHelper.tryUploadPattern(
@@ -768,8 +725,7 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
         if (output.isEmpty()) {
             return false;
         }
-        // ae2fc 的流体/大物品样板继承自 ItemEncodedPattern，isSameAs 不匹配子类
-        return output.getItem() instanceof appeng.items.misc.ItemEncodedPattern
+        return AEApi.instance().definitions().items().encodedPattern().isSameAs(output)
                 || AEApi.instance().definitions().materials().blankPattern().isSameAs(output);
     }
 
@@ -1224,14 +1180,6 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
 
     @Override
     public void onContainerClosed(EntityPlayer playerIn) {
-        // R3: 从 ItemStorageAdapter 的打开玩家列表中移除
-        if (playerIn instanceof net.minecraft.entity.player.EntityPlayerMP) {
-            ItemStorageAdapter adapter = this.cachedAdapter != null ? this.cachedAdapter : findItemStorageAdapter();
-            if (adapter != null) {
-                adapter.removeOpenPlayer((net.minecraft.entity.player.EntityPlayerMP) playerIn);
-            }
-        }
-        this.cachedAdapter = null; // 清空缓存，避免持有过期引用
         super.onContainerClosed(playerIn);
         this.saveStateToItemNBT();
         if (this.omniData != null) {
@@ -1278,7 +1226,7 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
 
     @Override
     public ItemStack[] getViewCells() {
-        return super.getViewCells();
+        return new ItemStack[0];
     }
 
     // ================== 物品库更新回调 ==================
@@ -1346,13 +1294,6 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
         for (IAEItemStack is : change) {
             this.omniItems.add(is);
         }
-        // 外部 ME 网络存储变化时，通知 adapter 刷新 sortedList
-        if (this.cachedAdapter == null) {
-            this.cachedAdapter = findItemStorageAdapter();
-        }
-        if (this.cachedAdapter != null) {
-            this.cachedAdapter.markSortedListDirty();
-        }
     }
 
     /**
@@ -1394,6 +1335,8 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
         this.omniNextItemId = 1;
 
         this.omniNeedsFullSync = true;
+        this.omniIsFullSyncing = true;
+        this.omniFullSyncOffset = 0;
     }
 
     /**
@@ -1522,15 +1465,15 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
         super.detectAndSendChanges();
         if (!Platform.isServer()) return;
 
-        // === R3: Omni Terminal 增量更新通知 ===
-        // 客户端主动发送 PAGE_REQUEST，服务端只需在变化时通知客户端刷新
-        boolean hasChanges = this.omniNeedsFullSync || !this.omniItems.isEmpty();
-        if (hasChanges) {
-            ItemStorageAdapter adapter = findItemStorageAdapter();
-            if (adapter != null) {
-                adapter.onStorageChanged(this.getPlayerInv().player.world.getTotalWorldTime());
-            }
-            this.omniNeedsFullSync = false;
+        // === Omni Terminal 自定义物品同步 ===
+        if (this.omniIsFullSyncing) {
+            this.sendOmniFullSyncBatch();
+        } else if (this.omniNeedsFullSync) {
+            this.omniIsFullSyncing = true;
+            this.omniFullSyncOffset = 0;
+            this.sendOmniFullSyncBatch();
+        } else if (!this.omniItems.isEmpty()) {
+            this.sendOmniDeltaSync();
             this.omniItems.resetStatus();
         }
 
@@ -1652,127 +1595,88 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
         return id;
     }
 
-    // R3: sendOmniFullSyncBatch() / sendOmniDeltaSync() 已删除
-    // 客户端主动发送 PAGE_REQUEST，服务端通过 UPDATE_NOTIFY 通知变化
+    private void sendOmniFullSyncBatch() {
+        appeng.api.storage.data.IItemList<IAEItemStack> storage = this.omniMonitor.getStorageList();
+        List<PacketOmniInventoryUpdate.Entry> batch = new ArrayList<>();
+        int count = 0;
+
+        for (IAEItemStack stack : storage) {
+            if (count++ < this.omniFullSyncOffset) continue;
+            if (batch.size() >= OMNI_FULL_SYNC_BATCH) break;
+
+            int id = this.getOrAllocateId(stack);
+            batch.add(new PacketOmniInventoryUpdate.Entry(id, stack, stack.getStackSize()));
+        }
+
+
+
+        if (batch.isEmpty()) {
+            this.omniIsFullSyncing = false;
+            this.omniNeedsFullSync = false;
+            this.omniFullSyncOffset = 0;
+
+            // 发送 FULL_END 通知客户端同步完成
+            com.github.aeddddd.ae2enhanced.AE2Enhanced.network.sendTo(
+                    new PacketOmniInventoryUpdate(PacketOmniInventoryUpdate.Mode.FULL_END, java.util.Collections.emptyList()),
+                    (net.minecraft.entity.player.EntityPlayerMP) this.getPlayerInv().player);
+            return;
+        }
+
+        PacketOmniInventoryUpdate.Mode mode =
+                (this.omniFullSyncOffset == 0)
+                        ? PacketOmniInventoryUpdate.Mode.FULL_INIT
+                        : PacketOmniInventoryUpdate.Mode.FULL_CONTINUE;
+
+        com.github.aeddddd.ae2enhanced.AE2Enhanced.network.sendTo(
+                new PacketOmniInventoryUpdate(mode, batch),
+                (net.minecraft.entity.player.EntityPlayerMP) this.getPlayerInv().player);
+
+        this.omniFullSyncOffset += batch.size();
+    }
+
+    private void sendOmniDeltaSync() {
+        List<PacketOmniInventoryUpdate.Entry> counts = new ArrayList<>();
+        List<PacketOmniInventoryUpdate.Entry> registers = new ArrayList<>();
+        appeng.api.storage.data.IItemList<IAEItemStack> storage = this.omniMonitor.getStorageList();
+
+        for (IAEItemStack stack : this.omniItems) {
+            boolean isNew = (this.omniItemToId.getInt(stack) == 0);
+            int id = this.getOrAllocateId(stack);
+            IAEItemStack current = storage.findPrecise(stack);
+
+            if (isNew) {
+                // 新类型：发送 REGISTER（带 definition）
+                registers.add(new PacketOmniInventoryUpdate.Entry(
+                        id, current != null ? current : stack, current != null ? current.getStackSize() : 0));
+            } else {
+                // 已有类型：发送 DELTA_COUNT（仅 id + count）
+                long count = (current != null) ? current.getStackSize() : 0;
+                counts.add(new PacketOmniInventoryUpdate.Entry(id, null, count));
+            }
+        }
+
+        // 先发送 REGISTER（如有），再发送 DELTA_COUNT
+        if (!registers.isEmpty()) {
+            for (PacketOmniInventoryUpdate.Entry reg : registers) {
+                com.github.aeddddd.ae2enhanced.AE2Enhanced.network.sendTo(
+                        new PacketOmniInventoryUpdate(
+                                PacketOmniInventoryUpdate.Mode.ITEM_REGISTER,
+                                java.util.Collections.singletonList(reg)),
+                        (net.minecraft.entity.player.EntityPlayerMP) this.getPlayerInv().player);
+            }
+        }
+        if (!counts.isEmpty()) {
+            com.github.aeddddd.ae2enhanced.AE2Enhanced.network.sendTo(
+                    new PacketOmniInventoryUpdate(PacketOmniInventoryUpdate.Mode.DELTA_COUNT, counts),
+                    (net.minecraft.entity.player.EntityPlayerMP) this.getPlayerInv().player);
+        }
+    }
 
     // ================== 服务端搜索（基于超维度仓储索引）====================
 
     /**
      * 处理客户端发来的搜索请求，利用超维度仓储的预构建索引快速筛选。
      */
-    /**
-     * R3: 处理客户端发来的分页请求。
-     */
-    public void handlePageRequest(com.github.aeddddd.ae2enhanced.network.packet.PacketOmniPageRequest request) {
-        ItemStorageAdapter adapter = findItemStorageAdapter();
-        ItemStorageAdapter.PageResult result;
-
-        IPartitionList<IAEItemStack> viewCellFilter = appeng.items.storage.ItemViewCell.createFilter(this.getViewCells());
-        Set<ItemDescriptor> clientFilter = null;
-        List<ItemDescriptor> requestFilter = request.getClientFilter();
-        if (requestFilter != null) {
-            clientFilter = new HashSet<>(requestFilter);
-        }
-
-        if (adapter != null) {
-            result = adapter.query(
-                request.getSearchString(),
-                request.getSearchMode(),
-                request.getSortBy(),
-                request.getSortDir(),
-                request.getViewMode(),
-                request.getOffset(),
-                request.getLimit(),
-                viewCellFilter,
-                clientFilter
-            );
-        } else {
-            // Fallback: 遍历 omniMonitor.getStorageList()
-            result = fallbackPageQuery(request, viewCellFilter, clientFilter);
-        }
-
-        // 构建响应
-        List<com.github.aeddddd.ae2enhanced.network.packet.PacketOmniPageResult.Entry> entries =
-                new ArrayList<>(result.items.size());
-        for (IAEItemStack stack : result.items) {
-            int id = this.getOrAllocateId(stack);
-            entries.add(new com.github.aeddddd.ae2enhanced.network.packet.PacketOmniPageResult.Entry(
-                    id, stack, stack.getStackSize()));
-        }
-
-        com.github.aeddddd.ae2enhanced.network.packet.PacketOmniPageResult response =
-                new com.github.aeddddd.ae2enhanced.network.packet.PacketOmniPageResult(
-                        result.totalCount, result.offset, entries);
-
-        com.github.aeddddd.ae2enhanced.AE2Enhanced.network.sendTo(
-                response,
-                (net.minecraft.entity.player.EntityPlayerMP) this.getPlayerInv().player);
-    }
-
-    private ItemStorageAdapter.PageResult fallbackPageQuery(
-            com.github.aeddddd.ae2enhanced.network.packet.PacketOmniPageRequest request,
-            IPartitionList<IAEItemStack> viewCellFilter,
-            Set<ItemDescriptor> clientFilter) {
-        appeng.api.storage.data.IItemList<IAEItemStack> list = this.omniMonitor.getStorageList();
-        List<IAEItemStack> all = new ArrayList<>();
-        for (IAEItemStack stack : list) {
-            if (!stack.isMeaningful()) continue;
-            all.add(stack.copy());
-        }
-
-        // ViewMode / ViewCell / ClientFilter 过滤
-        List<IAEItemStack> filtered = new ArrayList<>();
-        for (IAEItemStack stack : all) {
-            if (request.getViewMode() == 2 && !stack.isCraftable()) continue;
-            if (request.getViewMode() == 0 && stack.getStackSize() == 0L) continue;
-            if (viewCellFilter != null && !viewCellFilter.isListed(stack)) continue;
-            if (clientFilter != null && !clientFilter.contains(new ItemDescriptor(stack.getDefinition().copy()))) continue;
-            filtered.add(stack);
-        }
-
-        // 排序
-        appeng.api.config.SortOrder sortBy = appeng.api.config.SortOrder.values()[request.getSortBy()];
-        appeng.api.config.SortDir sortDir = appeng.api.config.SortDir.values()[request.getSortDir()];
-        Comparator<IAEItemStack> c = getSearchComparator(sortBy);
-        appeng.util.ItemSorters.setDirection(sortDir);
-        appeng.util.ItemSorters.init();
-        filtered.sort(c);
-
-        // 搜索过滤
-        String search = request.getSearchString();
-        if (search != null && !search.isEmpty()) {
-            String query = search.toLowerCase();
-            List<IAEItemStack> searched = new ArrayList<>();
-            boolean isModSearch = request.getSearchMode() == 1;
-            boolean fuzzyModSearch = isModSearch
-                    && (com.github.aeddddd.ae2enhanced.config.AE2EnhancedConfig.terminal.modSearchFuzzyThreshold <= 0
-                    || all.size() <= com.github.aeddddd.ae2enhanced.config.AE2EnhancedConfig.terminal.modSearchFuzzyThreshold);
-            for (IAEItemStack stack : filtered) {
-                if (isModSearch) {
-                    String modId = stack.asItemStackRepresentation().getItem().getRegistryName().getNamespace().toLowerCase();
-                    if (fuzzyModSearch ? modId.contains(query) : modId.equals(query)) {
-                        searched.add(stack);
-                    }
-                } else {
-                    if (stack.asItemStackRepresentation().getDisplayName().toLowerCase().contains(query)) {
-                        searched.add(stack);
-                    }
-                }
-            }
-            filtered = searched;
-        }
-
-        int total = filtered.size();
-        int start = Math.min(request.getOffset(), total);
-        int end = Math.min(request.getOffset() + request.getLimit(), total);
-        List<IAEItemStack> page = new ArrayList<>(Math.max(0, end - start));
-        for (int i = start; i < end; i++) {
-            page.add(filtered.get(i));
-        }
-
-        return new ItemStorageAdapter.PageResult(total, request.getOffset(), page);
-    }
-
     public void handleSearchRequest(PacketOmniSearchRequest request) {
         ItemStorageAdapter adapter = findItemStorageAdapter();
         List<IAEItemStack> results;
@@ -1821,60 +1725,30 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
     }
 
     private ItemStorageAdapter findItemStorageAdapter() {
-        ItemStorageAdapter adapter = null;
-
         // 方案 1：如果 omniMonitor 直接是 SimpleMEMonitor
         if (this.omniMonitor instanceof SimpleMEMonitor) {
-            adapter = ((SimpleMEMonitor) this.omniMonitor).getAdapter();
+            return ((SimpleMEMonitor) this.omniMonitor).getAdapter();
         }
 
         // 方案 2：遍历网络节点找到 TileHyperdimensionalController
-        if (adapter == null) {
-            try {
-                appeng.api.networking.IGridNode node = getNetworkNode();
-                if (node == null || node.getGrid() == null) return null;
-                appeng.api.networking.IGrid grid = node.getGrid();
+        try {
+            appeng.api.networking.IGridNode node = getNetworkNode();
+            if (node == null || node.getGrid() == null) return null;
+            appeng.api.networking.IGrid grid = node.getGrid();
 
-                for (appeng.api.networking.IGridNode gridNode : grid.getNodes()) {
-                    Object machine = gridNode.getMachine();
-                    if (machine instanceof TileHyperdimensionalController) {
-                        TileHyperdimensionalController controller = (TileHyperdimensionalController) machine;
-                        if (controller.isFormed()) {
-                            adapter = controller.getItemAdapter();
-                            break;
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.error("[AE2E] Failed to find ItemStorageAdapter", e);
-            }
-        }
-
-        // 将网络 monitor 设为 adapter 的外部存储源，确保终端能看到全部物品。
-        // 如果 omniMonitor 只是 SimpleMEMonitor（即 adapter 自身包装），则尝试从网格获取真正的网络物品 monitor，
-        // 以便拿到 crafting grid 注入的 craftable 标记。
-        if (adapter != null) {
-            appeng.api.storage.IMEMonitor<IAEItemStack> desiredExternal = this.omniMonitor;
-            if (desiredExternal instanceof SimpleMEMonitor) {
-                appeng.api.networking.IGridNode node = getNetworkNode();
-                if (node != null && node.getGrid() != null) {
-                    appeng.api.networking.IGrid grid = node.getGrid();
-                    IStorageGrid storageGrid = grid.getCache(IStorageGrid.class);
-                    if (storageGrid != null) {
-                        appeng.api.storage.IMEMonitor<IAEItemStack> netMonitor = storageGrid.getInventory(
-                                AEApi.instance().storage().getStorageChannel(IItemStorageChannel.class));
-                        if (netMonitor != null) {
-                            desiredExternal = netMonitor;
-                        }
+            for (appeng.api.networking.IGridNode gridNode : grid.getNodes()) {
+                Object machine = gridNode.getMachine();
+                if (machine instanceof TileHyperdimensionalController) {
+                    TileHyperdimensionalController controller = (TileHyperdimensionalController) machine;
+                    if (controller.isFormed()) {
+                        return controller.getItemAdapter();
                     }
                 }
             }
-            if (adapter.getExternalMonitor() != desiredExternal) {
-                adapter.setExternalMonitor(desiredExternal);
-            }
+        } catch (Exception e) {
+            com.github.aeddddd.ae2enhanced.AE2Enhanced.LOGGER.error("[AE2E] Failed to find ItemStorageAdapter", e);
         }
-
-        return adapter;
+        return null;
     }
 
     private List<IAEItemStack> fallbackSearch(PacketOmniSearchRequest request) {
@@ -1883,33 +1757,21 @@ public class ContainerOmniTerm extends ContainerMEMonitorable
         List<IAEItemStack> results = new ArrayList<>();
         String query = request.getQuery().toLowerCase();
 
-        boolean fuzzyModSearch = request.isModSearch()
-                && (com.github.aeddddd.ae2enhanced.config.AE2EnhancedConfig.terminal.modSearchFuzzyThreshold <= 0
-                || getMonitorItemCount() <= com.github.aeddddd.ae2enhanced.config.AE2EnhancedConfig.terminal.modSearchFuzzyThreshold);
-
         for (IAEItemStack stack : list) {
             if (!stack.isMeaningful()) continue;
             if (request.isModSearch()) {
-                String modId = stack.asItemStackRepresentation().getItem().getRegistryName().getNamespace().toLowerCase();
-                if (fuzzyModSearch ? modId.contains(query) : modId.equals(query)) {
+                String modId = Platform.getModId(stack).toLowerCase();
+                if (modId.contains(query)) {
                     results.add(stack.copy());
                 }
             } else {
-                String name = stack.asItemStackRepresentation().getDisplayName().toLowerCase();
+                String name = Platform.getItemDisplayName(stack).toLowerCase();
                 if (name.contains(query)) {
                     results.add(stack.copy());
                 }
             }
         }
         return results;
-    }
-
-    private int getMonitorItemCount() {
-        int count = 0;
-        for (IAEItemStack stack : this.omniMonitor.getStorageList()) {
-            if (stack.isMeaningful()) count++;
-        }
-        return count;
     }
 
     private static Comparator<IAEItemStack> getSearchComparator(appeng.api.config.SortOrder sortBy) {

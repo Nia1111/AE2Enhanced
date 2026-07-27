@@ -13,7 +13,6 @@ import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidTankProperties;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -30,12 +29,6 @@ import java.lang.reflect.Field;
 @Mixin(value = TileMachineBase.class, remap = false)
 public class MixinTileMachineBase {
 
-    @Shadow
-    protected SlotConfig slotConfig;
-
-    @Shadow
-    protected ItemStack[] inventory;
-
     @Inject(method = "func_73660_a", at = @At(value = "INVOKE", target = "Lcofh/thermalexpansion/block/machine/TileMachineBase;transferOutput()V"))
     private void ae2enhanced$redirectOutputsBeforeTransfer(CallbackInfo ci) {
         try {
@@ -44,8 +37,10 @@ public class MixinTileMachineBase {
             if (world == null || world.isRemote) {
                 return;
             }
-            SlotConfig slotConfig = this.slotConfig;
-            ItemStack[] inventory = this.inventory;
+            // slotConfig / inventory 分别声明在祖父类 TileReconfigurable / TileInventory 上，
+            // 通过 Accessor Mixin 获取（@Shadow 无法跨父类解析字段）.
+            SlotConfig slotConfig = ((ITileReconfigurableAccessor) tile).ae2e$getSlotConfig();
+            ItemStack[] inventory = ((ITileInventoryAccessor) tile).ae2e$getInventory();
             BlockPos pos = tile.getPos();
             if (slotConfig == null || inventory == null) {
                 return;

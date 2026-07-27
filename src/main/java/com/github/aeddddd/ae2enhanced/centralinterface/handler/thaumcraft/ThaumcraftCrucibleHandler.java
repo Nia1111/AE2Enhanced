@@ -24,15 +24,7 @@ import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraft.util.EnumParticleTypes;
-import thaumcraft.api.ThaumcraftApi;
-import thaumcraft.api.aspects.Aspect;
-import thaumcraft.api.aspects.AspectList;
-import thaumcraft.api.capabilities.IPlayerKnowledge;
-import thaumcraft.api.capabilities.ThaumcraftCapabilities;
-import thaumcraft.api.crafting.CrucibleRecipe;
-import thaumcraft.api.crafting.IThaumcraftRecipe;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -200,9 +192,9 @@ public class ThaumcraftCrucibleHandler implements IRemoteHandler, IVirtualBatchC
     @Override
     public boolean canCraftVirtually(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs) {
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return false;
-        CrucibleRecipe recipe = ThaumcraftApi.getCrucibleRecipe(outputs[0].createItemStack());
+        Object recipe = ThaumcraftReflectionHelper.getCrucibleRecipe(outputs[0].createItemStack());
         if (recipe == null) return false;
-        Ingredient catalyst = recipe.getCatalyst();
+        Ingredient catalyst = ThaumcraftReflectionHelper.crucibleGetCatalyst(recipe);
         if (catalyst == null) return false;
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             if (catalyst.apply(ingredients.getStackInSlot(i))) return true;
@@ -228,10 +220,10 @@ public class ThaumcraftCrucibleHandler implements IRemoteHandler, IVirtualBatchC
     public List<IAEStack> getVirtualCost(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs, long count) {
         List<IAEStack> costs = new ArrayList<>();
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return costs;
-        CrucibleRecipe recipe = ThaumcraftApi.getCrucibleRecipe(outputs[0].createItemStack());
+        Object recipe = ThaumcraftReflectionHelper.getCrucibleRecipe(outputs[0].createItemStack());
         if (recipe == null) return costs;
 
-        Ingredient catalyst = recipe.getCatalyst();
+        Ingredient catalyst = ThaumcraftReflectionHelper.crucibleGetCatalyst(recipe);
         if (catalyst != null) {
             for (int i = 0; i < ingredients.getSizeInventory(); i++) {
                 ItemStack stack = ingredients.getStackInSlot(i);
@@ -244,9 +236,9 @@ public class ThaumcraftCrucibleHandler implements IRemoteHandler, IVirtualBatchC
             }
         }
 
-        AspectList aspects = recipe.getAspects();
-        if (aspects != null && aspects.size() > 0) {
-            List<IAEStack> essentia = createEssentiaCosts(aspects, count);
+        Object aspects = ThaumcraftReflectionHelper.crucibleGetAspects(recipe);
+        if (aspects != null && ThaumcraftReflectionHelper.aspectListSize(aspects) > 0) {
+            List<IAEStack> essentia = ThaumcraftReflectionHelper.createEssentiaCosts(aspects, count);
             if (essentia == null) {
                 return null;
             }
@@ -261,37 +253,6 @@ public class ThaumcraftCrucibleHandler implements IRemoteHandler, IVirtualBatchC
         List<ItemStack> products = new ArrayList<>();
         if (!canCraftVirtually(world, pos, ingredients, outputs)) return products;
         return scaleOutputsByCount(outputs, count);
-    }
-
-    /**
-     * 通过反射创建源质消耗栈，避免在 ThaumicEnergistics 未安装时类加载失败。
-     *
-     * @return 源质消耗列表；若 ThaumicEnergistics 缺失或任意源质栈无法创建则返回 null
-     */
-    private List<IAEStack> createEssentiaCosts(AspectList aspects, long count) {
-        List<IAEStack> costs = new ArrayList<>();
-        try {
-            Class<?> essentiaStackClass = Class.forName("thaumicenergistics.api.EssentiaStack");
-            Class<?> aeEssentiaStackClass = Class.forName("thaumicenergistics.integration.appeng.AEEssentiaStack");
-            Constructor<?> ctor = essentiaStackClass.getConstructor(Aspect.class, int.class);
-            Method fromEssentiaStack = aeEssentiaStackClass.getMethod("fromEssentiaStack", essentiaStackClass);
-
-            for (Aspect aspect : aspects.getAspects()) {
-                if (aspect == null) continue;
-                int amount = aspects.getAmount(aspect);
-                if (amount <= 0) continue;
-                Object essStack = ctor.newInstance(aspect, (int) ((long) amount * count));
-                Object aeStack = fromEssentiaStack.invoke(null, essStack);
-                if (aeStack == null) {
-                    return null;
-                }
-                costs.add((IAEStack) aeStack);
-            }
-        } catch (Exception e) {
-            // ThaumicEnergistics 未安装或版本不兼容
-            return null;
-        }
-        return costs;
     }
 
     @Override
@@ -393,11 +354,10 @@ public class ThaumcraftCrucibleHandler implements IRemoteHandler, IVirtualBatchC
     }
 
     private static ItemStack identifyCatalyst(List<ItemStack> items) {
-        Map<net.minecraft.util.ResourceLocation, IThaumcraftRecipe> recipes = ThaumcraftApi.getCraftingRecipes();
-        for (IThaumcraftRecipe recipe : recipes.values()) {
-            if (!(recipe instanceof CrucibleRecipe)) continue;
-            CrucibleRecipe cr = (CrucibleRecipe) recipe;
-            Ingredient catalyst = cr.getCatalyst();
+        Map<?, ?> recipes = ThaumcraftReflectionHelper.getCraftingRecipes();
+        for (Object recipe : recipes.values()) {
+            if (!ThaumcraftReflectionHelper.CLASS_CRUCIBLE_RECIPE.isInstance(recipe)) continue;
+            Ingredient catalyst = ThaumcraftReflectionHelper.crucibleGetCatalyst(recipe);
             if (catalyst == null) continue;
             for (ItemStack item : items) {
                 if (catalyst.apply(item)) {
@@ -412,24 +372,24 @@ public class ThaumcraftCrucibleHandler implements IRemoteHandler, IVirtualBatchC
         if (!(world instanceof WorldServer)) return "[AE2E]";
 
         FakePlayer fakePlayer = FakePlayerFactory.get((WorldServer) world, CRUCIBLE_PROFILE);
-        IPlayerKnowledge knowledge = ThaumcraftCapabilities.getKnowledge(fakePlayer);
+        Object knowledge = ThaumcraftReflectionHelper.getKnowledge(fakePlayer);
         if (knowledge != null && !researchGrantAttempted) {
             researchGrantAttempted = true;
-            for (IThaumcraftRecipe recipe : ThaumcraftApi.getCraftingRecipes().values()) {
-                if (recipe instanceof CrucibleRecipe) {
-                    String research = ((CrucibleRecipe) recipe).getResearch();
+            for (Object recipe : ThaumcraftReflectionHelper.getCraftingRecipes().values()) {
+                if (ThaumcraftReflectionHelper.CLASS_CRUCIBLE_RECIPE.isInstance(recipe)) {
+                    String research = ThaumcraftReflectionHelper.crucibleGetResearch(recipe);
                     if (research != null && !research.isEmpty()) {
                         // addResearch 只把研究标记为“已知”,默认 stage=0,
                         // 但坩埚配方检查用的是 isResearchComplete,需要 stage > stages.length.
                         // 因此这里额外 setResearchStage 到一个足够大的值.
-                        knowledge.addResearch(research);
-                        knowledge.setResearchStage(research, 100);
+                        ThaumcraftReflectionHelper.knowledgeAddResearch(knowledge, research);
+                        ThaumcraftReflectionHelper.knowledgeSetResearchStage(knowledge, research, 100);
                         GRANTED_RESEARCH.add(research);
                     }
                 }
             }
             // 同步给 FakePlayer,确保后续 attemptSmelt 中 knowsResearchStrict 能命中
-            knowledge.sync(fakePlayer);
+            ThaumcraftReflectionHelper.knowledgeSync(knowledge, fakePlayer);
             AE2Enhanced.LOGGER.info("[AE2E] Granted {} crucible researches to FakePlayer [{}]",
                     GRANTED_RESEARCH.size(), fakePlayer.getName());
         }

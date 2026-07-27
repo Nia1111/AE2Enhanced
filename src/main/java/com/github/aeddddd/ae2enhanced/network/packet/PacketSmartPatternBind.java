@@ -15,32 +15,40 @@ import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 /**
  * 智能样板接口绑定请求.
  *
- * <p>客户端查询 JEI 后,将 SmartPatternData 的 NBT 发送到服务端,
+ * <p>客户端查询 JEI 后,将 SmartPatternData 的 NBT 与绑定目标信息发送到服务端,
  * 服务端反序列化并保存到 TileEntity 和外部存储文件.</p>
  */
 public class PacketSmartPatternBind implements IMessage {
 
     private long pos;           // TileSmartPatternInterface 的 BlockPos
     private NBTTagCompound data; // SmartPatternData 的 NBT
+    private long boundPos;      // 绑定目标方块的 BlockPos
+    private int boundDim;       // 绑定目标方块的维度
 
     public PacketSmartPatternBind() {
     }
 
-    public PacketSmartPatternBind(BlockPos pos, NBTTagCompound data) {
+    public PacketSmartPatternBind(BlockPos pos, NBTTagCompound data, BlockPos boundPos, int boundDim) {
         this.pos = pos.toLong();
         this.data = data;
+        this.boundPos = boundPos.toLong();
+        this.boundDim = boundDim;
     }
 
     @Override
     public void fromBytes(ByteBuf buf) {
         this.pos = buf.readLong();
         this.data = ByteBufUtils.readTag(buf);
+        this.boundPos = buf.readLong();
+        this.boundDim = buf.readInt();
     }
 
     @Override
     public void toBytes(ByteBuf buf) {
         buf.writeLong(pos);
         ByteBufUtils.writeTag(buf, data);
+        buf.writeLong(boundPos);
+        buf.writeInt(boundDim);
     }
 
     public BlockPos getPos() {
@@ -49,6 +57,14 @@ public class PacketSmartPatternBind implements IMessage {
 
     public NBTTagCompound getData() {
         return data;
+    }
+
+    public BlockPos getBoundPos() {
+        return BlockPos.fromLong(boundPos);
+    }
+
+    public int getBoundDim() {
+        return boundDim;
     }
 
     public static class Handler implements IMessageHandler<PacketSmartPatternBind, IMessage> {
@@ -62,7 +78,7 @@ public class PacketSmartPatternBind implements IMessage {
                     TileSmartPatternInterface tile = (TileSmartPatternInterface) te;
                     SmartPatternData data = SmartPatternData.fromNBT(message.getData());
                     if (data != null) {
-                        tile.setPatternData(data);
+                        tile.bindWithData(message.getBoundPos(), message.getBoundDim(), data.getTargetBlockId(), data);
                         tile.updateRecipeDisplay();
                         tile.markDirty();
                         SmartPatternStorageFile.save(world, data);

@@ -15,9 +15,8 @@ import java.util.List;
 
 /**
  * 修改 Crafting CPU 状态界面中物品列表的排序：
- * 1. 合成中(active > 0)
- * 2. 计划合成(pending > 0)
- * 3. 现存(storage only)
+ * 按 正在合成 + 计划合成 总数降序排列（类似高版本行为）。
+ * 纯库存项（无合成活动）排在末尾，同级按物品显示名排序，避免合成进行中条目频繁跳动。
  */
 @Mixin(value = GuiCraftingCPU.class, remap = false)
 public class MixinGuiCraftingCPU {
@@ -40,20 +39,21 @@ public class MixinGuiCraftingCPU {
             return;
         }
 
-        this.visual.sort(Comparator.comparingInt(this::getStatusPriority)
+        this.visual.sort(Comparator.comparingLong(this::getCraftingTotal).reversed()
                 .thenComparing(this::getItemDisplayName));
     }
 
-    private int getStatusPriority(IAEItemStack stack) {
+    private long getCraftingTotal(IAEItemStack stack) {
+        long total = 0;
         IAEItemStack activeStack = this.active.findPrecise(stack);
-        if (activeStack != null && activeStack.getStackSize() > 0) {
-            return 0; // 合成中 — 最高优先级
+        if (activeStack != null) {
+            total += activeStack.getStackSize();
         }
         IAEItemStack pendingStack = this.pending.findPrecise(stack);
-        if (pendingStack != null && pendingStack.getStackSize() > 0) {
-            return 1; // 计划合成
+        if (pendingStack != null) {
+            total += pendingStack.getStackSize();
         }
-        return 2; // 现存 — 最低优先级
+        return total;
     }
 
     private String getItemDisplayName(IAEItemStack stack) {

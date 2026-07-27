@@ -60,11 +60,6 @@ public class SmartPatternStorageFile {
                     version, CURRENT_VERSION);
                 return null;
             }
-            // 更新访问时间,用于垃圾回收判断
-            try {
-                file.setLastModified(System.currentTimeMillis());
-            } catch (Exception ignored) {
-            }
             return SmartPatternData.fromNBT(root);
         } catch (Exception e) {
             AE2Enhanced.LOGGER.error(

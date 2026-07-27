@@ -58,6 +58,7 @@ public final class ModEventHandler {
 
     public static void register() {
         MinecraftForge.EVENT_BUS.register(new ModEventHandler());
+        MinecraftForge.EVENT_BUS.register(new com.github.aeddddd.ae2enhanced.crafting.smartpattern.SmartPatternMergeHelper());
     }
 
     /**

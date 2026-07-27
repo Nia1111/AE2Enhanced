@@ -398,7 +398,8 @@ public class ItemUniversalMemoryCard extends Item {
         data.detectConflicts();
 
         AE2Enhanced.network.sendToServer(
-                new com.github.aeddddd.ae2enhanced.network.packet.PacketSmartPatternBind(interfacePos, data.toNBT()));
+                new com.github.aeddddd.ae2enhanced.network.packet.PacketSmartPatternBind(
+                        interfacePos, data.toNBT(), entry.pos, entry.dim));
         player.sendMessage(new TextComponentTranslation("gui.ae2enhanced.smart_pattern_interface.bind_success",
                 recipes.size(), blockId));
     }

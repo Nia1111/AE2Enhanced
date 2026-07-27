@@ -9,8 +9,6 @@ import appeng.api.storage.data.IAEItemStack;
 import appeng.api.storage.data.IAEStack;
 import appeng.util.item.AEItemStack;
 import appeng.me.GridAccessException;
-import appeng.me.helpers.AENetworkProxy;
-import appeng.me.helpers.MachineSource;
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
 import com.github.aeddddd.ae2enhanced.config.AE2EnhancedConfig;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketVirtualCraftingParticles;
@@ -49,14 +47,38 @@ public class VirtualBatchEngine {
 
     private final DualityCentralInterface owner;
 
+    // 虚拟合成粒子效果：目标位置 + 剩余 tick（仅本引擎使用，从 Duality 内聚至此）
+    private final List<VirtualParticleTarget> activeParticleTargets = new ArrayList<>();
+
     public VirtualBatchEngine(DualityCentralInterface owner) {
         this.owner = owner;
     }
 
     /**
+     * 是否仍有未播完的虚拟合成粒子（供 Duality 决定 tick 速率）。
+     */
+    boolean hasActiveParticles() {
+        return !this.activeParticleTargets.isEmpty();
+    }
+
+    static class VirtualParticleTarget {
+        final BlockPos pos;
+        final int particleType;
+        final int color;
+        int remainingTicks;
+
+        VirtualParticleTarget(BlockPos pos, int particleType, int color, int duration) {
+            this.pos = pos;
+            this.particleType = particleType;
+            this.color = color;
+            this.remainingTicks = duration;
+        }
+    }
+
+    /**
      * 尝试对指定目标执行一次虚拟批量合成。
      *
-     * @param proxy       网络代理
+     * @param grid        网格连接 seam
      * @param patternDetails 配方详情
      * @param originalTable 原始合成台（已包含 CPU 提取的第一份物品）
      * @param target      目标绑定
@@ -64,7 +86,7 @@ public class VirtualBatchEngine {
      * @param maxParallel 卡片 tier 提供的最大并行数（Long.MAX_VALUE 表示无上限）
      * @return 实际完成的并行数，0 表示失败
      */
-    public long execute(AENetworkProxy proxy,
+    public long execute(IGridConnection grid,
                         ICraftingPatternDetails patternDetails,
                         InventoryCrafting originalTable,
                         TargetBinding target,
@@ -114,8 +136,8 @@ public class VirtualBatchEngine {
             IStorageGrid storage;
             IEnergySource energy;
             try {
-                storage = proxy.getStorage();
-                energy = proxy.getEnergy();
+                storage = grid.storage();
+                energy = grid.energy();
             } catch (GridAccessException e) {
                 logFail(world, target, "grid access exception: " + e.getMessage());
                 return 0;
@@ -132,7 +154,7 @@ public class VirtualBatchEngine {
                 return 0;
             }
 
-            IActionSource source = new MachineSource(owner.host);
+            IActionSource source = NetworkAccess.machineSource(owner.host);
             List<IAEStack> netCosts = getNetCosts(handler, world, target, virtualTable,
                     outputs, actualParallel, patternDetails);
             if (netCosts == null) {
@@ -174,7 +196,7 @@ public class VirtualBatchEngine {
             }
 
             products = mergeProducts(products);
-            owner.pendingVirtualProducts.addAll(products);
+            owner.pendingProducts.addAll(products);
 
             List<EnumParticleTypes> particleTypes = handler.getVirtualCraftingParticles(world, target.pos);
             int particleType = particleTypes.isEmpty()
@@ -202,14 +224,13 @@ public class VirtualBatchEngine {
      *
      * @return 是否在本 tick 中实际做了工作
      */
-    public boolean tick(AENetworkProxy proxy) {
+    public boolean tick(IGridConnection grid) {
         boolean didWork = false;
         World world = owner.host.getTileEntity().getWorld();
 
-        if (!owner.pendingVirtualProducts.isEmpty()) {
-            List<ItemStack> toInject = new ArrayList<>(owner.pendingVirtualProducts);
-            owner.pendingVirtualProducts.clear();
-            if (owner.injectItemsToNetwork(proxy, world, toInject)) {
+        if (!owner.pendingProducts.isEmpty()) {
+            List<ItemStack> toInject = owner.pendingProducts.drainAll();
+            if (owner.injectItemsToNetwork(grid, world, toInject)) {
                 didWork = true;
             } else {
                 owner.stashItemsToStorage(world, toInject);
@@ -235,7 +256,7 @@ public class VirtualBatchEngine {
      *
      * @param itemSource CPU 内部物品缓存；为 null 时物品回退到网络核算
      */
-    private long computeActualParallel(IStorageGrid storage,
+    long computeActualParallel(IStorageGrid storage,
                                        IEnergySource energy,
                                        IVirtualBatchCraftingHandler handler,
                                        World world,
@@ -245,7 +266,7 @@ public class VirtualBatchEngine {
                                        long maxParallel,
                                        ICraftingPatternDetails details,
                                        IMEInventory<IAEItemStack> itemSource) {
-        MachineSource source = new MachineSource(owner.host);
+        IActionSource source = NetworkAccess.machineSource(owner.host);
         List<IAEStack> perCopy = handler.getVirtualCost(world, target.pos, virtualTable, outputs, 1, details);
         if (perCopy == null || perCopy.isEmpty()) {
             long actual = maxParallel;
@@ -298,7 +319,7 @@ public class VirtualBatchEngine {
      * <p>物品对齐按 {@link ItemCostKey} 聚合而非 List 下标，避免依赖 handler
      * 在 count=1 与 count=parallel 两次调用中返回相同的条目顺序。</p>
      */
-    private List<IAEStack> getNetCosts(IVirtualBatchCraftingHandler handler,
+    List<IAEStack> getNetCosts(IVirtualBatchCraftingHandler handler,
                                        World world,
                                        TargetBinding target,
                                        InventoryCrafting virtualTable,
@@ -351,7 +372,7 @@ public class VirtualBatchEngine {
     /**
      * 合并产物列表中可堆叠的相同物品。
      */
-    private List<ItemStack> mergeProducts(List<ItemStack> products) {
+    List<ItemStack> mergeProducts(List<ItemStack> products) {
         if (products == null || products.size() <= 1) {
             return products;
         }
@@ -396,15 +417,15 @@ public class VirtualBatchEngine {
         else if (particleType == EnumParticleTypes.END_ROD.getParticleID()) color = 0xFFFFFFFF;
 
         int maxTargets = AE2EnhancedConfig.centralInterface.virtualParticleMaxTargets;
-        if (owner.activeParticleTargets.size() >= maxTargets) {
-            owner.activeParticleTargets.remove(0);
+        if (this.activeParticleTargets.size() >= maxTargets) {
+            this.activeParticleTargets.remove(0);
         }
-        owner.activeParticleTargets.add(new DualityCentralInterface.VirtualParticleTarget(
+        this.activeParticleTargets.add(new VirtualParticleTarget(
                 pos, particleType, color, AE2EnhancedConfig.centralInterface.virtualParticleDurationTicks));
     }
 
     private boolean sendParticlePackets(World world) {
-        if (owner.activeParticleTargets.isEmpty()) {
+        if (this.activeParticleTargets.isEmpty()) {
             return false;
         }
         if (world == null || world.isRemote) {
@@ -416,9 +437,9 @@ public class VirtualBatchEngine {
         int renderDistanceSq = renderDistance * renderDistance;
 
         List<PacketVirtualCraftingParticles.ParticleTarget> packetTargets = new ArrayList<>();
-        Iterator<DualityCentralInterface.VirtualParticleTarget> it = owner.activeParticleTargets.iterator();
+        Iterator<VirtualParticleTarget> it = this.activeParticleTargets.iterator();
         while (it.hasNext()) {
-            DualityCentralInterface.VirtualParticleTarget target = it.next();
+            VirtualParticleTarget target = it.next();
             target.remainingTicks--;
             if (target.remainingTicks <= 0) {
                 it.remove();
@@ -445,7 +466,7 @@ public class VirtualBatchEngine {
      * 将 IAEStack 列表中的 IAEItemStack 按物品类型合并，
      * 避免同种物品分散在多个 crafting slot 时被重复计算并行数。
      */
-    private static List<IAEStack> mergeItemCosts(List<IAEStack> costs) {
+    static List<IAEStack> mergeItemCosts(List<IAEStack> costs) {
         if (costs == null || costs.isEmpty()) {
             return Collections.emptyList();
         }

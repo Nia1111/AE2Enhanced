@@ -117,7 +117,7 @@ public class DefaultSingleBatchHandler implements IRemoteHandler {
                 ItemStack inSlot = handler.getStackInSlot(slot);
                 if (inSlot.isEmpty()) continue;
                 // 只回退本次推送的输入材料，避免清空升级/电池槽
-                if (!isInputMaterial(inSlot, inputsSafe)) continue;
+                if (!HandlerUtils.isInputMaterial(inSlot, inputsSafe)) continue;
                 ItemStack extracted = handler.extractItem(slot, inSlot.getCount(), false);
                 if (!extracted.isEmpty()) {
                     reverted.add(extracted);
@@ -144,7 +144,7 @@ public class DefaultSingleBatchHandler implements IRemoteHandler {
                 if (inSlot.isEmpty()) continue;
                 // 优先收集预期产物；若无法匹配预期产物，则收集非输入物品。
                 // 升级/电池等物品通常不在 expectedOutputs 也不在 inputs 中，借此避免被清空。
-                if (!isInputMaterial(inSlot, inputsSafe)
+                if (!HandlerUtils.isInputMaterial(inSlot, inputsSafe)
                         && !matchesAnyExpected(inSlot, expectedSafe)) {
                     continue;
                 }
@@ -172,7 +172,7 @@ public class DefaultSingleBatchHandler implements IRemoteHandler {
 
     private boolean matchesAnyExpected(ItemStack stack, List<ItemStack> expectedList) {
         for (ItemStack expected : expectedList) {
-            if (matchesLoosely(stack, expected)) {
+            if (HandlerUtils.matchesLoosely(stack, expected)) {
                 return true;
             }
         }
@@ -228,7 +228,7 @@ public class DefaultSingleBatchHandler implements IRemoteHandler {
                 if (inSlot.isEmpty()) continue;
                 ItemStack simulated = handler.extractItem(slot, 1, true);
                 if (simulated.isEmpty()) continue;
-                if (!isInputMaterial(inSlot, inputsSafe)) {
+                if (!HandlerUtils.isInputMaterial(inSlot, inputsSafe)) {
                     return true; // 发现产物,可以收集
                 }
             }
@@ -254,7 +254,7 @@ public class DefaultSingleBatchHandler implements IRemoteHandler {
                 if (inSlot.isEmpty()) continue;
                 ItemStack simulated = handler.extractItem(slot, 1, true);
                 if (simulated.isEmpty()) continue;
-                if (isInputMaterial(inSlot, inputsSafe)) {
+                if (HandlerUtils.isInputMaterial(inSlot, inputsSafe)) {
                     return false; // 还有输入材料,未完成
                 }
             }
@@ -269,7 +269,7 @@ public class DefaultSingleBatchHandler implements IRemoteHandler {
                 if (inSlot.isEmpty()) continue;
                 ItemStack simulated = handler.extractItem(slot, 1, true);
                 if (simulated.isEmpty()) continue;
-                if (!isInputMaterial(inSlot, inputsSafe)) {
+                if (!HandlerUtils.isInputMaterial(inSlot, inputsSafe)) {
                     return false; // 还有产物,未真正完成
                 }
             }
@@ -312,9 +312,9 @@ public class DefaultSingleBatchHandler implements IRemoteHandler {
 
                 ItemStack inSlot = handler.getStackInSlot(slot);
                 if (inSlot.isEmpty()) continue;
-                if (isInputMaterial(inSlot, inputs)) continue;
+                if (HandlerUtils.isInputMaterial(inSlot, inputs)) continue;
 
-                if (!matchesLoosely(inSlot, expected)) continue;
+                if (!HandlerUtils.matchesLoosely(inSlot, expected)) continue;
 
                 int toExtract = Math.min(remainingAmount, inSlot.getCount());
                 ItemStack extracted = handler.extractItem(slot, toExtract, false);
@@ -353,7 +353,7 @@ public class DefaultSingleBatchHandler implements IRemoteHandler {
 
                 ItemStack inSlot = handler.getStackInSlot(slot);
                 if (inSlot.isEmpty()) continue;
-                if (isInputMaterial(inSlot, inputs)) continue;
+                if (HandlerUtils.isInputMaterial(inSlot, inputs)) continue;
 
                 // 循环提取直到槽位真正清空，防止某些 IItemHandler 单次提取上限导致产物残留
                 boolean anyExtracted = false;
@@ -373,22 +373,5 @@ public class DefaultSingleBatchHandler implements IRemoteHandler {
         return collected;
     }
 
-    private boolean isInputMaterial(ItemStack stack, List<ItemStack> inputs) {
-        for (ItemStack input : inputs) {
-            if (ItemStack.areItemsEqual(stack, input) && ItemStack.areItemStackTagsEqual(stack, input)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean matchesLoosely(ItemStack actual, ItemStack expected) {
-        if (!ItemStack.areItemsEqual(actual, expected)) {
-            return false;
-        }
-        if (!expected.hasTagCompound()) {
-            return true;
-        }
-        return ItemStack.areItemStackTagsEqual(actual, expected);
-    }
+    // isInputMaterial / matchesLoosely 统一复用 HandlerUtils 的公共实现
 }

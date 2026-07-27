@@ -95,4 +95,22 @@ public class HandlerRegistry {
         init();
         return new ArrayList<>(HANDLERS);
     }
+
+    /**
+     * 清空注册表并允许重新初始化。<b>仅供单元测试使用</b>：静态注册表状态需要在
+     * 测试间隔离，生产代码不得调用此方法。
+     */
+    public static synchronized void resetForTesting() {
+        HANDLERS.clear();
+        initialized = false;
+    }
+
+    /**
+     * 向注册表追加一个处理器。<b>仅供单元测试使用</b>：用于注入 fake handler
+     * 验证 {@link #findHandler(String)} 的匹配顺序与兜底行为。
+     */
+    public static synchronized void registerForTesting(IRemoteHandler handler) {
+        init();
+        HANDLERS.add(handler);
+    }
 }

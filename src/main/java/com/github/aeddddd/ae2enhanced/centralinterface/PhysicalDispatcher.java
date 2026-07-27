@@ -3,8 +3,6 @@ package com.github.aeddddd.ae2enhanced.centralinterface;
 import appeng.api.networking.crafting.ICraftingPatternDetails;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.storage.data.IAEItemStack;
-import appeng.me.helpers.AENetworkProxy;
-import appeng.me.helpers.MachineSource;
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
@@ -57,7 +55,7 @@ public class PhysicalDispatcher {
      *
      * @return true 表示推送成功
      */
-    public boolean dispatch(AENetworkProxy proxy,
+    public boolean dispatch(IGridConnection grid,
                             ICraftingPatternDetails patternDetails,
                             InventoryCrafting originalTable,
                             TargetBinding target,
@@ -81,7 +79,7 @@ public class PhysicalDispatcher {
 
         // 复制 table，避免一个 target 的失败影响其他 target
         InventoryCrafting table = owner.copyInventoryCrafting(originalTable);
-        IActionSource source = new MachineSource(owner.host);
+        IActionSource source = NetworkAccess.machineSource(owner.host);
 
         // 获取全局坐标所有权，进入 PUSHING 状态
         List<FluidStack> pushedFluids = new ArrayList<>();
@@ -94,11 +92,11 @@ public class PhysicalDispatcher {
             // 1. 发配前回收目标输出槽残留内容，防止残留产物干扰新材料推送
             List<ItemStack> clearedOutputs = safeClearOutputs(handler, world, target.pos, source, session);
             if (!clearedOutputs.isEmpty()) {
-                stashOrInject(proxy, world, clearedOutputs);
+                stashOrInject(grid, world, clearedOutputs);
             }
 
             // 2. 推送流体输入（如果配方包含流体）
-            if (!owner.pushFluidInputs(world, target.pos, table, pushedFluids)) {
+            if (!FluidTransferHelper.pushFluidInputs(world, target.pos, table, pushedFluids)) {
                 revertSession(session, "pushFluidInputs failed", source);
                 return false;
             }
@@ -146,7 +144,7 @@ public class PhysicalDispatcher {
      *
      * @return 是否在本 tick 中实际做了收集/推进工作
      */
-    public boolean tick(AENetworkProxy proxy, World world, int timeoutTicks) {
+    public boolean tick(IGridConnection grid, World world, int timeoutTicks) {
         boolean didWork = false;
 
         // 阶段 1：PROCESSING -> COLLECTING
@@ -164,7 +162,7 @@ public class PhysicalDispatcher {
                 continue;
             }
 
-            IActionSource source = new MachineSource(owner.host);
+            IActionSource source = NetworkAccess.machineSource(owner.host);
             List<ItemStack> inputs = session.getInputs();
 
             Boolean idle = safeIsIdle(handler, world, target.pos, inputs, session);
@@ -207,7 +205,7 @@ public class PhysicalDispatcher {
                 continue;
             }
 
-            IActionSource source = new MachineSource(owner.host);
+            IActionSource source = NetworkAccess.machineSource(owner.host);
             IAEItemStack[] expected = session.getExpectedOutputs();
             List<ItemStack> inputs = session.getInputs();
 
@@ -216,14 +214,14 @@ public class PhysicalDispatcher {
                 products = new ArrayList<>();
             }
 
-            List<FluidStack> fluidProducts = owner.collectFluidProducts(world, target.pos, session);
+            List<FluidStack> fluidProducts = FluidTransferHelper.collectFluidProducts(world, target.pos, session);
             if (!fluidProducts.isEmpty()) {
-                List<FluidStack> overflow = owner.injectFluidsToNetwork(proxy, world, fluidProducts);
+                List<FluidStack> overflow = NetworkAccess.injectFluidsToNetwork(grid, owner.host, fluidProducts);
                 if (overflow.isEmpty()) {
                     didWork = true;
                 } else {
                     // 网络已满，将溢出流体推回目标，保留产物并等待下次重试
-                    List<FluidStack> stillRemaining = owner.pushFluidsToTarget(world, target.pos, overflow);
+                    List<FluidStack> stillRemaining = FluidTransferHelper.pushFluidsToTarget(world, target.pos, overflow);
                     for (FluidStack f : stillRemaining) {
                         AE2Enhanced.LOGGER.warn("[AE2E] CentralInterface fluid product lost for {}: {} mb of {}",
                                 target.pos, f.amount, f.getFluid().getName());
@@ -232,7 +230,7 @@ public class PhysicalDispatcher {
             }
 
             if (!products.isEmpty()) {
-                if (stashOrInject(proxy, world, products)) {
+                if (stashOrInject(grid, world, products)) {
                     didWork = true;
                 }
             }
@@ -266,7 +264,7 @@ public class PhysicalDispatcher {
             IRemoteHandler handler = HandlerRegistry.findHandler(binding.blockId);
             if (handler == null) return;
 
-            IActionSource source = new MachineSource(owner.host);
+            IActionSource source = NetworkAccess.machineSource(owner.host);
             revertSession(session, "emergency collect", source);
         } catch (Exception e) {
             AE2Enhanced.LOGGER.warn("[AE2E] Emergency collect failed for binding {}: {}", binding.pos, e.toString());
@@ -291,17 +289,17 @@ public class PhysicalDispatcher {
                     List<ItemStack> products = safeCollectProducts(handler, world, target.pos,
                             session.getExpectedOutputs(), session.getInputs(), source, session);
                     if (products != null && !products.isEmpty()) {
-                        stashOrInject(owner.host.getProxy(), world, products);
+                        stashOrInject(owner.gridConnection(), world, products);
                     }
 
                     // 回退尚未消耗的材料
                     List<ItemStack> reverted = safeRevertMaterials(handler, world, target.pos, source, session);
                     if (reverted != null && !reverted.isEmpty()) {
-                        stashOrInject(owner.host.getProxy(), world, reverted);
+                        stashOrInject(owner.gridConnection(), world, reverted);
                     }
 
                     // 回退已推流体
-                    owner.revertPushedFluids(world, target.pos, session.getInputFluids());
+                    FluidTransferHelper.revertPushedFluids(world, target.pos, session.getInputFluids());
                 }
             }
         } catch (Exception e) {
@@ -325,7 +323,7 @@ public class PhysicalDispatcher {
         if (world.provider.getDimension() == target.dimension && world.isBlockLoaded(target.pos)) {
             IRemoteHandler handler = HandlerRegistry.findHandler(target.blockId);
             if (handler != null) {
-                IActionSource source = new MachineSource(owner.host);
+                IActionSource source = NetworkAccess.machineSource(owner.host);
                 revertSession(session, reason, source);
                 return true;
             }
@@ -353,11 +351,11 @@ public class PhysicalDispatcher {
      *
      * @return 是否有任何物品成功进入网络或 storage
      */
-    private boolean stashOrInject(AENetworkProxy proxy, World world, List<ItemStack> items) {
+    private boolean stashOrInject(IGridConnection grid, World world, List<ItemStack> items) {
         if (items == null || items.isEmpty()) {
             return false;
         }
-        if (proxy != null && owner.injectItemsToNetwork(proxy, world, items)) {
+        if (grid != null && owner.injectItemsToNetwork(grid, world, items)) {
             return true;
         }
         owner.stashItemsToStorage(world, items);

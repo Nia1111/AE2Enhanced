@@ -18,7 +18,6 @@ import com.github.aeddddd.ae2enhanced.dimension.PersonalDimPermission;
 import com.github.aeddddd.ae2enhanced.dimension.PersonalDimensionManager;
 import com.github.aeddddd.ae2enhanced.dimension.PlayerDimEntry;
 import com.github.aeddddd.ae2enhanced.registry.content.BlockRegistry;
-import com.github.aeddddd.ae2enhanced.crafting.smartpattern.SmartPatternGarbageCollector;
 import com.github.aeddddd.ae2enhanced.mixin.late.accessor.IAEConfigAccessor;
 import com.github.aeddddd.ae2enhanced.item.ItemFluidDrop;
 import com.github.aeddddd.ae2enhanced.storage.ItemStorageAdapter;
@@ -59,7 +58,6 @@ import java.util.*;
  *
  * <p>Subcommands:</p>
  * <ul>
- *   <li>{@code /ae2e spgc} — Manual Smart Pattern garbage collection</li>
  *   <li>{@code /ae2e channels enable|disable|status} — Toggle AE2 channel checking</li>
  *   <li>{@code /ae2e fastpathing enable|disable|status} — Toggle experimental O(N) channel pathing</li>
  *   <li>{@code /ae2e recoverhd list} — List all hyperdimensional storage UUIDs</li>
@@ -77,7 +75,7 @@ public class CommandAE2Enhanced extends CommandBase {
     @Override
     @Nonnull
     public String getUsage(@Nonnull ICommandSender sender) {
-        return "/ae2e <spgc|channels|fastpathing|recoverhd|testhd|migratefluids|pd|help>";
+        return "/ae2e <channels|fastpathing|recoverhd|testhd|migratefluids|pd|help>";
     }
 
     @Override
@@ -92,7 +90,7 @@ public class CommandAE2Enhanced extends CommandBase {
     }
 
     private static final String[] SUBCOMMANDS = {
-            "spgc", "channels", "fastpathing", "recoverhd", "testhd", "migratefluids", "pd", "help"
+            "channels", "fastpathing", "specialcrafting", "recoverhd", "testhd", "migratefluids", "pd", "help"
     };
     private static final String[] TOGGLE_OPTIONS = {"enable", "disable", "status"};
     private static final String[] PD_SUBCOMMANDS = {
@@ -116,7 +114,7 @@ public class CommandAE2Enhanced extends CommandBase {
         }
         String sub = args[0].toLowerCase();
         if (args.length == 2) {
-            if ("channels".equals(sub) || "fastpathing".equals(sub)) {
+            if ("channels".equals(sub) || "fastpathing".equals(sub) || "specialcrafting".equals(sub)) {
                 return CommandBase.getListOfStringsMatchingLastWord(args, TOGGLE_OPTIONS);
             }
             if ("recoverhd".equals(sub)) {
@@ -182,14 +180,14 @@ public class CommandAE2Enhanced extends CommandBase {
         }
         String sub = args[0].toLowerCase();
         switch (sub) {
-            case "spgc":
-                executeSpgc(sender);
-                break;
             case "channels":
                 executeChannels(sender, args);
                 break;
             case "fastpathing":
                 executeFastPathing(sender, args);
+                break;
+            case "specialcrafting":
+                executeSpecialCrafting(sender, args);
                 break;
             case "recoverhd":
                 executeRecoverHd(server, sender, args);
@@ -216,8 +214,6 @@ public class CommandAE2Enhanced extends CommandBase {
 
     private void executeHelp(@Nonnull ICommandSender sender) {
         sender.sendMessage(new TextComponentString(TextFormatting.AQUA + "========== AE2Enhanced Command Help =========="));
-        sender.sendMessage(new TextComponentString(TextFormatting.YELLOW + "/ae2e spgc"));
-        sender.sendMessage(new TextComponentString(TextFormatting.GRAY + "  Manually trigger Smart Pattern garbage collection."));
         sender.sendMessage(new TextComponentString(TextFormatting.YELLOW + "/ae2e channels <enable|disable|status>"));
         sender.sendMessage(new TextComponentString(TextFormatting.GRAY + "  enable:  Enable AE2 channel checking (normal mode)."));
         sender.sendMessage(new TextComponentString(TextFormatting.GRAY + "  disable: Disable AE2 channel checking (infinite channels)."));
@@ -237,6 +233,9 @@ public class CommandAE2Enhanced extends CommandBase {
         sender.sendMessage(new TextComponentString(TextFormatting.GRAY + "  Requires ae2fc to be loaded and OP permission."));
         sender.sendMessage(new TextComponentString(TextFormatting.YELLOW + "/ae2e pd list|info|delete|tp|invite|kick|setperm"));
         sender.sendMessage(new TextComponentString(TextFormatting.GRAY + "  Manage personal dimensions."));
+        sender.sendMessage(new TextComponentString(TextFormatting.YELLOW + "/ae2e specialcrafting <enable|disable|status>"));
+        sender.sendMessage(new TextComponentString(TextFormatting.GRAY + "  Toggle special crafting plans (self-referencing/cyclic productive recipes)."));
+        sender.sendMessage(new TextComponentString(TextFormatting.GRAY + "  When enabled, such plans are solved in closed form and run on Computation Cores."));
         sender.sendMessage(new TextComponentString(TextFormatting.YELLOW + "/ae2e help"));
         sender.sendMessage(new TextComponentString(TextFormatting.GRAY + "  Display this help message."));
         sender.sendMessage(new TextComponentString(TextFormatting.AQUA + "=============================================="));
@@ -568,20 +567,6 @@ public class CommandAE2Enhanced extends CommandBase {
         sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "[AE2E] Migrated " + convertedStacks + " AE2E fluid drop stacks (" + convertedAmount + " mB) to ae2fc format."));
     }
 
-    // ---- spgc ----
-
-    private void executeSpgc(@Nonnull ICommandSender sender) {
-        sender.sendMessage(new TextComponentString(TextFormatting.YELLOW + "[AE2E] Scanning ME interfaces and cleaning orphaned Smart Pattern files..."));
-        int deleted = SmartPatternGarbageCollector.runManualGC();
-        if (deleted < 0) {
-            sender.sendMessage(new TextComponentString(TextFormatting.RED + "[AE2E] An error occurred during cleanup. Check the server log."));
-        } else if (deleted == 0) {
-            sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "[AE2E] No orphaned files found."));
-        } else {
-            sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "[AE2E] Cleaned up " + deleted + " orphaned Smart Pattern file(s)."));
-        }
-    }
-
     // ---- channels ----
 
     private void executeChannels(@Nonnull ICommandSender sender, @Nonnull String[] args) {
@@ -661,6 +646,40 @@ public class CommandAE2Enhanced extends CommandBase {
 
     private void setFastPathing(boolean enabled) {
         AE2EnhancedConfig.channelPathing.fastPathing = enabled;
+        ConfigManager.sync(AE2Enhanced.MOD_ID, Config.Type.INSTANCE);
+    }
+
+    // ---- specialcrafting ----
+
+    private void executeSpecialCrafting(@Nonnull ICommandSender sender, @Nonnull String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(new TextComponentString(TextFormatting.RED + "Usage: /ae2e specialcrafting <enable|disable|status>"));
+            return;
+        }
+        String action = args[1].toLowerCase();
+        switch (action) {
+            case "enable":
+                setSpecialCrafting(true);
+                sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "[AE2E] Special crafting plans enabled."));
+                break;
+            case "disable":
+                setSpecialCrafting(false);
+                sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "[AE2E] Special crafting plans disabled (vanilla calculation)."));
+                break;
+            case "status":
+                boolean enabled = AE2EnhancedConfig.crafting.specialCrafting;
+                String status = enabled
+                        ? TextFormatting.GREEN + "Enabled (closed-form solver, Computation Core execution)"
+                        : TextFormatting.YELLOW + "Disabled (vanilla calculation)";
+                sender.sendMessage(new TextComponentString(TextFormatting.AQUA + "[AE2E] Special crafting status: " + status));
+                break;
+            default:
+                sender.sendMessage(new TextComponentString(TextFormatting.RED + "Usage: /ae2e specialcrafting <enable|disable|status>"));
+        }
+    }
+
+    private void setSpecialCrafting(boolean enabled) {
+        AE2EnhancedConfig.crafting.specialCrafting = enabled;
         ConfigManager.sync(AE2Enhanced.MOD_ID, Config.Type.INSTANCE);
     }
 

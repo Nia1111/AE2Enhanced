@@ -1,0 +1,216 @@
+package com.github.aeddddd.ae2enhanced.specialcrafting;
+
+import java.util.List;
+
+import appeng.api.config.Actionable;
+import appeng.api.networking.crafting.ICraftingGrid;
+import appeng.api.networking.security.IActionSource;
+import appeng.api.storage.data.IAEItemStack;
+import appeng.crafting.CraftBranchFailure;
+import appeng.crafting.CraftingJob;
+import appeng.crafting.CraftingTreeNode;
+import appeng.crafting.CraftingTreeProcess;
+import appeng.crafting.MECraftingInventory;
+
+import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+
+/**
+ * 跨样板增殖环求解器（阶段 2,泛化版,移植自 1.20.1）.
+ * <p>对 {@link CycleAnalyzer.Analysis} 判定为增殖环的环键集求闭式解:
+ * 各环内物品按前缀分析得出的种子保留 + 贷款法整批模拟——沿环执行顺序依次以
+ * 原生 {@code CraftingTreeProcess.request} 整批执行各样板,环内物品的消耗/产出
+ * 在模拟库存内闭合（非 root 键每超轮净变化为零）,仅请求物有净增益.
+ * 环外输入（辅材等）由子节点原生解析（库存/外部子合成）.</p>
+ */
+public final class CycleSolver {
+
+    /**
+     * 求解结果.
+     */
+    public enum SolveResult {
+        /** 成功,模拟库存与树已记账（调用方 dive 聚合计划）. */
+        SUCCESS,
+        /** 不适用（种子不足/输入不足等）,调用方应回落原生. */
+        FALLBACK,
+        /** 数值溢出（天文数字订单）,调用方应产出 O(1) 缺料计划. */
+        OVERFLOW
+    }
+
+    private CycleSolver() {
+    }
+
+    /**
+     * 模拟库存中某键的可用量（只读）.
+     */
+    static long invAmount(MECraftingInventory inv, IAEItemStack key) {
+        IAEItemStack probe = key.copy();
+        probe.setStackSize(Long.MAX_VALUE);
+        IAEItemStack result = inv.extractItems(probe, Actionable.SIMULATE, null);
+        return result == null ? 0 : result.getStackSize();
+    }
+
+    /**
+     * 尝试以增殖环闭式解满足请求.
+     *
+     * @param inv 以网络快照为父的模拟库存（不得 ignore 请求物）
+     * @param rootNode 新建的空根节点,成功的 process 会挂载到其 nodes 下
+     */
+    public static SolveResult trySolve(ICraftingGrid cc, CraftingJob job, CycleAnalyzer.Analysis analysis,
+            MECraftingInventory inv, IAEItemStack what, long target, CraftingTreeNode rootNode,
+            IActionSource src) throws InterruptedException {
+        List<IAEItemStack> keys = analysis.keys();
+        long[] seeds = analysis.seedsPerKey();
+        long[] batchSeeds = analysis.batchSeedPerKey();
+        long[] times = analysis.timesPerRound();
+
+        // 注意:不做"库存直接交付"(fromStock)——AE2 执行模型只认样板产出作为交付来源,
+        // 交付量一律由环运转产出,种子保留,余量执行结束返回网络.
+        long remaining = target;
+        if (remaining <= 0) {
+            return SolveResult.SUCCESS;
+        }
+
+        long rounds = (remaining + analysis.netGain() - 1) / analysis.netGain();
+        // T_i = rounds × timesPerRound[i],任一溢出即天文数字订单
+        long[] totalTimes = new long[times.length];
+        for (int i = 0; i < totalTimes.length; i++) {
+            if (times[i] != 0 && rounds > Long.MAX_VALUE / times[i]) {
+                return SolveResult.OVERFLOW;
+            }
+            totalTimes[i] = rounds * times[i];
+        }
+
+        // 1) 各环内物品种子校验:
+        // - 多消费者键(batchSeeds>0):仅需 max(前缀种子, 每轮总消耗)——运行时并发消耗
+        //   由超轮配额调度器(RoundQuotaScheduler)闸在每轮以内;
+        // - 单消费者键:仅需前缀启动种子.
+        long[] requiredStock = new long[seeds.length];
+        for (int i = 0; i < keys.size(); i++) {
+            requiredStock[i] = batchSeeds[i] > 0 ? Math.max(seeds[i], batchSeeds[i]) : seeds[i];
+            if (requiredStock[i] > 0) {
+                long stock = invAmount(inv, keys.get(i));
+                if (stock < requiredStock[i]) {
+                    AE2Enhanced.LOGGER.info(
+                            "[特殊配方] 环求解回落: {} 种子不足(需要 {},库存 {}{})",
+                            keys.get(i), requiredStock[i], stock,
+                            batchSeeds[i] > 0 ? ",多消费者键按每轮消耗记账" : "");
+                    return SolveResult.FALLBACK;
+                }
+            }
+        }
+
+        // 2) 贷款法(计划期模拟技巧,借还精确对冲,只抬高水位)
+        long[] loans = new long[seeds.length];
+        for (int i = 0; i < seeds.length; i++) {
+            if (seeds[i] <= 0 || rounds - 1 <= 0) {
+                continue;
+            }
+            long dip;
+            if (batchSeeds[i] > 0) {
+                if (seeds[i] > Long.MAX_VALUE / rounds) {
+                    return SolveResult.OVERFLOW;
+                }
+                dip = rounds * seeds[i] - requiredStock[i];
+            } else {
+                if (seeds[i] > Long.MAX_VALUE / (rounds - 1)) {
+                    return SolveResult.OVERFLOW;
+                }
+                dip = (rounds - 1) * seeds[i];
+            }
+            if (dip > 0) {
+                loans[i] = dip;
+                IAEItemStack loan = keys.get(i).copy();
+                loan.setStackSize(dip);
+                inv.injectItems(loan, Actionable.MODULATE, src);
+            }
+        }
+        try {
+            List<CycleAnalyzer.CycleStep> steps = analysis.steps();
+            List<CraftingTreeProcess> pros = new java.util.ArrayList<>();
+            List<CycleAnalyzer.CycleStep> proSteps = new java.util.ArrayList<>();
+            for (int i = 0; i < steps.size(); i++) {
+                if (totalTimes[i] <= 0) {
+                    continue;
+                }
+                CraftingTreeProcess pro = new CraftingTreeProcess(cc, job, steps.get(i).pattern(), rootNode, 1);
+                Ae2CraftingReflect.addProcessToNode(rootNode, pro);
+                Ae2CraftingReflect.treeProcessRequest(pro, inv, totalTimes[i], src);
+                pros.add(pro);
+                proSteps.add(steps.get(i));
+            }
+            // 1.12.2 特有:dive/getAmountCrafted 要求每个 process 的父节点 what
+            // 必须是其输出之一,故按"谁产出谁"把平挂的 process 重接为层级链
+            reattachProcesses(rootNode, what, proSteps, pros);
+        } catch (CraftBranchFailure failure) {
+            AE2Enhanced.LOGGER.info("[特殊配方] 环求解回落:环外输入不足({})", failure.toString());
+            return SolveResult.FALLBACK; // 环外输入不足 → 原生兜底(缺料报告)
+        } finally {
+            for (int i = 0; i < seeds.length; i++) {
+                if (loans[i] > 0) {
+                    IAEItemStack payback = keys.get(i).copy();
+                    payback.setStackSize(loans[i]);
+                    inv.extractItems(payback, Actionable.MODULATE, src);
+                }
+            }
+        }
+
+        // 3) 结算校验(对应 1.20.1 的 settle 步骤):线性系统的守恒记账必须经得起
+        // 实际模拟检验——环外子合成若偷吃了环键(如外部输入的子合成消耗请求物),
+        // 最终库存将低于 请求量+种子,该方案运行时必死锁,必须回落.
+        // 预期库存 = 种子 + rounds×netGain ≥ 请求量 + 种子(种子保留).
+        long avail = invAmount(inv, what);
+        long keep = avail > target ? seeds[0] : 0;
+        long drainable = Math.min(target, Math.max(0, avail - keep));
+        if (drainable < target) {
+            AE2Enhanced.LOGGER.info("[特殊配方] 环求解回落:结算校验失败(库存 {} < 请求 {} + 种子 {})",
+                    avail, target, keep);
+            return SolveResult.FALLBACK;
+        }
+        return SolveResult.SUCCESS;
+    }
+
+    /**
+     * 循环链层级重建(1.12.2 树语义).
+     * <p>贷款模拟阶段 process 平挂在根节点下(顺序执行以匹配贷款水位);但
+     * {@code CraftingTreeProcess.dive → getAmountCrafted} 要求父节点的 what 是
+     * 该样板的输出之一,否则抛出 "Crafting Tree construction failed"。此处按
+     * 产出关系重接:产出 root 键的样板留在根下,其余样板挂到消费其 toKey 的
+     * 样板的对应输入子节点下;最末端输入节点保持为叶子(种子喂养).</p>
+     */
+    private static void reattachProcesses(CraftingTreeNode rootNode, IAEItemStack rootWhat,
+            List<CycleAnalyzer.CycleStep> proSteps, List<CraftingTreeProcess> pros) {
+        Ae2CraftingReflect.getNodeProcesses(rootNode).clear();
+        for (int i = 0; i < pros.size(); i++) {
+            CycleAnalyzer.CycleStep step = proSteps.get(i);
+            CraftingTreeNode parentNode;
+            if (step.toKey().equals(rootWhat)) {
+                parentNode = rootNode;
+            } else {
+                parentNode = findConsumerChildNode(step, proSteps, pros);
+                if (parentNode == null) {
+                    throw new IllegalStateException("循环链层级重建失败:找不到消费 " + step.toKey() + " 的样板子节点");
+                }
+            }
+            Ae2CraftingReflect.setProcessParent(pros.get(i), parentNode);
+            Ae2CraftingReflect.addProcessToNode(parentNode, pros.get(i));
+        }
+    }
+
+    /**
+     * 在所有样板的输入子节点中找到 what 等于 {@code step.toKey} 的节点
+     * （即该键的实际消费者）.注意:不能按 step.fromKey 匹配——并集分析按
+     * 样板去重后,多消费样板（如 θ 的回转样板）只保留一条 fromKey 记录,
+     * 其另一路消费关系会丢失;直接按子节点查找则总是正确.
+     */
+    private static CraftingTreeNode findConsumerChildNode(CycleAnalyzer.CycleStep step,
+            List<CycleAnalyzer.CycleStep> proSteps, List<CraftingTreeProcess> pros) {
+        for (CraftingTreeProcess pro : pros) {
+            for (CraftingTreeNode child : Ae2CraftingReflect.getProcessNodes(pro).keySet()) {
+                if (step.toKey().equals(Ae2CraftingReflect.getNodeWhat(child))) {
+                    return child;
+                }
+            }
+        }
+        return null;
+    }
+}

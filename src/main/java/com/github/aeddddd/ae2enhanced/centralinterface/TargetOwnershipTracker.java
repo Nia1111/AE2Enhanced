@@ -72,4 +72,12 @@ public final class TargetOwnershipTracker {
             }
         }
     }
+
+    /**
+     * 清空全部所有权记录。<b>仅供单元测试使用</b>：全局单例状态需要在测试间隔离，
+     * 生产代码不得调用此方法。
+     */
+    public static synchronized void resetForTesting() {
+        INSTANCE.owners.clear();
+    }
 }

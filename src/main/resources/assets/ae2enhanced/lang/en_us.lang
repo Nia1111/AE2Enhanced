@@ -27,6 +27,9 @@ jei.ae2enhanced.category.blackhole=Black Hole Crafting
 jei.ae2enhanced.blackhole.hint=Throw into event horizon
 
 gui.ae2enhanced.unformed.title=§cUnassembled
+gui.ae2enhanced.special_plan.dup=§6Self-amplifying: §r%d consumed / %d produced per craft (net +%d), %d crafts, seed %d
+gui.ae2enhanced.special_plan.cycle=§6Crafting cycle: §r%d rounds, per round %d consumed / %d produced, seed %d
+gui.ae2enhanced.special_plan.calls=§7Pattern calls: %d
 gui.ae2enhanced.unformed.subtitle=Supercausal Assembly Hub
 gui.ae2enhanced.unformed.ready=Structure Complete — Ready to Assemble
 gui.ae2enhanced.unformed.hint=Click the button below to assemble

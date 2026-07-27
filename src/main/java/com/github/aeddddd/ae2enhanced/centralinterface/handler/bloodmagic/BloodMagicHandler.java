@@ -23,13 +23,6 @@ import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.IItemHandler;
 
-import WayofTime.bloodmagic.api.impl.BloodMagicAPI;
-import WayofTime.bloodmagic.api.impl.recipe.RecipeAlchemyTable;
-import WayofTime.bloodmagic.api.impl.recipe.RecipeBloodAltar;
-import WayofTime.bloodmagic.tile.TileAlchemyTable;
-import WayofTime.bloodmagic.tile.TileAltar;
-import WayofTime.bloodmagic.tile.TileSoulForge;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -43,6 +36,9 @@ import java.util.List;
  *   <li>狱火锻炉 (bloodmagic:soul_forge) — 4 输入槽均分,每槽 1 个,收集输出槽产物 + 输入槽残余</li>
  *   <li>祭坛 (bloodmagic:altar) — 单槽 push + startCycle 启动,回收槽位 0 产物</li>
  * </ul>
+ *
+ * 所有 Blood Magic 类均通过 {@link BloodMagicReflectionHelper} 反射访问,
+ * 本类不存在对 WayofTime.bloodmagic 的编译期硬引用.
  */
 public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingHandler {
 
@@ -59,21 +55,22 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
     @Override
     public boolean isValidTarget(World world, BlockPos pos) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TileAlchemyTable) {
-            return !((TileAlchemyTable) te).isSlave();
+        if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALCHEMY_TABLE, te)) {
+            return !BloodMagicReflectionHelper.isAlchemyTableSlave(te);
         }
-        return te instanceof TileSoulForge || te instanceof TileAltar;
+        return BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_SOUL_FORGE, te)
+                || BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALTAR, te);
     }
 
     @Override
     public boolean canStart(World world, BlockPos pos, InventoryCrafting ingredients, TargetSession session) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TileAlchemyTable) {
-            return canStartAlchemyTable((TileAlchemyTable) te, ingredients);
-        } else if (te instanceof TileSoulForge) {
-            return canStartSoulForge((TileSoulForge) te, ingredients);
-        } else if (te instanceof TileAltar) {
-            return canStartAltar((TileAltar) te, ingredients);
+        if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALCHEMY_TABLE, te)) {
+            return canStartAlchemyTable(te, ingredients);
+        } else if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_SOUL_FORGE, te)) {
+            return canStartSoulForge(te, ingredients);
+        } else if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALTAR, te)) {
+            return canStartAltar(te, ingredients);
         }
         return false;
     }
@@ -82,12 +79,12 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
     public boolean pushMaterials(World world, BlockPos pos, InventoryCrafting ingredients, IActionSource source, TargetSession session) {
         TileEntity te = world.getTileEntity(pos);
         boolean success = false;
-        if (te instanceof TileAlchemyTable) {
-            success = pushMaterialsAlchemyTable((TileAlchemyTable) te, ingredients);
-        } else if (te instanceof TileSoulForge) {
-            success = pushMaterialsSoulForge((TileSoulForge) te, ingredients);
-        } else if (te instanceof TileAltar) {
-            success = pushMaterialsAltar((TileAltar) te, ingredients);
+        if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALCHEMY_TABLE, te)) {
+            success = pushMaterialsAlchemyTable(te, ingredients);
+        } else if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_SOUL_FORGE, te)) {
+            success = pushMaterialsSoulForge(te, ingredients);
+        } else if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALTAR, te)) {
+            success = pushMaterialsAltar(te, ingredients);
         }
         if (success && session != null) {
             session.setPushTick(world.getTotalWorldTime());
@@ -98,8 +95,8 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
     @Override
     public boolean startProcess(World world, BlockPos pos, IActionSource source, TargetSession session) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TileAltar) {
-            ((TileAltar) te).startCycle();
+        if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALTAR, te)) {
+            BloodMagicReflectionHelper.altarStartCycle(te);
             return true;
         }
         // 炼金术桌和狱火锻炉 tick 自动处理,无需显式启动
@@ -109,12 +106,12 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
     @Override
     public List<ItemStack> collectProducts(World world, BlockPos pos, IAEItemStack[] expectedOutputs, List<ItemStack> inputs, IActionSource source, TargetSession session) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TileAlchemyTable) {
-            return collectProductsAlchemyTable((TileAlchemyTable) te);
-        } else if (te instanceof TileSoulForge) {
-            return collectProductsSoulForge((TileSoulForge) te);
-        } else if (te instanceof TileAltar) {
-            return collectProductsAltar((TileAltar) te);
+        if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALCHEMY_TABLE, te)) {
+            return collectProductsAlchemyTable(te);
+        } else if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_SOUL_FORGE, te)) {
+            return collectProductsSoulForge(te);
+        } else if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALTAR, te)) {
+            return collectProductsAltar(te);
         }
         return new ArrayList<>();
     }
@@ -125,13 +122,12 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
             return false;
         }
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TileAlchemyTable) {
-            return ((TileAlchemyTable) te).getBurnTime() == 0;
-        } else if (te instanceof TileSoulForge) {
-            return ((TileSoulForge) te).burnTime == 0;
-        } else if (te instanceof TileAltar) {
-            TileAltar altar = (TileAltar) te;
-            return !altar.isActive() && altar.getProgress() == 0;
+        if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALCHEMY_TABLE, te)) {
+            return BloodMagicReflectionHelper.getAlchemyTableBurnTime(te) == 0;
+        } else if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_SOUL_FORGE, te)) {
+            return BloodMagicReflectionHelper.getSoulForgeBurnTime(te) == 0;
+        } else if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALTAR, te)) {
+            return !BloodMagicReflectionHelper.isAltarActive(te) && BloodMagicReflectionHelper.getAltarProgress(te) == 0;
         }
         return true;
     }
@@ -141,9 +137,9 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
     @Override
     public boolean canCraftVirtually(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TileAlchemyTable) {
+        if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALCHEMY_TABLE, te)) {
             return canCraftVirtuallyAlchemyTable(ingredients, outputs);
-        } else if (te instanceof TileAltar) {
+        } else if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALTAR, te)) {
             return canCraftVirtuallyAltar(ingredients, outputs);
         }
         // Soul Forge 暂不接入（缺少 Demon Will AE 通道）
@@ -167,9 +163,9 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
     @Override
     public List<IAEStack> getVirtualCost(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs, long count) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TileAlchemyTable) {
+        if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALCHEMY_TABLE, te)) {
             return getVirtualCostAlchemyTable(ingredients, outputs, count);
-        } else if (te instanceof TileAltar) {
+        } else if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALTAR, te)) {
             return getVirtualCostAltar(ingredients, outputs, count);
         }
         return new ArrayList<>();
@@ -186,19 +182,20 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
 
     private boolean canCraftVirtuallyAlchemyTable(InventoryCrafting ingredients, IAEItemStack[] outputs) {
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return false;
-        RecipeAlchemyTable recipe = findAlchemyRecipeByOutput(outputs[0].createItemStack());
+        Object recipe = findAlchemyRecipeByOutput(outputs[0].createItemStack());
         if (recipe == null) return false;
-        return matchIngredients(recipe.getInput(), collectNonEmpty(ingredients));
+        return matchIngredients(BloodMagicReflectionHelper.alchemyRecipeGetInput(recipe), collectNonEmpty(ingredients));
     }
 
     private List<IAEStack> getVirtualCostAlchemyTable(InventoryCrafting ingredients, IAEItemStack[] outputs, long count) {
         List<IAEStack> costs = new ArrayList<>();
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return costs;
-        RecipeAlchemyTable recipe = findAlchemyRecipeByOutput(outputs[0].createItemStack());
+        Object recipe = findAlchemyRecipeByOutput(outputs[0].createItemStack());
         if (recipe == null) return costs;
 
         List<ItemStack> available = collectNonEmpty(ingredients);
-        for (Ingredient ing : recipe.getInput()) {
+        for (Object ingObj : BloodMagicReflectionHelper.alchemyRecipeGetInput(recipe)) {
+            Ingredient ing = (Ingredient) ingObj;
             if (ing == null || ing == Ingredient.EMPTY) continue;
             for (int i = 0; i < available.size(); i++) {
                 if (ing.apply(available.get(i))) {
@@ -210,7 +207,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
             }
         }
 
-        IAEStack lp = createLPCost(recipe.getSyphon(), count);
+        IAEStack lp = createLPCost(BloodMagicReflectionHelper.alchemyRecipeGetSyphon(recipe), count);
         if (lp == null) {
             return null;
         }
@@ -220,9 +217,9 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
 
     private boolean canCraftVirtuallyAltar(InventoryCrafting ingredients, IAEItemStack[] outputs) {
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return false;
-        RecipeBloodAltar recipe = findAltarRecipeByOutput(outputs[0].createItemStack());
+        Object recipe = findAltarRecipeByOutput(outputs[0].createItemStack());
         if (recipe == null) return false;
-        Ingredient input = recipe.getInput();
+        Ingredient input = BloodMagicReflectionHelper.bloodAltarRecipeGetInput(recipe);
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             if (input.apply(ingredients.getStackInSlot(i))) return true;
         }
@@ -232,10 +229,10 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
     private List<IAEStack> getVirtualCostAltar(InventoryCrafting ingredients, IAEItemStack[] outputs, long count) {
         List<IAEStack> costs = new ArrayList<>();
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return costs;
-        RecipeBloodAltar recipe = findAltarRecipeByOutput(outputs[0].createItemStack());
+        Object recipe = findAltarRecipeByOutput(outputs[0].createItemStack());
         if (recipe == null) return costs;
 
-        Ingredient input = recipe.getInput();
+        Ingredient input = BloodMagicReflectionHelper.bloodAltarRecipeGetInput(recipe);
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             ItemStack stack = ingredients.getStackInSlot(i);
             if (!stack.isEmpty() && input.apply(stack)) {
@@ -246,7 +243,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
             }
         }
 
-        IAEStack lp = createLPCost(recipe.getSyphon(), count);
+        IAEStack lp = createLPCost(BloodMagicReflectionHelper.bloodAltarRecipeGetSyphon(recipe), count);
         if (lp == null) {
             return null;
         }
@@ -254,10 +251,10 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         return costs;
     }
 
-    private RecipeAlchemyTable findAlchemyRecipeByOutput(ItemStack output) {
+    private Object findAlchemyRecipeByOutput(ItemStack output) {
         if (output.isEmpty()) return null;
-        for (RecipeAlchemyTable recipe : BloodMagicAPI.INSTANCE.getRecipeRegistrar().getAlchemyRecipes()) {
-            ItemStack recipeOutput = recipe.getOutput();
+        for (Object recipe : BloodMagicReflectionHelper.getAlchemyRecipes()) {
+            ItemStack recipeOutput = BloodMagicReflectionHelper.alchemyRecipeGetOutput(recipe);
             if (!recipeOutput.isEmpty()
                     && recipeOutput.getItem() == output.getItem()
                     && recipeOutput.getMetadata() == output.getMetadata()) {
@@ -267,10 +264,10 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         return null;
     }
 
-    private RecipeBloodAltar findAltarRecipeByOutput(ItemStack output) {
+    private Object findAltarRecipeByOutput(ItemStack output) {
         if (output.isEmpty()) return null;
-        for (RecipeBloodAltar recipe : BloodMagicAPI.INSTANCE.getRecipeRegistrar().getAltarRecipes()) {
-            ItemStack recipeOutput = recipe.getOutput();
+        for (Object recipe : BloodMagicReflectionHelper.getAltarRecipes()) {
+            ItemStack recipeOutput = BloodMagicReflectionHelper.bloodAltarRecipeGetOutput(recipe);
             if (!recipeOutput.isEmpty()
                     && recipeOutput.getItem() == output.getItem()
                     && recipeOutput.getMetadata() == output.getMetadata()) {
@@ -304,8 +301,9 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         return list;
     }
 
-    private boolean matchIngredients(List<Ingredient> required, List<ItemStack> available) {
-        for (Ingredient ing : required) {
+    private boolean matchIngredients(List<?> required, List<ItemStack> available) {
+        for (Object ingObj : required) {
+            Ingredient ing = (Ingredient) ingObj;
             if (ing == null || ing == Ingredient.EMPTY) continue;
             boolean found = false;
             for (int i = 0; i < available.size(); i++) {
@@ -340,8 +338,8 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
 
     // ==================== Alchemy Table ====================
 
-    private boolean canStartAlchemyTable(TileAlchemyTable table, InventoryCrafting ingredients) {
-        if (table.isSlave()) return false;
+    private boolean canStartAlchemyTable(TileEntity table, InventoryCrafting ingredients) {
+        if (BloodMagicReflectionHelper.isAlchemyTableSlave(table)) return false;
 
         List<ItemStack> materials = collectSingles(ingredients);
         if (materials.isEmpty()) return false;
@@ -353,7 +351,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         // 检查是否有足够空输入槽
         int emptySlots = 0;
         for (int i = 0; i < inputHandler.getSlots(); i++) {
-            if (table.isInputSlotAccessible(i) && inputHandler.getStackInSlot(i).isEmpty()) {
+            if (BloodMagicReflectionHelper.isAlchemyTableInputSlotAccessible(table, i) && inputHandler.getStackInSlot(i).isEmpty()) {
                 emptySlots++;
             }
         }
@@ -365,7 +363,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         return outputHandler.getStackInSlot(0).isEmpty();
     }
 
-    private boolean pushMaterialsAlchemyTable(TileAlchemyTable table, InventoryCrafting ingredients) {
+    private boolean pushMaterialsAlchemyTable(TileEntity table, InventoryCrafting ingredients) {
         List<ItemStack> materials = collectSingles(ingredients);
         IItemHandler handler = table.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, EnumFacing.NORTH);
         if (handler == null) return false;
@@ -374,7 +372,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         for (ItemStack material : materials) {
             boolean placed = false;
             while (slot < handler.getSlots()) {
-                if (table.isInputSlotAccessible(slot) && handler.getStackInSlot(slot).isEmpty()) {
+                if (BloodMagicReflectionHelper.isAlchemyTableInputSlotAccessible(table, slot) && handler.getStackInSlot(slot).isEmpty()) {
                     ItemStack remainder = handler.insertItem(slot, material, false);
                     if (remainder.isEmpty()) {
                         placed = true;
@@ -391,7 +389,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         return true;
     }
 
-    private List<ItemStack> collectProductsAlchemyTable(TileAlchemyTable table) {
+    private List<ItemStack> collectProductsAlchemyTable(TileEntity table) {
         List<ItemStack> collected = new ArrayList<>();
 
         // 1. 收集输出槽产物(DOWN 面,槽位 0 对应绝对槽位 8)
@@ -419,7 +417,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
 
     // ==================== Soul Forge ====================
 
-    private boolean canStartSoulForge(TileSoulForge forge, InventoryCrafting ingredients) {
+    private boolean canStartSoulForge(TileEntity forge, InventoryCrafting ingredients) {
         List<ItemStack> materials = collectSingles(ingredients);
         if (materials.isEmpty()) return false;
         if (materials.size() > 4) return false;
@@ -438,7 +436,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         return handler.getStackInSlot(5).isEmpty();
     }
 
-    private boolean pushMaterialsSoulForge(TileSoulForge forge, InventoryCrafting ingredients) {
+    private boolean pushMaterialsSoulForge(TileEntity forge, InventoryCrafting ingredients) {
         List<ItemStack> materials = collectSingles(ingredients);
         IItemHandler handler = forge.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
         if (handler == null) return false;
@@ -464,7 +462,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         return true;
     }
 
-    private List<ItemStack> collectProductsSoulForge(TileSoulForge forge) {
+    private List<ItemStack> collectProductsSoulForge(TileEntity forge) {
         List<ItemStack> collected = new ArrayList<>();
         IItemHandler handler = forge.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
         if (handler == null) return collected;
@@ -486,7 +484,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
 
     // ==================== Altar ====================
 
-    private boolean canStartAltar(TileAltar altar, InventoryCrafting ingredients) {
+    private boolean canStartAltar(TileEntity altar, InventoryCrafting ingredients) {
         List<ItemStack> materials = collectSingles(ingredients);
         if (materials.size() != 1) return false;
 
@@ -495,7 +493,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         return handler.getStackInSlot(0).isEmpty();
     }
 
-    private boolean pushMaterialsAltar(TileAltar altar, InventoryCrafting ingredients) {
+    private boolean pushMaterialsAltar(TileEntity altar, InventoryCrafting ingredients) {
         List<ItemStack> materials = collectSingles(ingredients);
         if (materials.isEmpty()) return false;
 
@@ -506,7 +504,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         return remainder.isEmpty();
     }
 
-    private List<ItemStack> collectProductsAltar(TileAltar altar) {
+    private List<ItemStack> collectProductsAltar(TileEntity altar) {
         List<ItemStack> collected = new ArrayList<>();
         IItemHandler handler = altar.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
         if (handler == null) return collected;
@@ -521,17 +519,17 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
     @Override
     public List<ItemStack> revertMaterials(World world, BlockPos pos, IActionSource source, TargetSession session) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TileAlchemyTable) {
-            return revertMaterialsAlchemyTable((TileAlchemyTable) te);
-        } else if (te instanceof TileSoulForge) {
-            return revertMaterialsSoulForge((TileSoulForge) te);
-        } else if (te instanceof TileAltar) {
-            return revertMaterialsAltar((TileAltar) te);
+        if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALCHEMY_TABLE, te)) {
+            return revertMaterialsAlchemyTable(te);
+        } else if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_SOUL_FORGE, te)) {
+            return revertMaterialsSoulForge(te);
+        } else if (BloodMagicReflectionHelper.isInstance(BloodMagicReflectionHelper.CLASS_TILE_ALTAR, te)) {
+            return revertMaterialsAltar(te);
         }
         return java.util.Collections.emptyList();
     }
 
-    private List<ItemStack> revertMaterialsAlchemyTable(TileAlchemyTable table) {
+    private List<ItemStack> revertMaterialsAlchemyTable(TileEntity table) {
         List<ItemStack> reverted = new ArrayList<>();
         IItemHandler handler = table.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
         if (handler != null) {
@@ -543,7 +541,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         return reverted;
     }
 
-    private List<ItemStack> revertMaterialsSoulForge(TileSoulForge forge) {
+    private List<ItemStack> revertMaterialsSoulForge(TileEntity forge) {
         List<ItemStack> reverted = new ArrayList<>();
         IItemHandler handler = forge.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
         if (handler != null) {
@@ -555,7 +553,7 @@ public class BloodMagicHandler implements IRemoteHandler, IVirtualBatchCraftingH
         return reverted;
     }
 
-    private List<ItemStack> revertMaterialsAltar(TileAltar altar) {
+    private List<ItemStack> revertMaterialsAltar(TileEntity altar) {
         List<ItemStack> reverted = new ArrayList<>();
         IItemHandler handler = altar.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
         if (handler != null) {

@@ -64,8 +64,9 @@ public class MemoryCardHandlerRegistry {
             IMemoryCardHandler handler = (IMemoryCardHandler) clazz.newInstance();
             register(handler);
             AE2Enhanced.LOGGER.info("[AE2E] MemoryCardHandlerRegistry loaded handler for mod: {}", modId);
-        } catch (Exception e) {
-            AE2Enhanced.LOGGER.warn("[AE2E] MemoryCardHandlerRegistry failed to load handler for mod: {}", modId, e);
+        } catch (Throwable t) {
+            // 可选 mod 的 handler 初始化失败（含 Error，如类初始化异常）不应导致游戏崩溃
+            AE2Enhanced.LOGGER.warn("[AE2E] MemoryCardHandlerRegistry failed to load handler for mod: {}", modId, t);
         }
     }
 }

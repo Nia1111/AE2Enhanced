@@ -1,6 +1,5 @@
 package com.github.aeddddd.ae2enhanced.centralinterface;
 
-import appeng.api.AEApi;
 import appeng.api.config.LockCraftingMode;
 import appeng.api.config.Settings;
 import appeng.api.config.Upgrades;
@@ -8,15 +7,9 @@ import appeng.api.config.YesNo;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.crafting.ICraftingPatternDetails;
 import appeng.api.networking.crafting.ICraftingProviderHelper;
-import appeng.api.networking.events.MENetworkCraftingPatternChange;
-import appeng.api.networking.storage.IStorageGrid;
 import appeng.api.networking.ticking.TickRateModulation;
 import appeng.api.networking.ticking.TickingRequest;
-import appeng.api.storage.channels.IFluidStorageChannel;
-import appeng.api.storage.channels.IItemStorageChannel;
-import appeng.api.storage.data.IAEFluidStack;
 import appeng.api.storage.data.IAEItemStack;
-import appeng.api.storage.data.IAEStack;
 import appeng.api.util.IConfigManager;
 import appeng.me.GridAccessException;
 import appeng.me.helpers.AENetworkProxy;
@@ -24,40 +17,48 @@ import appeng.tile.inventory.AppEngInternalAEInventory;
 import appeng.tile.inventory.AppEngInternalInventory;
 import appeng.util.ConfigManager;
 import appeng.util.IConfigManagerHost;
-import appeng.util.Platform;
 import appeng.util.inv.InvOperation;
 import appeng.util.item.AEItemStack;
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
-import com.github.aeddddd.ae2enhanced.crafting.smartpattern.SmartPatternSubDetails;
-import com.github.aeddddd.ae2enhanced.item.ItemSmartPattern;
-import com.github.aeddddd.ae2enhanced.item.ItemVirtualParallelCard;
 import com.github.aeddddd.ae2enhanced.config.AE2EnhancedConfig;
-import com.github.aeddddd.ae2enhanced.network.packet.PacketVirtualCraftingParticles;
-import com.github.aeddddd.ae2enhanced.util.compat.Ae2fcFluidCompat;
+import com.github.aeddddd.ae2enhanced.item.ItemVirtualParallelCard;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.EnumParticleTypes;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
-import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.items.IItemHandler;
 
 import javax.annotation.Nonnull;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 中枢 ME 接口的核心逻辑类,复刻 AE2 {@link appeng.helpers.DualityInterface} 的结构.
  *
- * P1 阶段实现：
- * - 样板存储与 CraftingProvider 注册
- * - 远程目标绑定管理
- * - 单份材料发配(默认 fallback)：推送材料到目标 IItemHandler,tick 时收集产物
+ * <p>职责边界（重构后）：</p>
+ * <ul>
+ *   <li>库存持有（config / patterns / storage）与库存回调</li>
+ *   <li>pushPattern 调度：虚拟批量优先、混合栈类型回退物理、全局冷却管理</li>
+ *   <li>绑定目标与 {@link TargetSession} 生命周期管理</li>
+ *   <li>tick 编排：物理 session 推进、虚拟产物注入、storage 回推网络</li>
+ *   <li>NBT 持久化（委托 {@link PendingProductQueue} / {@link CraftingPatternList}）</li>
+ * </ul>
+ *
+ * <p>协作组件：</p>
+ * <ul>
+ *   <li>{@link PhysicalDispatcher} —— 物理发配与产物收集</li>
+ *   <li>{@link VirtualBatchEngine} —— 虚拟批量合成与粒子</li>
+ *   <li>{@link FluidTransferHelper} —— 目标机器流体 IO（无状态）</li>
+ *   <li>{@link NetworkAccess} —— AE2 内部实现层访问门面</li>
+ *   <li>{@link CraftingPatternList} —— 样板列表与配方注册</li>
+ *   <li>{@link PendingProductQueue} —— 虚拟产物暂存队列（NBT 持久化）</li>
+ * </ul>
  */
 public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInventory {
 
@@ -73,8 +74,8 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
     private final AppEngInternalInventory patterns;
     private final AppEngInternalInventory storage;
 
-    private Set<ICraftingPatternDetails> craftingList = null;
-    private int priority = 0;
+    // 样板列表与配方注册（优先级随 NBT 持久化）
+    private final CraftingPatternList patternList = new CraftingPatternList();
 
     // 远程绑定
     private final List<TargetBinding> bindings = new ArrayList<>();
@@ -82,10 +83,7 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
     // 每个绑定目标对应一个 TargetSession,集中管理 PUSHING/PROCESSING/COLLECTING/IDLE/UNAVAILABLE
     final Map<TargetBinding, TargetSession> sessions = new HashMap<>();
     // 虚拟合成产物暂存队列(等待 waitingFor 注册后再注入网络)
-    final List<ItemStack> pendingVirtualProducts = new ArrayList<>();
-
-    // 虚拟合成粒子效果：目标位置 + 剩余 tick
-    final List<VirtualParticleTarget> activeParticleTargets = new ArrayList<>();
+    final PendingProductQueue pendingProducts = new PendingProductQueue();
 
     // 虚拟合成冷却：每个目标成功执行一批后进入冷却
     final Map<TargetBinding, Integer> virtualCooldowns = new HashMap<>();
@@ -106,34 +104,6 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
 
     private final PhysicalDispatcher physicalDispatcher;
     private final VirtualBatchEngine virtualBatchEngine;
-
-    static class VirtualParticleTarget {
-        final BlockPos pos;
-        final int particleType;
-        final int color;
-        int remainingTicks;
-
-        VirtualParticleTarget(BlockPos pos, int particleType, int color, int duration) {
-            this.pos = pos;
-            this.particleType = particleType;
-            this.color = color;
-            this.remainingTicks = duration;
-        }
-    }
-
-    // 流体 IO 尝试顺序：null（内部 tank）优先，然后按 UP/DOWN/NORTH/SOUTH/WEST/EAST 逐个尝试
-    private static final List<EnumFacing> FLUID_FACE_ORDER;
-    static {
-        List<EnumFacing> list = new ArrayList<>();
-        list.add(null);
-        list.add(EnumFacing.UP);
-        list.add(EnumFacing.DOWN);
-        list.add(EnumFacing.NORTH);
-        list.add(EnumFacing.SOUTH);
-        list.add(EnumFacing.WEST);
-        list.add(EnumFacing.EAST);
-        FLUID_FACE_ORDER = Collections.unmodifiableList(list);
-    }
 
     public DualityCentralInterface(ICentralInterfaceHost host) {
         this.host = host;
@@ -220,23 +190,23 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
     // ---- Crafting Provider ----
 
     public void provideCrafting(ICraftingProviderHelper craftingTracker) {
-        AENetworkProxy proxy = this.host.getProxy();
-        if (proxy.isActive() && this.craftingList != null && !this.bindings.isEmpty()) {
-            for (ICraftingPatternDetails details : this.craftingList) {
-                details.setPriority(this.priority);
-                // 每个配方只注册一次；AE2 CPU 会针对同一 pattern 多次调用 pushPattern 实现并行。
-                craftingTracker.addCraftingOption(this.host, details);
-            }
-        }
+        this.patternList.provideCrafting(craftingTracker, this.host, gridConnection().isActive(), !this.bindings.isEmpty());
+    }
+
+    /**
+     * 获取当前网格连接 seam（每次调用实时包装 host proxy，代理内部网格引用变化时自动跟随）。
+     */
+    IGridConnection gridConnection() {
+        return NetworkAccess.connection(this.host.getProxy());
     }
 
     public boolean pushPattern(ICraftingPatternDetails patternDetails, InventoryCrafting table) {
         this.lastVirtualBatchSize = 0;
         long pendingLimit = this.nextVirtualBatchLimit;
         this.nextVirtualBatchLimit = 0;
-        AENetworkProxy proxy = this.host.getProxy();
-        if (!proxy.isActive() || this.craftingList == null
-                || !this.craftingList.contains(patternDetails)) {
+        IGridConnection grid = gridConnection();
+        if (!grid.isActive() || !this.patternList.isInitialized()
+                || !this.patternList.contains(patternDetails)) {
             return false;
         }
 
@@ -281,7 +251,7 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
             }
 
             if (preferPhysical && handler.hasCapability(HandlerCapabilities.PHYSICAL)) {
-                if (this.physicalDispatcher.dispatch(proxy, patternDetails, table, target, handler)) {
+                if (this.physicalDispatcher.dispatch(grid, patternDetails, table, target, handler)) {
                     this.lastVirtualBatchSize = 1;
                     return true;
                 }
@@ -292,7 +262,7 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
                     if (!vh.skipCooldownOnSingleBatch()) {
                         attemptedNonSkippableVirtual = true;
                     }
-                    long actualParallel = this.virtualBatchEngine.execute(proxy, patternDetails, table, target, vh, virtualParallel);
+                    long actualParallel = this.virtualBatchEngine.execute(grid, patternDetails, table, target, vh, virtualParallel);
                     if (actualParallel > 0) {
                         this.lastVirtualBatchSize = actualParallel;
                         if (actualParallel > 1 || !vh.skipCooldownOnSingleBatch()) {
@@ -315,7 +285,7 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
                 if (!vh.skipCooldownOnSingleBatch()) {
                     attemptedNonSkippableVirtual = true;
                 }
-                long actualParallel = this.virtualBatchEngine.execute(proxy, patternDetails, table, target, vh, virtualParallel);
+                long actualParallel = this.virtualBatchEngine.execute(grid, patternDetails, table, target, vh, virtualParallel);
                 if (actualParallel > 0) {
                     this.lastVirtualBatchSize = actualParallel;
                     if (actualParallel > 1 || !vh.skipCooldownOnSingleBatch()) {
@@ -327,7 +297,7 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
 
                 // 虚拟合成失败时，若该目标同时支持物理发配，则回退到同目标物理发配
                 if (handler.hasCapability(HandlerCapabilities.PHYSICAL)) {
-                    if (this.physicalDispatcher.dispatch(proxy, patternDetails, table, target, handler)) {
+                    if (this.physicalDispatcher.dispatch(grid, patternDetails, table, target, handler)) {
                         this.lastVirtualBatchSize = 1;
                         return true;
                     }
@@ -337,7 +307,7 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
 
             // 否则尝试物理发配
             if (handler.hasCapability(HandlerCapabilities.PHYSICAL)) {
-                if (this.physicalDispatcher.dispatch(proxy, patternDetails, table, target, handler)) {
+                if (this.physicalDispatcher.dispatch(grid, patternDetails, table, target, handler)) {
                     this.lastVirtualBatchSize = 1;
                     return true;
                 }
@@ -397,11 +367,9 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
         if (upgrades == null) {
             return maxParallel;
         }
-        boolean foundCard = false;
         for (int i = 0; i < upgrades.getSlots(); i++) {
             ItemStack stack = upgrades.getStackInSlot(i);
             if (!stack.isEmpty() && stack.getItem() instanceof ItemVirtualParallelCard) {
-                foundCard = true;
                 maxParallel = Math.max(maxParallel, ItemVirtualParallelCard.getParallel(stack));
             }
         }
@@ -469,24 +437,19 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
      * 流体假物品走物品通道,由 ae2fc 的 FakeMonitor 体系接管(若 ae2fc 未安装,
      * 则由本 mod 的 MixinNetworkMonitorFluid 转注入流体通道).
      */
-    boolean injectItemsToNetwork(AENetworkProxy proxy, World world, List<ItemStack> items) {
+    boolean injectItemsToNetwork(IGridConnection grid, World world, List<ItemStack> items) {
         try {
-            IItemStorageChannel channel = AEApi.instance().storage().getStorageChannel(IItemStorageChannel.class);
             for (ItemStack product : items) {
                 if (product.isEmpty()) continue;
                 IAEItemStack toInsert = AEItemStack.fromItemStack(product);
-                IAEItemStack remaining = Platform.poweredInsert(
-                        proxy.getEnergy(),
-                        proxy.getStorage().getInventory(channel),
-                        toInsert,
-                        new appeng.me.helpers.MachineSource(this.host));
+                IAEItemStack remaining = NetworkAccess.poweredInsertItem(grid, this.host, toInsert);
                 if (remaining != null && remaining.getStackSize() > 0) {
                     ItemStack leftover = remaining.createItemStack();
                     stashItemToStorage(world, leftover);
                 }
             }
             return true;
-        } catch (appeng.me.GridAccessException e) {
+        } catch (GridAccessException e) {
             AE2Enhanced.LOGGER.warn("[AE2E] CentralInterface failed to inject items to network", e);
             return false;
         }
@@ -567,8 +530,8 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
     }
 
     public TickRateModulation tickingRequest(IGridNode node, int ticksSinceLastCall) {
-        AENetworkProxy proxy = this.host.getProxy();
-        if (!proxy.isActive()) {
+        IGridConnection grid = gridConnection();
+        if (!grid.isActive()) {
             return TickRateModulation.SLEEP;
         }
 
@@ -580,38 +543,32 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
 
         boolean didWork = false;
         World world = this.host.getTileEntity().getWorld();
-        int timeoutTicks = com.github.aeddddd.ae2enhanced.config.AE2EnhancedConfig.centralInterface.processingTimeoutTicks;
+        int timeoutTicks = AE2EnhancedConfig.centralInterface.processingTimeoutTicks;
 
         // 物理 session 处理（PROCESSING / COLLECTING）
-        if (this.physicalDispatcher.tick(proxy, world, timeoutTicks)) {
+        if (this.physicalDispatcher.tick(grid, world, timeoutTicks)) {
             didWork = true;
         }
 
         // 虚拟产物注入 + 粒子包
-        if (this.virtualBatchEngine.tick(proxy)) {
+        if (this.virtualBatchEngine.tick(grid)) {
             didWork = true;
         }
 
         // 将 storage slots 中的物品推入网络(如果有空间)
-        pushStorageToNetwork(proxy);
+        pushStorageToNetwork(grid);
 
-        return (hasWorkToDo() || !this.activeParticleTargets.isEmpty())
+        return (hasWorkToDo() || this.virtualBatchEngine.hasActiveParticles())
                 ? (didWork || cooldownExpired ? TickRateModulation.URGENT : TickRateModulation.SLOWER)
                 : TickRateModulation.SLEEP;
     }
 
-    private void pushStorageToNetwork(AENetworkProxy proxy) {
+    private void pushStorageToNetwork(IGridConnection grid) {
         try {
-            IItemStorageChannel channel =
-                    AEApi.instance().storage().getStorageChannel(IItemStorageChannel.class);
             for (int s = 0; s < this.storage.getSlots(); s++) {
                 ItemStack stack = this.storage.getStackInSlot(s);
                 if (stack.isEmpty()) continue;
-                IAEItemStack notInserted = Platform.poweredInsert(
-                        proxy.getEnergy(),
-                        proxy.getStorage().getInventory(channel),
-                        AEItemStack.fromItemStack(stack),
-                        new appeng.me.helpers.MachineSource(this.host));
+                IAEItemStack notInserted = NetworkAccess.poweredInsertItem(grid, this.host, AEItemStack.fromItemStack(stack));
                 if (notInserted == null || notInserted.getStackSize() == 0) {
                     this.storage.extractItem(s, stack.getCount(), false);
                 } else {
@@ -621,279 +578,16 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
                     }
                 }
             }
-        } catch (appeng.me.GridAccessException e) {
+        } catch (GridAccessException e) {
             // 网络未连接,保持 storage 中
         }
-    }
-
-    /**
-     * 向附近玩家发送虚拟合成粒子包。
-     */
-    // ---- 流体支持 ----
-
-    /**
-     * 将 table 中的流体假物品推送到目标的 IFluidHandler.
-     * CPU 已事先将物品提取到 table 中,此处只做转换与推送,不再从网络提取.
-     * 推送成功后,将对应槽位从 table 中清空,防止后续 handler.pushMaterials 再次处理.
-     *
-     * <p>按 {@link #FLUID_FACE_ORDER} 依次尝试各方向面,第一个能完整接受流体的面即被使用,
-     * 避免向多个 face 重复推送或污染输出槽.</p>
-     */
-    boolean pushFluidInputs(World world, BlockPos pos, InventoryCrafting table, List<FluidStack> pushedFluids) {
-        TileEntity te = world.getTileEntity(pos);
-        if (te == null) return true;
-
-        for (int i = 0; i < table.getSizeInventory(); i++) {
-            ItemStack stack = table.getStackInSlot(i);
-            if (stack.isEmpty()) continue;
-
-            // 只处理流体假物品（AE2E / ae2fc 的 FluidDrop / FluidPacket）。
-            // 真实的流体容器（如水桶）应作为普通物品推送给机器，由机器自行处理空容器返还；
-            // 否则这里会把容器直接抽干并清空槽位，导致空容器丢失。
-            if (!Ae2fcFluidCompat.isAnyFluidFakeItem(stack)) continue;
-
-            FluidStack fluid = Ae2fcFluidCompat.getFluidStack(stack);
-            if (fluid == null) {
-                // 兼容 ae2fc 的 ItemFluidPacket(旧版 fallback)
-                String itemClass = stack.getItem().getClass().getName();
-                if ("com.glodblock.github.common.item.ItemFluidPacket".equals(itemClass)) {
-                    fluid = com.github.aeddddd.ae2enhanced.util.fakeitem.FakeFluids.unpackAe2fcFluid(stack);
-                }
-            }
-            if (fluid == null) continue;
-
-            boolean pushed = false;
-            for (EnumFacing face : FLUID_FACE_ORDER) {
-                if (tryFillFluidHandler(te, face, fluid, pushedFluids)) {
-                    pushed = true;
-                    break;
-                }
-            }
-
-            if (!pushed) {
-                return false;
-            }
-
-            // 从 table 中移除已推送的流体,避免 handler.pushMaterials 再次尝试插入 ItemFluidDrop
-            table.setInventorySlotContents(i, ItemStack.EMPTY);
-        }
-        return true;
-    }
-
-    private boolean tryFillFluidHandler(TileEntity te, EnumFacing face, FluidStack fluid, List<FluidStack> pushedFluids) {
-        if (!te.hasCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, face)) return false;
-        IFluidHandler fh = te.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, face);
-        if (fh == null) return false;
-        int filled = fh.fill(fluid, false);
-        if (filled >= fluid.amount) {
-            fh.fill(fluid, true);
-            pushedFluids.add(fluid.copy());
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * 回退已推送到目标 IFluidHandler 的流体.
-     * 按 {@link #FLUID_FACE_ORDER} 依次尝试抽取,按精确 FluidStack 匹配回退.
-     */
-    void revertPushedFluids(World world, BlockPos pos, List<FluidStack> fluids) {
-        if (fluids.isEmpty()) return;
-        TileEntity te = world.getTileEntity(pos);
-        if (te == null) return;
-        for (FluidStack fluid : fluids) {
-            for (EnumFacing face : FLUID_FACE_ORDER) {
-                if (tryDrainFluidHandler(te, face, fluid)) break;
-            }
-        }
-    }
-
-    /**
-     * 将溢出流体尝试重新推回目标机器的 tank。
-     * 用于网络已满时保留流体在目标中，避免产物丢失。
-     *
-     * @return 未能成功推回目标而剩余的流体
-     */
-    List<FluidStack> pushFluidsToTarget(World world, BlockPos pos, List<FluidStack> fluids) {
-        List<FluidStack> remaining = new ArrayList<>();
-        TileEntity te = world.getTileEntity(pos);
-        if (te == null) {
-            for (FluidStack f : fluids) {
-                if (f != null && f.amount > 0) remaining.add(f.copy());
-            }
-            return remaining;
-        }
-        for (FluidStack fluid : fluids) {
-            if (fluid == null || fluid.amount <= 0) continue;
-            boolean pushed = false;
-            List<FluidStack> dummy = new ArrayList<>();
-            for (EnumFacing face : FLUID_FACE_ORDER) {
-                if (tryFillFluidHandler(te, face, fluid, dummy)) {
-                    pushed = true;
-                    break;
-                }
-            }
-            if (!pushed) {
-                remaining.add(fluid.copy());
-            }
-        }
-        return remaining;
-    }
-
-    private boolean tryDrainFluidHandler(TileEntity te, EnumFacing face, FluidStack fluid) {
-        if (!te.hasCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, face)) return false;
-        IFluidHandler fh = te.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, face);
-        if (fh == null) return false;
-        FluidStack drained = fh.drain(fluid, false);
-        if (drained != null && drained.amount > 0) {
-            // 只回退实际存在的量,避免过度抽取
-            FluidStack toDrain = fluid.copy();
-            toDrain.amount = Math.min(fluid.amount, drained.amount);
-            fh.drain(toDrain, true);
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * 从目标的 IFluidHandler 收集流体产物.
-     *
-     * <p>直接返回 FluidStack 列表，不再转换为流体假物品；调用方应通过
-     * {@link #injectFluidsToNetwork} 将流体注入 AE 流体网络。</p>
-     *
-     * <p>第一阶段按 {@link #FLUID_FACE_ORDER} 收集与预期产物匹配的流体；
-     * 第二阶段作为兜底，抽取各 face 上剩余的非输入流体，避免 TE 等机器的产物
-     * 因数量/NBT 不完全匹配而残留在 tank 中。</p>
-     */
-    List<FluidStack> collectFluidProducts(World world, BlockPos pos, TargetSession session) {
-        List<FluidStack> fluids = new ArrayList<>();
-        TileEntity te = world.getTileEntity(pos);
-        if (te == null) return fluids;
-
-        IAEItemStack[] expectedOutputs = session != null ? session.getExpectedOutputs() : null;
-        List<FluidStack> inputFluids = session != null ? session.getInputFluids() : Collections.emptyList();
-
-        // 阶段 1：按预期产物精确收集
-        if (expectedOutputs != null) {
-            for (IAEItemStack expected : expectedOutputs) {
-                if (expected == null || expected.getStackSize() <= 0) continue;
-                ItemStack stack = expected.createItemStack();
-                FluidStack expectedFluid = extractFluidFromItemStack(stack);
-                if (expectedFluid == null) continue;
-
-                for (EnumFacing face : FLUID_FACE_ORDER) {
-                    if (tryCollectExpectedFluid(te, face, expectedFluid, fluids)) {
-                        break;
-                    }
-                }
-            }
-        }
-
-        // 阶段 2：兜底收集剩余非输入流体（主要面向 TE 流体产物机器）
-        for (EnumFacing face : FLUID_FACE_ORDER) {
-            if (!te.hasCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, face)) continue;
-            IFluidHandler fh = te.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, face);
-            if (fh == null) continue;
-            collectRemainingFluid(fh, inputFluids, fluids);
-        }
-
-        return fluids;
-    }
-
-    private FluidStack extractFluidFromItemStack(ItemStack stack) {
-        if (!Ae2fcFluidCompat.isAnyFluidFakeItem(stack)) {
-            return null;
-        }
-        FluidStack fluid = Ae2fcFluidCompat.getFluidStack(stack);
-        if (fluid != null) {
-            return fluid;
-        }
-        String itemClass = stack.getItem().getClass().getName();
-        if ("com.glodblock.github.common.item.ItemFluidPacket".equals(itemClass)) {
-            return com.github.aeddddd.ae2enhanced.util.fakeitem.FakeFluids.unpackAe2fcFluid(stack);
-        }
-        return null;
-    }
-
-    private boolean tryCollectExpectedFluid(TileEntity te, EnumFacing face, FluidStack expectedFluid, List<FluidStack> fluids) {
-        if (!te.hasCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, face)) return false;
-        IFluidHandler fh = te.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, face);
-        if (fh == null) return false;
-        FluidStack drained = fh.drain(expectedFluid, false);
-        if (drained != null && drained.amount >= expectedFluid.amount) {
-            fh.drain(expectedFluid, true);
-            fluids.add(expectedFluid.copy());
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * 循环抽取指定 IFluidHandler 中的剩余流体，跳过本批次推送的输入流体。
-     */
-    private void collectRemainingFluid(IFluidHandler fh, List<FluidStack> inputFluids, List<FluidStack> fluids) {
-        while (true) {
-            FluidStack drained = fh.drain(Integer.MAX_VALUE, false);
-            if (drained == null || drained.amount <= 0) break;
-            if (isInputFluid(drained, inputFluids)) break;
-            FluidStack actual = fh.drain(drained, true);
-            if (actual == null || actual.amount <= 0) break;
-            fluids.add(actual.copy());
-        }
-    }
-
-    private boolean isInputFluid(FluidStack fluid, List<FluidStack> inputFluids) {
-        for (FluidStack input : inputFluids) {
-            if (input != null && input.isFluidEqual(fluid)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 将流体列表直接注入 AE 流体网络，不再创建流体假物品。
-     *
-     * @return 未能注入网络的溢出流体列表；若全部注入成功则返回空列表
-     */
-    List<FluidStack> injectFluidsToNetwork(AENetworkProxy proxy, World world, List<FluidStack> fluids) {
-        List<FluidStack> overflow = new ArrayList<>();
-        try {
-            IFluidStorageChannel channel = AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class);
-            for (FluidStack fluid : fluids) {
-                if (fluid == null || fluid.amount <= 0) continue;
-                IAEFluidStack toInsert = channel.createStack(fluid);
-                if (toInsert == null) {
-                    overflow.add(fluid.copy());
-                    continue;
-                }
-                IAEFluidStack remaining = Platform.poweredInsert(
-                        proxy.getEnergy(),
-                        proxy.getStorage().getInventory(channel),
-                        toInsert,
-                        new appeng.me.helpers.MachineSource(this.host));
-                if (remaining != null && remaining.getStackSize() > 0) {
-                    FluidStack leftover = remaining.getFluidStack();
-                    AE2Enhanced.LOGGER.warn("[AE2E] CentralInterface fluid overflow: {} mb of {}", leftover.amount, leftover.getFluid().getName());
-                    overflow.add(leftover.copy());
-                }
-            }
-        } catch (appeng.me.GridAccessException e) {
-            AE2Enhanced.LOGGER.warn("[AE2E] CentralInterface failed to inject fluids to network", e);
-            for (FluidStack fluid : fluids) {
-                if (fluid != null && fluid.amount > 0) {
-                    overflow.add(fluid.copy());
-                }
-            }
-        }
-        return overflow;
     }
 
     private boolean hasWorkToDo() {
         if (isOnGlobalVirtualCooldown()) {
             return true;
         }
-        if (!this.pendingVirtualProducts.isEmpty()) {
+        if (!this.pendingProducts.isEmpty()) {
             return true;
         }
         for (TargetSession session : this.sessions.values()) {
@@ -920,7 +614,7 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
     @Override
     public void onChangeInventory(IItemHandler inv, int slot, InvOperation mc, ItemStack removed, ItemStack added) {
         if (inv == this.patterns) {
-            updateCraftingList();
+            refreshPatterns();
             this.host.saveChanges();
         } else if (inv == this.config) {
             this.host.saveChanges();
@@ -938,7 +632,7 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
     // ---- Crafting List Management ----
 
     public void initialize() {
-        updateCraftingList();
+        refreshPatterns();
         // 加载完成后,若存在持久化的处理状态,唤醒 tick 以继续收集
         if (hasWorkToDo()) {
             tryWakeTickDevice();
@@ -946,94 +640,16 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
     }
 
     void tryWakeTickDevice() {
-        try {
-            AENetworkProxy proxy = this.host.getProxy();
-            if (proxy.isActive()) {
-                appeng.api.networking.ticking.ITickManager tm = proxy.getTick();
-                if (tm != null) {
-                    tm.wakeDevice(this.host.getProxy().getNode());
-                }
-            }
-        } catch (appeng.me.GridAccessException e) {
-            AE2Enhanced.LOGGER.warn("[AE2E] Failed to wake tick device for CentralInterface", e);
-        }
+        gridConnection().wakeTickDevice(this.host);
     }
 
-    private void updateCraftingList() {
-        AENetworkProxy proxy = this.host.getProxy();
-
-        boolean removed = false;
-        boolean newPattern = false;
-
-        if (this.craftingList == null) {
-            this.craftingList = new HashSet<>();
-        }
-
-        boolean[] accountedFor = new boolean[this.patterns.getSlots()];
-
-        Iterator<ICraftingPatternDetails> i = this.craftingList.iterator();
-        while (i.hasNext()) {
-            ICraftingPatternDetails details = i.next();
-            boolean found = false;
-            for (int x = 0; x < accountedFor.length; x++) {
-                ItemStack stackInSlot = this.patterns.getStackInSlot(x);
-                if (details.getPattern() == stackInSlot) {
-                    found = true;
-                    accountedFor[x] = true;
-                    break;
-                }
-                // SmartPatternSubDetails: match by parent ItemSmartPattern
-                if (details instanceof SmartPatternSubDetails) {
-                    ItemStack parent = ((SmartPatternSubDetails) details).getPattern();
-                    if (parent == stackInSlot) {
-                        found = true;
-                        accountedFor[x] = true;
-                        break;
-                    }
-                }
-            }
-            if (!found) {
-                removed = true;
-                i.remove();
-            }
-        }
-
-        for (int x = 0; x < accountedFor.length; x++) {
-            if (!accountedFor[x]) {
-                newPattern = true;
-                addToCraftingList(this.patterns.getStackInSlot(x));
-            }
-        }
-
-        // 网络就绪后才发送事件；若未就绪，craftingList 仍已完成重建，
-        // 等网络恢复后 CraftingGridCache 的 provideCrafting 扫描即可发现配方。
-        if (proxy.isReady() && (newPattern || removed)) {
-            try {
-                proxy.getGrid().postEvent(new MENetworkCraftingPatternChange(this.host, proxy.getNode()));
-            } catch (GridAccessException e) {
-                // ignore
-            }
-        }
-    }
-
-    private void addToCraftingList(ItemStack stack) {
-        if (stack.isEmpty()) return;
-        // 智能样板展开
-        if (stack.getItem() instanceof ItemSmartPattern) {
-            World world = this.host.getTileEntity().getWorld();
-            List<SmartPatternSubDetails> subs = ItemSmartPattern.expandPatterns(stack, world);
-            if (subs != null) {
-                this.craftingList.addAll(subs);
-            }
-            return;
-        }
-        if (!(stack.getItem() instanceof appeng.api.implementations.ICraftingPatternItem)) return;
-        appeng.api.implementations.ICraftingPatternItem patternItem =
-                (appeng.api.implementations.ICraftingPatternItem) stack.getItem();
-        ICraftingPatternDetails details = patternItem.getPatternForItem(stack, this.host.getTileEntity().getWorld());
-        if (details != null) {
-            this.craftingList.add(details);
-        }
+    /**
+     * 重建配方列表并在有增删时向网格发送 MENetworkCraftingPatternChange。
+     */
+    private void refreshPatterns() {
+        World world = this.host.getTileEntity().getWorld();
+        this.patternList.refresh(this.patterns, world,
+                () -> gridConnection().postPatternChange(this.host));
     }
 
     // ---- Binding Management ----
@@ -1136,14 +752,7 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
     }
 
     private void postPatternChangeEvent() {
-        try {
-            AENetworkProxy proxy = this.host.getProxy();
-            if (proxy.isReady()) {
-                proxy.getGrid().postEvent(new appeng.api.networking.events.MENetworkCraftingPatternChange(this.host, proxy.getNode()));
-            }
-        } catch (appeng.me.GridAccessException e) {
-            // ignore
-        }
+        gridConnection().postPatternChange(this.host);
     }
 
     // ---- 默认单份材料发配工具方法 ----
@@ -1165,19 +774,6 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
         return copy;
     }
 
-    private TileEntity getTargetTile(TargetBinding target) {
-        World world = this.host.getTileEntity().getWorld();
-        if (world.provider.getDimension() != target.dimension) return null;
-        if (!world.isBlockLoaded(target.pos)) return null;
-        TileEntity te = world.getTileEntity(target.pos);
-        if (te == null) return null;
-        return te;
-    }
-
-    private IRemoteHandler resolveHandler(String blockId) {
-        return HandlerRegistry.findHandler(blockId);
-    }
-
     // ---- NBT ----
 
     public void readFromNBT(NBTTagCompound data) {
@@ -1185,7 +781,7 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
         this.patterns.readFromNBT(data, "patterns");
         this.storage.readFromNBT(data, "storage");
         this.cm.readFromNBT(data);
-        this.priority = data.getInteger("priority");
+        this.patternList.setPriority(data.getInteger("priority"));
 
         // 绑定
         this.bindings.clear();
@@ -1201,11 +797,11 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
         }
 
         // 恢复待注入的虚拟合成产物
-        readPendingVirtualProductsFromNBT(data);
+        this.pendingProducts.readFromNBT(data);
 
         // 旧版运行时状态（processingState）按用户要求直接丢弃，session 重置为 IDLE
 
-        // 注意：不在 readFromNBT 时调用 updateCraftingList(),
+        // 注意：不在 readFromNBT 时重建配方列表,
         // 因为 SmartPattern 展开需要 world 对象,而 NBT 读取阶段 world 可能为 null.
         // craftingList 将在 TileCentralMEInterface.update() -> initialize() 中重建.
     }
@@ -1215,7 +811,7 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
         this.patterns.writeToNBT(data, "patterns");
         this.storage.writeToNBT(data, "storage");
         this.cm.writeToNBT(data);
-        data.setInteger("priority", this.priority);
+        data.setInteger("priority", this.patternList.getPriority());
 
         // 绑定
         if (this.boundBlockId != null) {
@@ -1228,40 +824,7 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
         data.setTag("bindings", list);
 
         // 持久化待注入的虚拟合成产物
-        writePendingVirtualProductsToNBT(data);
-    }
-
-    /**
-     * 将待注入的虚拟合成产物写入 NBT，避免 chunk 卸载/服务器重启时丢失。
-     */
-    private void writePendingVirtualProductsToNBT(NBTTagCompound data) {
-        NBTTagList list = new NBTTagList();
-        for (ItemStack product : this.pendingVirtualProducts) {
-            if (product.isEmpty()) continue;
-            list.appendTag(product.serializeNBT());
-        }
-        if (list.tagCount() > 0) {
-            data.setTag("pendingVirtualProducts", list);
-        } else {
-            data.removeTag("pendingVirtualProducts");
-        }
-    }
-
-    /**
-     * 从 NBT 恢复待注入的虚拟合成产物。
-     */
-    private void readPendingVirtualProductsFromNBT(NBTTagCompound data) {
-        this.pendingVirtualProducts.clear();
-        if (!data.hasKey("pendingVirtualProducts")) {
-            return;
-        }
-        NBTTagList list = data.getTagList("pendingVirtualProducts", 10);
-        for (int i = 0; i < list.tagCount(); i++) {
-            ItemStack stack = new ItemStack(list.getCompoundTagAt(i));
-            if (!stack.isEmpty()) {
-                this.pendingVirtualProducts.add(stack);
-            }
-        }
+        this.pendingProducts.writeToNBT(data);
     }
 
     // ---- Cleanup ----
@@ -1273,14 +836,14 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
         for (int i = 0; i < this.patterns.getSlots(); i++) {
             ItemStack stack = this.patterns.getStackInSlot(i);
             if (!stack.isEmpty()) {
-                Platform.spawnDrops(world, pos, Collections.singletonList(stack));
+                NetworkAccess.spawnDrops(world, pos, Collections.singletonList(stack));
                 this.patterns.setStackInSlot(i, ItemStack.EMPTY);
             }
         }
         for (int i = 0; i < this.storage.getSlots(); i++) {
             ItemStack stack = this.storage.getStackInSlot(i);
             if (!stack.isEmpty()) {
-                Platform.spawnDrops(world, pos, Collections.singletonList(stack));
+                NetworkAccess.spawnDrops(world, pos, Collections.singletonList(stack));
                 this.storage.setStackInSlot(i, ItemStack.EMPTY);
             }
         }

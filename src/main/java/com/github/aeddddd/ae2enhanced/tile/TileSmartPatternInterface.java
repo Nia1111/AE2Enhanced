@@ -179,6 +179,21 @@ public class TileSmartPatternInterface extends TileEntity {
         syncToClient();
     }
 
+    /**
+     * 绑定目标信息并同时设置配方数据(记忆卡绑定流程).
+     * 与 {@link #setBinding} 不同,不会清除传入的 patternData.
+     */
+    public void bindWithData(@Nullable BlockPos pos, int dim, @Nonnull String blockId, @Nonnull SmartPatternData data) {
+        this.boundPos = pos;
+        this.boundDim = dim;
+        this.boundBlockId = blockId;
+        this.patternData = data;
+        this.lockedRecipeIndex = -1;
+        clearMiniGuiInventory();
+        markDirty();
+        syncToClient();
+    }
+
     public void clearBinding() {
         this.boundPos = null;
         this.boundDim = Integer.MIN_VALUE;

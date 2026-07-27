@@ -22,15 +22,7 @@ import net.minecraft.util.EnumParticleTypes;
 import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.common.util.RecipeMatcher;
-import thaumcraft.api.ThaumcraftApi;
-import thaumcraft.api.aspects.Aspect;
-import thaumcraft.api.aspects.AspectList;
-import thaumcraft.api.capabilities.IPlayerKnowledge;
-import thaumcraft.api.capabilities.ThaumcraftCapabilities;
-import thaumcraft.api.crafting.IThaumcraftRecipe;
-import thaumcraft.api.crafting.InfusionRecipe;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -51,7 +43,7 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
 
     private static final String BLOCK_ID = "thaumcraft:infusion_matrix";
 
-    // Thaumcraft 内部类反射(API 类直接引用,内部类反射隔离)
+    // Thaumcraft 内部类反射(API 类反射见 ThaumcraftReflectionHelper)
     private static Class<?> CLASS_TILE_INFUSION_MATRIX;
     private static Class<?> CLASS_TILE_PEDESTAL;
     private static Method METHOD_CRAFTING_START;
@@ -231,17 +223,17 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
                 }
 
                 // 未启动,可能是研究不足.从基座反查配方,临时授予研究后重试
-                InfusionRecipe recipe = findRecipeFromPedestals(world, pos, te);
+                Object recipe = findRecipeFromPedestals(world, pos, te);
                 if (recipe != null) {
-                    IPlayerKnowledge knowledge = ThaumcraftCapabilities.getKnowledge(fakePlayer);
-                    String research = recipe.getResearch();
+                    Object knowledge = ThaumcraftReflectionHelper.getKnowledge(fakePlayer);
+                    String research = ThaumcraftReflectionHelper.infusionGetResearch(recipe);
                     boolean added = false;
                     if (knowledge != null && research != null && !research.isEmpty()) {
-                        added = knowledge.addResearch(research);
+                        added = ThaumcraftReflectionHelper.knowledgeAddResearch(knowledge, research);
                     }
                     METHOD_CRAFTING_START.invoke(te, fakePlayer);
                     if (added && knowledge != null) {
-                        knowledge.removeResearch(research);
+                        ThaumcraftReflectionHelper.knowledgeRemoveResearch(knowledge, research);
                     }
                     if (isCrafting(te)) {
                         return true;
@@ -250,7 +242,7 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
                     return forceStartCrafting(world, pos, te, recipe);
                 }
             } catch (Exception e) {
-                InfusionRecipe recipe = findRecipeFromPedestals(world, pos, te);
+                Object recipe = findRecipeFromPedestals(world, pos, te);
                 if (recipe != null) {
                     return forceStartCrafting(world, pos, te, recipe);
                 }
@@ -264,7 +256,7 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
      * FakePlayer 方案失败时的回退：直接设置矩阵字段并立即完成合成.
      * 这会跳过注魔过程(源质吸收、稳定性波动等),直接产出结果.
      */
-    private boolean forceStartCrafting(World world, BlockPos pos, TileEntity te, InfusionRecipe recipe) {
+    private boolean forceStartCrafting(World world, BlockPos pos, TileEntity te, Object recipe) {
         try {
             // 获取主材
             BlockPos mainPos = pos.down(2);
@@ -274,7 +266,7 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
             if (mainItem.isEmpty()) return false;
 
             // 获取产物
-            Object output = recipe.getRecipeOutput();
+            Object output = ThaumcraftReflectionHelper.infusionGetRecipeOutput(recipe);
             if (output instanceof ItemStack) {
                 ItemStack result = ((ItemStack) output).copy();
 
@@ -293,7 +285,7 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
                 // 消耗辅材并处理 container item
                 @SuppressWarnings("unchecked")
                 List<BlockPos> pedestals = (List<BlockPos>) FIELD_PEDESTALS.get(te);
-                NonNullList<Ingredient> components = recipe.getComponents();
+                NonNullList<Ingredient> components = ThaumcraftReflectionHelper.infusionGetComponents(recipe);
                 for (int i = 0; i < components.size() && i < pedestals.size(); i++) {
                     BlockPos pPos = pedestals.get(i);
                     TileEntity pTe = world.getTileEntity(pPos);
@@ -338,7 +330,7 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
     @Override
     public boolean canCraftVirtually(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs) {
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return false;
-        InfusionRecipe recipe = ThaumcraftApi.getInfusionRecipe(outputs[0].createItemStack());
+        Object recipe = ThaumcraftReflectionHelper.getInfusionRecipe(outputs[0].createItemStack());
         if (recipe == null) return false;
         return matchInfusionRecipe(recipe, ingredients);
     }
@@ -361,13 +353,13 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
     public List<IAEStack> getVirtualCost(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs, long count) {
         List<IAEStack> costs = new ArrayList<>();
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return costs;
-        InfusionRecipe recipe = ThaumcraftApi.getInfusionRecipe(outputs[0].createItemStack());
+        Object recipe = ThaumcraftReflectionHelper.getInfusionRecipe(outputs[0].createItemStack());
         if (recipe == null) return costs;
 
         List<ItemStack> available = collectNonEmpty(ingredients);
 
         // 主材
-        Ingredient mainInput = recipe.getRecipeInput();
+        Ingredient mainInput = ThaumcraftReflectionHelper.infusionGetRecipeInput(recipe);
         if (mainInput != null) {
             for (int i = 0; i < available.size(); i++) {
                 if (mainInput.apply(available.get(i))) {
@@ -380,7 +372,7 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
         }
 
         // 辅材
-        NonNullList<Ingredient> components = recipe.getComponents();
+        NonNullList<Ingredient> components = ThaumcraftReflectionHelper.infusionGetComponents(recipe);
         if (components != null) {
             for (Ingredient ing : components) {
                 if (ing == null || ing == Ingredient.EMPTY) continue;
@@ -396,9 +388,9 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
         }
 
         // 源质
-        AspectList aspects = recipe.getAspects();
-        if (aspects != null && aspects.size() > 0) {
-            List<IAEStack> essentia = createEssentiaCosts(aspects, count);
+        Object aspects = ThaumcraftReflectionHelper.infusionGetAspects(recipe);
+        if (aspects != null && ThaumcraftReflectionHelper.aspectListSize(aspects) > 0) {
+            List<IAEStack> essentia = ThaumcraftReflectionHelper.createEssentiaCosts(aspects, count);
             if (essentia == null) {
                 return null;
             }
@@ -417,9 +409,9 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
 
     // ---- 批量虚拟合成辅助 ----
 
-    private boolean matchInfusionRecipe(InfusionRecipe recipe, InventoryCrafting ingredients) {
+    private boolean matchInfusionRecipe(Object recipe, InventoryCrafting ingredients) {
         List<ItemStack> available = collectNonEmpty(ingredients);
-        Ingredient mainInput = recipe.getRecipeInput();
+        Ingredient mainInput = ThaumcraftReflectionHelper.infusionGetRecipeInput(recipe);
         if (mainInput != null) {
             boolean found = false;
             for (int i = 0; i < available.size(); i++) {
@@ -431,7 +423,7 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
             }
             if (!found) return false;
         }
-        NonNullList<Ingredient> components = recipe.getComponents();
+        NonNullList<Ingredient> components = ThaumcraftReflectionHelper.infusionGetComponents(recipe);
         if (components != null) {
             for (Ingredient ing : components) {
                 if (ing == null || ing == Ingredient.EMPTY) continue;
@@ -456,37 +448,6 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
             if (!stack.isEmpty()) list.add(stack.copy());
         }
         return list;
-    }
-
-    /**
-     * 通过反射创建源质消耗栈，避免在 ThaumicEnergistics 未安装时类加载失败。
-     *
-     * @return 源质消耗列表；若 ThaumicEnergistics 缺失或任意源质栈无法创建则返回 null
-     */
-    private List<IAEStack> createEssentiaCosts(AspectList aspects, long count) {
-        List<IAEStack> costs = new ArrayList<>();
-        try {
-            Class<?> essentiaStackClass = Class.forName("thaumicenergistics.api.EssentiaStack");
-            Class<?> aeEssentiaStackClass = Class.forName("thaumicenergistics.integration.appeng.AEEssentiaStack");
-            Constructor<?> ctor = essentiaStackClass.getConstructor(Aspect.class, int.class);
-            Method fromEssentiaStack = aeEssentiaStackClass.getMethod("fromEssentiaStack", essentiaStackClass);
-
-            for (Aspect aspect : aspects.getAspects()) {
-                if (aspect == null) continue;
-                int amount = aspects.getAmount(aspect);
-                if (amount <= 0) continue;
-                Object essStack = ctor.newInstance(aspect, (int) ((long) amount * count));
-                Object aeStack = fromEssentiaStack.invoke(null, essStack);
-                if (aeStack == null) {
-                    return null;
-                }
-                costs.add((IAEStack) aeStack);
-            }
-        } catch (Exception e) {
-            // ThaumicEnergistics 未安装或版本不兼容
-            return null;
-        }
-        return costs;
     }
 
     @Override
@@ -548,7 +509,7 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
      * 从已放置到基座的物品反查注魔配方.
      * 用于 craftingStart 失败后的 FakePlayer research 授予和强制回退.
      */
-    private static InfusionRecipe findRecipeFromPedestals(World world, BlockPos pos, TileEntity te) {
+    private static Object findRecipeFromPedestals(World world, BlockPos pos, TileEntity te) {
         // 读取主材
         BlockPos mainPos = pos.down(2);
         TileEntity mainTe = world.getTileEntity(mainPos);
@@ -580,17 +541,16 @@ public class ThaumcraftHandler implements IRemoteHandler, IVirtualBatchCraftingH
         }
 
         // 遍历配方匹配
-        Map<net.minecraft.util.ResourceLocation, IThaumcraftRecipe> recipes = ThaumcraftApi.getCraftingRecipes();
-        for (IThaumcraftRecipe recipe : recipes.values()) {
-            if (!(recipe instanceof InfusionRecipe)) continue;
-            InfusionRecipe ir = (InfusionRecipe) recipe;
-            Ingredient input = ir.getRecipeInput();
-            NonNullList<Ingredient> components = ir.getComponents();
+        Map<?, ?> recipes = ThaumcraftReflectionHelper.getCraftingRecipes();
+        for (Object recipe : recipes.values()) {
+            if (!ThaumcraftReflectionHelper.CLASS_INFUSION_RECIPE.isInstance(recipe)) continue;
+            Ingredient input = ThaumcraftReflectionHelper.infusionGetRecipeInput(recipe);
+            NonNullList<Ingredient> components = ThaumcraftReflectionHelper.infusionGetComponents(recipe);
             if (input == null || components == null) continue;
             if (!input.apply(mainItem)) continue;
             if (auxItems.size() != components.size()) continue;
             if (RecipeMatcher.findMatches(auxItems, components) != null) {
-                return ir;
+                return recipe;
             }
         }
         return null;

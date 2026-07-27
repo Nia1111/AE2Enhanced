@@ -27,6 +27,9 @@ jei.ae2enhanced.category.blackhole=黑洞合成
 jei.ae2enhanced.blackhole.hint=投入事件视界
 
 gui.ae2enhanced.unformed.title=§c未组装
+gui.ae2enhanced.special_plan.dup=§6自增殖配方:§r每次消耗 %d / 产出 %d(净 +%d),共 %d 次,种子 %d
+gui.ae2enhanced.special_plan.cycle=§6循环链:§r共 %d 轮,每轮消耗 %d / 产出 %d,种子 %d
+gui.ae2enhanced.special_plan.calls=§7样板调用: %d 次
 gui.ae2enhanced.unformed.subtitle=超因果装配枢纽
 gui.ae2enhanced.unformed.ready=结构完整 - 可以组装
 gui.ae2enhanced.unformed.hint=点击下方按钮进行组装

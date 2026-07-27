@@ -85,24 +85,6 @@ public class SmartRecipe {
         }
     }
 
-    /**
-     * 所有输入输出数量翻倍,上限 Integer.MAX_VALUE.
-     */
-    public void doubleAmounts() {
-        for (int i = 0; i < inputs.length; i++) {
-            if (inputs[i] != null) {
-                long newSize = inputs[i].getStackSize() * 2L;
-                inputs[i].setStackSize(newSize > Integer.MAX_VALUE ? Integer.MAX_VALUE : newSize);
-            }
-        }
-        for (int i = 0; i < outputs.length; i++) {
-            if (outputs[i] != null) {
-                long newSize = outputs[i].getStackSize() * 2L;
-                outputs[i].setStackSize(newSize > Integer.MAX_VALUE ? Integer.MAX_VALUE : newSize);
-            }
-        }
-    }
-
     // ---- 数量操作 ----
 
     public void multiplyAmounts(int multiplier) {

@@ -19,20 +19,6 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.oredict.OreDictionary;
-import vazkii.botania.api.BotaniaAPI;
-import vazkii.botania.api.recipe.RecipeElvenTrade;
-import vazkii.botania.api.recipe.RecipeManaInfusion;
-import vazkii.botania.api.recipe.RecipePetals;
-import vazkii.botania.api.recipe.RecipeRuneAltar;
-import vazkii.botania.api.state.BotaniaStateProps;
-import vazkii.botania.api.state.enums.AlfPortalState;
-import vazkii.botania.common.block.ModBlocks;
-import vazkii.botania.common.block.tile.TileAlfPortal;
-import vazkii.botania.common.block.tile.TileAltar;
-import vazkii.botania.common.block.tile.TileRuneAltar;
-import vazkii.botania.common.block.tile.TileTerraPlate;
-import vazkii.botania.common.block.tile.mana.TilePool;
-import vazkii.botania.common.item.ModItems;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemStackHandler;
 
@@ -53,6 +39,9 @@ import net.minecraft.util.EnumParticleTypes;
  *   <li>符文祭坛 (botania:runealtar) — addItem 放入物品 + 活石催化 + 魔杖启动合成</li>
  *   <li>花药台 (botania:altar) — 放入材料后手动触发配方合成</li>
  * </ul>
+ *
+ * 所有 Botania 类均通过 {@link BotaniaReflectionHelper} 反射访问,
+ * 本类不存在对 vazkii.botania 的编译期硬引用.
  */
 public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHandler {
 
@@ -75,26 +64,26 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
     @Override
     public boolean isValidTarget(World world, BlockPos pos) {
         TileEntity te = world.getTileEntity(pos);
-        return te instanceof TilePool
-                || te instanceof TileAlfPortal
-                || te instanceof TileTerraPlate
-                || te instanceof TileRuneAltar
-                || te instanceof TileAltar;
+        return BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_POOL, te)
+                || BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALF_PORTAL, te)
+                || BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_TERRA_PLATE, te)
+                || BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_RUNE_ALTAR, te)
+                || BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALTAR, te);
     }
 
     @Override
     public boolean canStart(World world, BlockPos pos, InventoryCrafting ingredients, TargetSession session) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TilePool) {
-            return canStartPool(world, pos, (TilePool) te, ingredients);
-        } else if (te instanceof TileAlfPortal) {
-            return canStartAlfPortal(world, pos, (TileAlfPortal) te, ingredients);
-        } else if (te instanceof TileTerraPlate) {
-            return canStartTerraPlate(world, pos, (TileTerraPlate) te, ingredients);
-        } else if (te instanceof TileRuneAltar) {
-            return canStartRuneAltar(world, pos, (TileRuneAltar) te, ingredients);
-        } else if (te instanceof TileAltar) {
-            return canStartAltar(world, pos, (TileAltar) te, ingredients);
+        if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_POOL, te)) {
+            return canStartPool(world, pos, te, ingredients);
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALF_PORTAL, te)) {
+            return canStartAlfPortal(world, pos, te, ingredients);
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_TERRA_PLATE, te)) {
+            return canStartTerraPlate(world, pos, te, ingredients);
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_RUNE_ALTAR, te)) {
+            return canStartRuneAltar(world, pos, te, ingredients);
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALTAR, te)) {
+            return canStartAltar(world, pos, te, ingredients);
         }
         return false;
     }
@@ -103,16 +92,16 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
     public boolean pushMaterials(World world, BlockPos pos, InventoryCrafting ingredients, IActionSource source, TargetSession session) {
         TileEntity te = world.getTileEntity(pos);
         boolean success = false;
-        if (te instanceof TilePool) {
-            success = pushMaterialsPool(world, pos, (TilePool) te, ingredients);
-        } else if (te instanceof TileAlfPortal) {
-            success = pushMaterialsAlfPortal(world, pos, (TileAlfPortal) te, ingredients);
-        } else if (te instanceof TileTerraPlate) {
-            success = pushMaterialsTerraPlate(world, pos, (TileTerraPlate) te, ingredients);
-        } else if (te instanceof TileRuneAltar) {
-            success = pushMaterialsRuneAltar(world, pos, (TileRuneAltar) te, ingredients);
-        } else if (te instanceof TileAltar) {
-            success = pushMaterialsAltar(world, pos, (TileAltar) te, ingredients);
+        if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_POOL, te)) {
+            success = pushMaterialsPool(world, pos, te, ingredients);
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALF_PORTAL, te)) {
+            success = pushMaterialsAlfPortal(world, pos, te, ingredients);
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_TERRA_PLATE, te)) {
+            success = pushMaterialsTerraPlate(world, pos, te, ingredients);
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_RUNE_ALTAR, te)) {
+            success = pushMaterialsRuneAltar(world, pos, te, ingredients);
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALTAR, te)) {
+            success = pushMaterialsAltar(world, pos, te, ingredients);
         }
         if (success && session != null) {
             session.setPushTick(world.getTotalWorldTime());
@@ -123,10 +112,10 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
     @Override
     public boolean startProcess(World world, BlockPos pos, IActionSource source, TargetSession session) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TileRuneAltar) {
-            return startProcessRuneAltar(world, pos, (TileRuneAltar) te);
-        } else if (te instanceof TileAltar) {
-            return startProcessAltar(world, pos, (TileAltar) te);
+        if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_RUNE_ALTAR, te)) {
+            return startProcessRuneAltar(world, pos, te);
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALTAR, te)) {
+            return startProcessAltar(world, pos, te);
         }
         return true;
     }
@@ -134,9 +123,9 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
     @Override
     public List<ItemStack> collectProducts(World world, BlockPos pos, IAEItemStack[] expectedOutputs, List<ItemStack> inputs, IActionSource source, TargetSession session) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TileRuneAltar) {
+        if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_RUNE_ALTAR, te)) {
             return collectProductsRuneAltar(world, pos, expectedOutputs);
-        } else if (te instanceof TileAltar) {
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALTAR, te)) {
             return collectProductsAltar(world, pos);
         } else {
             return collectMatchingEntityItems(world, pos, expectedOutputs);
@@ -147,9 +136,9 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
     public List<ItemStack> revertMaterials(World world, BlockPos pos, IActionSource source, TargetSession session) {
         TileEntity te = world.getTileEntity(pos);
 //         AE2Enhanced.LOGGER.debug("[AE2E-Botania] revertMaterials at {} te={}", pos, te != null ? te.getClass().getSimpleName() : "null");
-        if (te instanceof TileRuneAltar) {
+        if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_RUNE_ALTAR, te)) {
             List<ItemStack> result = new ArrayList<>();
-            IItemHandler handler = ((TileRuneAltar) te).getItemHandler();
+            IItemHandler handler = BotaniaReflectionHelper.runeAltarGetItemHandler(te);
             if (handler != null) {
                 for (int i = 0; i < handler.getSlots(); i++) {
                     ItemStack stack = handler.extractItem(i, 64, false);
@@ -158,9 +147,9 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
             }
 //             AE2Enhanced.LOGGER.debug("[AE2E-Botania] revertMaterials RuneAltar: {} items at {}", result.size(), pos);
             return result;
-        } else if (te instanceof TileAltar) {
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALTAR, te)) {
             List<ItemStack> result = new ArrayList<>();
-            IItemHandler handler = ((TileAltar) te).getItemHandler();
+            IItemHandler handler = BotaniaReflectionHelper.altarGetItemHandler(te);
             if (handler != null) {
                 for (int i = 0; i < handler.getSlots(); i++) {
                     ItemStack stack = handler.extractItem(i, 64, false);
@@ -196,16 +185,16 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
     @Override
     public boolean isIdle(World world, BlockPos pos, List<ItemStack> inputs, TargetSession session) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TilePool) {
+        if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_POOL, te)) {
             return isIdlePool(world, pos, session);
-        } else if (te instanceof TileAlfPortal) {
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALF_PORTAL, te)) {
             return isIdleAlfPortal(world, pos, session);
-        } else if (te instanceof TileTerraPlate) {
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_TERRA_PLATE, te)) {
             return isIdleTerraPlate(world, pos, session);
-        } else if (te instanceof TileRuneAltar) {
-            return isIdleRuneAltar(world, pos, (TileRuneAltar) te, session);
-        } else if (te instanceof TileAltar) {
-            return isIdleAltar(world, pos, (TileAltar) te, session);
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_RUNE_ALTAR, te)) {
+            return isIdleRuneAltar(world, pos, te, session);
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALTAR, te)) {
+            return isIdleAltar(world, pos, te, session);
         }
         return true;
     }
@@ -219,15 +208,15 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
     @Override
     public boolean canCraftVirtually(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TilePool) {
+        if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_POOL, te)) {
             return canCraftVirtuallyPool(world, pos, ingredients, outputs);
-        } else if (te instanceof TileAlfPortal) {
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALF_PORTAL, te)) {
             return canCraftVirtuallyAlfPortal(world, pos, ingredients, outputs);
-        } else if (te instanceof TileTerraPlate) {
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_TERRA_PLATE, te)) {
             return canCraftVirtuallyTerraPlate(world, pos, ingredients, outputs);
-        } else if (te instanceof TileRuneAltar) {
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_RUNE_ALTAR, te)) {
             return canCraftVirtuallyRuneAltar(world, pos, ingredients, outputs);
-        } else if (te instanceof TileAltar) {
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALTAR, te)) {
             return canCraftVirtuallyAltar(world, pos, ingredients, outputs);
         }
         return false;
@@ -250,15 +239,15 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
     @Override
     public List<IAEStack> getVirtualCost(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs, long count) {
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof TilePool) {
+        if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_POOL, te)) {
             return getVirtualCostPool(world, pos, ingredients, outputs, count);
-        } else if (te instanceof TileAlfPortal) {
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALF_PORTAL, te)) {
             return getVirtualCostAlfPortal(world, pos, ingredients, outputs, count);
-        } else if (te instanceof TileTerraPlate) {
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_TERRA_PLATE, te)) {
             return getVirtualCostTerraPlate(world, pos, ingredients, outputs, count);
-        } else if (te instanceof TileRuneAltar) {
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_RUNE_ALTAR, te)) {
             return getVirtualCostRuneAltar(world, pos, ingredients, outputs, count);
-        } else if (te instanceof TileAltar) {
+        } else if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_TILE_ALTAR, te)) {
             return getVirtualCostAltar(world, pos, ingredients, outputs, count);
         }
         return new ArrayList<>();
@@ -273,19 +262,19 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
 
     // ==================== Pool ====================
 
-    private boolean canStartPool(World world, BlockPos pos, TilePool pool, InventoryCrafting ingredients) {
+    private boolean canStartPool(World world, BlockPos pos, Object pool, InventoryCrafting ingredients) {
         int totalManaNeeded = 0;
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             ItemStack stack = ingredients.getStackInSlot(i);
             if (stack.isEmpty()) continue;
-            RecipeManaInfusion recipe = TilePool.getMatchingRecipe(stack, world.getBlockState(pos.down()));
+            Object recipe = BotaniaReflectionHelper.getPoolMatchingRecipe(stack, world.getBlockState(pos.down()));
             if (recipe == null) {
 //                 AE2Enhanced.LOGGER.debug("[AE2E-Botania] canStartPool failed: no recipe for {} at {}", stack, pos);
                 return false;
             }
-            totalManaNeeded += recipe.getManaToConsume() * stack.getCount();
+            totalManaNeeded += BotaniaReflectionHelper.manaInfusionGetManaToConsume(recipe) * stack.getCount();
         }
-        boolean manaOk = pool.getCurrentMana() >= totalManaNeeded;
+        boolean manaOk = BotaniaReflectionHelper.getPoolCurrentMana(pool) >= totalManaNeeded;
         if (!manaOk) {
 //             AE2Enhanced.LOGGER.debug("[AE2E-Botania] canStartPool failed: need {} mana, pool has {} at {}",
 //                     totalManaNeeded, pool.getCurrentMana(), pos);
@@ -296,7 +285,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         return manaOk;
     }
 
-    private boolean pushMaterialsPool(World world, BlockPos pos, TilePool pool, InventoryCrafting ingredients) {
+    private boolean pushMaterialsPool(World world, BlockPos pos, Object pool, InventoryCrafting ingredients) {
 //         AE2Enhanced.LOGGER.debug("[AE2E-Botania] pushMaterialsPool start at {}", pos);
 
         // 清理 AABB 中已有的中枢输入标记实体,防止实体堆叠干扰 collideEntityItem
@@ -340,7 +329,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
 //                 AE2Enhanced.LOGGER.debug("[AE2E-Botania] pushMaterialsPool spawned entityItem: item={} hash={}",
 //                         entityItem.getItem(), System.identityHashCode(entityItem));
 
-                boolean consumed = pool.collideEntityItem(entityItem);
+                boolean consumed = BotaniaReflectionHelper.poolCollideEntityItem(pool, entityItem);
                 // WORKAROUND: 某些整合包中 collideEntityItem 执行了成功路径(shrink+spawn产物)
                 // 但返回值被某个未知模组篡改为 false.以 entityItem.item 是否被 shrink 空作为成功判据.
                 boolean actuallyConsumed = consumed || entityItem.getItem().isEmpty();
@@ -391,9 +380,9 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
 
     // ==================== Alf Portal ====================
 
-    private boolean canStartAlfPortal(World world, BlockPos pos, TileAlfPortal portal, InventoryCrafting ingredients) {
-        AlfPortalState state = world.getBlockState(pos).getValue(BotaniaStateProps.ALFPORTAL_STATE);
-        if (state == AlfPortalState.OFF) return false;
+    private boolean canStartAlfPortal(World world, BlockPos pos, Object portal, InventoryCrafting ingredients) {
+        Object state = BotaniaReflectionHelper.getAlfPortalState(world.getBlockState(pos));
+        if (state == BotaniaReflectionHelper.ALFPORTAL_STATE_OFF) return false;
 
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             ItemStack stack = ingredients.getStackInSlot(i);
@@ -403,7 +392,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         return true;
     }
 
-    private boolean pushMaterialsAlfPortal(World world, BlockPos pos, TileAlfPortal portal, InventoryCrafting ingredients) {
+    private boolean pushMaterialsAlfPortal(World world, BlockPos pos, Object portal, InventoryCrafting ingredients) {
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             ItemStack stack = ingredients.getStackInSlot(i);
             if (stack.isEmpty()) continue;
@@ -434,7 +423,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
 
     // ==================== Terra Plate ====================
 
-    private boolean canStartTerraPlate(World world, BlockPos pos, TileTerraPlate plate, InventoryCrafting ingredients) {
+    private boolean canStartTerraPlate(World world, BlockPos pos, Object plate, InventoryCrafting ingredients) {
         // 检查平台结构
         if (BotaniaReflectionHelper.METHOD_HAS_VALID_PLATFORM != null) {
             try {
@@ -456,7 +445,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         return true;
     }
 
-    private boolean pushMaterialsTerraPlate(World world, BlockPos pos, TileTerraPlate plate, InventoryCrafting ingredients) {
+    private boolean pushMaterialsTerraPlate(World world, BlockPos pos, Object plate, InventoryCrafting ingredients) {
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             ItemStack stack = ingredients.getStackInSlot(i);
             if (stack.isEmpty()) continue;
@@ -485,14 +474,14 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
 
     // ==================== Rune Altar ====================
 
-    private boolean canStartRuneAltar(World world, BlockPos pos, TileRuneAltar altar, InventoryCrafting ingredients) {
+    private boolean canStartRuneAltar(World world, BlockPos pos, Object altar, InventoryCrafting ingredients) {
         int cooldown = BotaniaReflectionHelper.getRuneAltarCooldown(altar);
         if (cooldown > 0) return false;
-        if (!altar.isEmpty()) return false;
+        if (!BotaniaReflectionHelper.runeAltarIsEmpty(altar)) return false;
         return true;
     }
 
-    private boolean pushMaterialsRuneAltar(World world, BlockPos pos, TileRuneAltar altar, InventoryCrafting ingredients) {
+    private boolean pushMaterialsRuneAltar(World world, BlockPos pos, Object altar, InventoryCrafting ingredients) {
         ItemStack livingrock = ItemStack.EMPTY;
 
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
@@ -500,7 +489,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
             if (stack.isEmpty()) continue;
 
             // 活石作为催化剂,不放入祭坛物品栏,而是丢在旁边
-            if (stack.getItem() == Item.getItemFromBlock(ModBlocks.livingrock) && stack.getMetadata() == 0) {
+            if (stack.getItem() == Item.getItemFromBlock(BotaniaReflectionHelper.BLOCK_LIVINGROCK) && stack.getMetadata() == 0) {
                 if (livingrock.isEmpty()) {
                     livingrock = stack.copy();
                 } else {
@@ -514,7 +503,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
             for (int c = 0; c < count; c++) {
                 ItemStack single = stack.copy();
                 single.setCount(1);
-                boolean added = altar.addItem(null, single, null);
+                boolean added = BotaniaReflectionHelper.runeAltarAddItem(altar, single);
                 if (!added) return false;
             }
         }
@@ -532,25 +521,25 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         return true;
     }
 
-    private boolean startProcessRuneAltar(World world, BlockPos pos, TileRuneAltar altar) {
+    private boolean startProcessRuneAltar(World world, BlockPos pos, Object altar) {
         int cooldown = BotaniaReflectionHelper.getRuneAltarCooldown(altar);
         if (cooldown > 0) return true;
 
         int mana = BotaniaReflectionHelper.getRuneAltarMana(altar);
-        int manaToGet = altar.manaToGet;
+        int manaToGet = BotaniaReflectionHelper.runeAltarGetManaToGet(altar);
 
         if (manaToGet <= 0 || mana < manaToGet) {
             return true; // 魔力不足,等待充能
         }
 
         // 查找匹配的配方
-        RecipeRuneAltar recipe = null;
+        Object recipe = null;
         Object currentRecipe = BotaniaReflectionHelper.getRuneAltarCurrentRecipe(altar);
-        if (currentRecipe instanceof RecipeRuneAltar) {
-            recipe = (RecipeRuneAltar) currentRecipe;
+        if (BotaniaReflectionHelper.isInstance(BotaniaReflectionHelper.CLASS_RECIPE_RUNE_ALTAR, currentRecipe)) {
+            recipe = currentRecipe;
         } else {
-            for (RecipeRuneAltar r : BotaniaAPI.runeAltarRecipes) {
-                if (r.matches(altar.getItemHandler())) {
+            for (Object r : BotaniaReflectionHelper.RUNE_ALTAR_RECIPES) {
+                if (BotaniaReflectionHelper.petalsMatches(r, BotaniaReflectionHelper.runeAltarGetItemHandler(altar))) {
                     recipe = r;
                     break;
                 }
@@ -565,7 +554,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         for (EntityItem item : items) {
             if (item.isDead) continue;
             ItemStack stack = item.getItem();
-            if (stack.getItem() == Item.getItemFromBlock(ModBlocks.livingrock) && stack.getMetadata() == 0) {
+            if (stack.getItem() == Item.getItemFromBlock(BotaniaReflectionHelper.BLOCK_LIVINGROCK) && stack.getMetadata() == 0) {
                 livingrockItem = item;
                 break;
             }
@@ -577,25 +566,25 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
 
         // 执行合成核心逻辑(反射绕过 player 检查)
         try {
-            int manaCost = recipe.getManaUsage();
-            altar.recieveMana(-manaCost);
+            int manaCost = BotaniaReflectionHelper.runeAltarRecipeGetManaUsage(recipe);
+            BotaniaReflectionHelper.runeAltarRecieveMana(altar, -manaCost);
 
-            ItemStack output = recipe.getOutput().copy();
+            ItemStack output = BotaniaReflectionHelper.petalsGetOutput(recipe).copy();
             EntityItem outputItem = new EntityItem(world, pos.getX() + 0.5, pos.getY() + 1.5, pos.getZ() + 0.5, output);
             world.spawnEntity(outputItem);
 
             BotaniaReflectionHelper.setRuneAltarCurrentRecipe(altar, null);
-            world.addBlockEvent(pos, ModBlocks.runeAltar, 1, 60);
-            world.addBlockEvent(pos, ModBlocks.runeAltar, 2, 0);
-            altar.saveLastRecipe();
+            world.addBlockEvent(pos, BotaniaReflectionHelper.BLOCK_RUNE_ALTAR, 1, 60);
+            world.addBlockEvent(pos, BotaniaReflectionHelper.BLOCK_RUNE_ALTAR, 2, 0);
+            BotaniaReflectionHelper.runeAltarSaveLastRecipe(altar);
 
             // 清空物品栏
-            IItemHandlerModifiable handler = altar.getItemHandler();
-            for (int i = 0; i < altar.getSizeInventory(); i++) {
+            IItemHandlerModifiable handler = BotaniaReflectionHelper.runeAltarGetItemHandler(altar);
+            for (int i = 0; i < BotaniaReflectionHelper.runeAltarGetSizeInventory(altar); i++) {
                 ItemStack stack = handler.getStackInSlot(i);
                 if (stack.isEmpty()) continue;
                 // 符文回收：非创造模式时符文会掉落
-                if (stack.getItem() == ModItems.rune) {
+                if (stack.getItem() == BotaniaReflectionHelper.ITEM_RUNE) {
                     EntityItem runeItem = new EntityItem(world, pos.getX() + 0.5, pos.getY() + 1.5, pos.getZ() + 0.5, stack.copy());
                     world.spawnEntity(runeItem);
                 }
@@ -615,19 +604,19 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         }
     }
 
-    private boolean isIdleRuneAltar(World world, BlockPos pos, TileRuneAltar altar, TargetSession session) {
+    private boolean isIdleRuneAltar(World world, BlockPos pos, Object altar, TargetSession session) {
         if (!isGraceElapsed(session, world.getTotalWorldTime(), PUSH_IDLE_GRACE_TICKS)) return false;
         int cooldown = BotaniaReflectionHelper.getRuneAltarCooldown(altar);
         // cooldown > 0 表示合成刚完成,正在冷却
         if (cooldown > 0) return true;
 
         // 祭坛为空说明可以接收下一次发配
-        if (altar.isEmpty()) {
+        if (BotaniaReflectionHelper.runeAltarIsEmpty(altar)) {
             return true;
         }
 
         // 祭坛内有物品且 manaToGet > 0,说明正在充能/合成,不 idle
-        if (altar.manaToGet > 0) {
+        if (BotaniaReflectionHelper.runeAltarGetManaToGet(altar) > 0) {
             return false;
         }
 
@@ -649,17 +638,17 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         return SEED_PATTERN.matcher(unlocalizedName).find();
     }
 
-    private boolean canStartAltar(World world, BlockPos pos, TileAltar altar, InventoryCrafting ingredients) {
+    private boolean canStartAltar(World world, BlockPos pos, Object altar, InventoryCrafting ingredients) {
         // 类似符文祭坛的严格前置检查
-        if (!altar.isEmpty()) return false;
-        if (altar.hasLava()) return false;
+        if (!BotaniaReflectionHelper.altarIsEmpty(altar)) return false;
+        if (BotaniaReflectionHelper.altarHasLava(altar)) return false;
         return findMatchingRecipe(ingredients) != null;
     }
 
-    private boolean pushMaterialsAltar(World world, BlockPos pos, TileAltar altar, InventoryCrafting ingredients) {
+    private boolean pushMaterialsAltar(World world, BlockPos pos, Object altar, InventoryCrafting ingredients) {
         // 自动填水：花药台合成必须有水,handler 自动保证
-        if (!altar.hasWater()) {
-            altar.setWater(true);
+        if (!BotaniaReflectionHelper.altarHasWater(altar)) {
+            BotaniaReflectionHelper.altarSetWater(altar, true);
             world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 3);
         }
 
@@ -704,7 +693,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
      * 将物品作为 EntityItem 直接送入花药台的 collideEntityItem.
      * 这样可精确控制处理顺序(非种子先、种子后),避免 AABB 扫描的不确定性.
      */
-    private boolean pushItemToAltar(World world, BlockPos pos, TileAltar altar, ItemStack stack) {
+    private boolean pushItemToAltar(World world, BlockPos pos, Object altar, ItemStack stack) {
         while (!stack.isEmpty()) {
             ItemStack single = stack.splitStack(1);
             EntityItem entityItem = new EntityItem(world, pos.getX() + 0.5, pos.getY() + 1.5, pos.getZ() + 0.5, single);
@@ -714,7 +703,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
             entityItem.motionZ = 0;
             entityItem.getEntityData().setBoolean(TAG_INPUT_FLAG, true);
 
-            boolean consumed = altar.collideEntityItem(entityItem);
+            boolean consumed = BotaniaReflectionHelper.altarCollideEntityItem(altar, entityItem);
             if (!consumed) {
                 entityItem.setDead();
                 return false;
@@ -730,13 +719,13 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         return true;
     }
 
-    private boolean startProcessAltar(World world, BlockPos pos, TileAltar altar) {
+    private boolean startProcessAltar(World world, BlockPos pos, Object altar) {
         // 花药台通过 collideEntityItem 自动触发合成,无需外部手动激活.
         // pushMaterialsAltar 中已按顺序调用 collideEntityItem,合成已即时完成.
         return true;
     }
 
-    private boolean isIdleAltar(World world, BlockPos pos, TileAltar altar, TargetSession session) {
+    private boolean isIdleAltar(World world, BlockPos pos, Object altar, TargetSession session) {
         if (!isGraceElapsed(session, world.getTotalWorldTime(), PUSH_IDLE_GRACE_TICKS)) return false;
         // pushMaterialsAltar 已直接调用 collideEntityItem 并将输入 EntityItem setDead,
         // 因此 AABB 中只会留下 Botania 生成的产物 EntityItem.
@@ -750,7 +739,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         return false;
     }
 
-    private RecipePetals findMatchingRecipe(InventoryCrafting ingredients) {
+    private Object findMatchingRecipe(InventoryCrafting ingredients) {
         // 提取非空物品到临时 IItemHandler
         ItemStackHandler temp = new ItemStackHandler(16);
         int slot = 0;
@@ -764,9 +753,9 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         return findMatchingRecipe(temp);
     }
 
-    private RecipePetals findMatchingRecipe(net.minecraftforge.items.IItemHandler handler) {
-        for (RecipePetals recipe : BotaniaAPI.petalRecipes) {
-            if (recipe.matches(handler)) {
+    private Object findMatchingRecipe(net.minecraftforge.items.IItemHandler handler) {
+        for (Object recipe : BotaniaReflectionHelper.PETAL_RECIPES) {
+            if (BotaniaReflectionHelper.petalsMatches(recipe, handler)) {
                 return recipe;
             }
         }
@@ -779,9 +768,9 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
 
     private boolean canCraftVirtuallyPool(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs) {
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return false;
-        RecipeManaInfusion recipe = findManaInfusionRecipeByOutput(outputs[0].createItemStack());
+        Object recipe = findManaInfusionRecipeByOutput(outputs[0].createItemStack());
         if (recipe == null) return false;
-        Object inputObj = recipe.getInput();
+        Object inputObj = BotaniaReflectionHelper.manaInfusionGetInput(recipe);
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             ItemStack stack = ingredients.getStackInSlot(i);
             if (!stack.isEmpty() && matchesRecipeObject(inputObj, stack)) return true;
@@ -792,9 +781,9 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
     private List<IAEStack> getVirtualCostPool(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs, long count) {
         List<IAEStack> costs = new ArrayList<>();
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return costs;
-        RecipeManaInfusion recipe = findManaInfusionRecipeByOutput(outputs[0].createItemStack());
+        Object recipe = findManaInfusionRecipeByOutput(outputs[0].createItemStack());
         if (recipe == null) return costs;
-        Object inputObj = recipe.getInput();
+        Object inputObj = BotaniaReflectionHelper.manaInfusionGetInput(recipe);
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             ItemStack stack = ingredients.getStackInSlot(i);
             if (!stack.isEmpty() && matchesRecipeObject(inputObj, stack)) {
@@ -804,14 +793,14 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
                 break;
             }
         }
-        costs.add(AEManaStack.create((long) recipe.getManaToConsume() * count));
+        costs.add(AEManaStack.create((long) BotaniaReflectionHelper.manaInfusionGetManaToConsume(recipe) * count));
         return costs;
     }
 
-    private RecipeManaInfusion findManaInfusionRecipeByOutput(ItemStack output) {
+    private Object findManaInfusionRecipeByOutput(ItemStack output) {
         if (output.isEmpty()) return null;
-        for (RecipeManaInfusion recipe : BotaniaAPI.manaInfusionRecipes) {
-            ItemStack recipeOutput = recipe.getOutput();
+        for (Object recipe : BotaniaReflectionHelper.MANA_INFUSION_RECIPES) {
+            ItemStack recipeOutput = BotaniaReflectionHelper.manaInfusionGetOutput(recipe);
             if (!recipeOutput.isEmpty()
                     && recipeOutput.getItem() == output.getItem()
                     && recipeOutput.getMetadata() == output.getMetadata()) {
@@ -825,18 +814,18 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
 
     private boolean canCraftVirtuallyAlfPortal(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs) {
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return false;
-        RecipeElvenTrade recipe = findElvenTradeRecipeByOutput(outputs[0].createItemStack());
+        Object recipe = findElvenTradeRecipeByOutput(outputs[0].createItemStack());
         if (recipe == null) return false;
-        return matchRecipeInputs(recipe.getInputs(), collectNonEmpty(ingredients));
+        return matchRecipeInputs(BotaniaReflectionHelper.elvenTradeGetInputs(recipe), collectNonEmpty(ingredients));
     }
 
     private List<IAEStack> getVirtualCostAlfPortal(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs, long count) {
         List<IAEStack> costs = new ArrayList<>();
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return costs;
-        RecipeElvenTrade recipe = findElvenTradeRecipeByOutput(outputs[0].createItemStack());
+        Object recipe = findElvenTradeRecipeByOutput(outputs[0].createItemStack());
         if (recipe == null) return costs;
         List<ItemStack> available = collectNonEmpty(ingredients);
-        for (Object req : recipe.getInputs()) {
+        for (Object req : BotaniaReflectionHelper.elvenTradeGetInputs(recipe)) {
             for (int i = 0; i < available.size(); i++) {
                 if (matchesRecipeObject(req, available.get(i))) {
                     IAEItemStack cost = AEItemStack.fromItemStack(available.remove(i).copy());
@@ -849,10 +838,11 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         return costs;
     }
 
-    private RecipeElvenTrade findElvenTradeRecipeByOutput(ItemStack output) {
+    private Object findElvenTradeRecipeByOutput(ItemStack output) {
         if (output.isEmpty()) return null;
-        for (RecipeElvenTrade recipe : BotaniaAPI.elvenTradeRecipes) {
-            for (ItemStack recipeOutput : recipe.getOutputs()) {
+        for (Object recipe : BotaniaReflectionHelper.ELVEN_TRADE_RECIPES) {
+            for (Object outputObj : BotaniaReflectionHelper.elvenTradeGetOutputs(recipe)) {
+                ItemStack recipeOutput = (ItemStack) outputObj;
                 if (!recipeOutput.isEmpty()
                         && recipeOutput.getItem() == output.getItem()
                         && recipeOutput.getMetadata() == output.getMetadata()) {
@@ -870,11 +860,11 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
     private boolean canCraftVirtuallyTerraPlate(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs) {
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return false;
         ItemStack expected = outputs[0].createItemStack();
-        if (expected.getItem() != ModItems.manaResource || expected.getMetadata() != 4) return false;
+        if (expected.getItem() != BotaniaReflectionHelper.ITEM_MANA_RESOURCE || expected.getMetadata() != 4) return false;
         boolean hasSteel = false, hasPearl = false, hasDiamond = false;
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             ItemStack stack = ingredients.getStackInSlot(i);
-            if (stack.isEmpty() || stack.getItem() != ModItems.manaResource) continue;
+            if (stack.isEmpty() || stack.getItem() != BotaniaReflectionHelper.ITEM_MANA_RESOURCE) continue;
             int meta = stack.getMetadata();
             if (meta == 0) hasSteel = true;
             else if (meta == 1) hasPearl = true;
@@ -887,7 +877,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         List<IAEStack> costs = new ArrayList<>();
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             ItemStack stack = ingredients.getStackInSlot(i);
-            if (stack.isEmpty() || stack.getItem() != ModItems.manaResource) continue;
+            if (stack.isEmpty() || stack.getItem() != BotaniaReflectionHelper.ITEM_MANA_RESOURCE) continue;
             int meta = stack.getMetadata();
             if (meta == 0 || meta == 1 || meta == 2) {
                 IAEItemStack cost = AEItemStack.fromItemStack(stack.copy());
@@ -903,32 +893,32 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
 
     private boolean canCraftVirtuallyRuneAltar(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs) {
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return false;
-        RecipeRuneAltar recipe = findRuneAltarRecipeByOutput(outputs[0].createItemStack());
+        Object recipe = findRuneAltarRecipeByOutput(outputs[0].createItemStack());
         if (recipe == null) return false;
         List<ItemStack> available = collectNonEmpty(ingredients);
         boolean hasLivingrock = false;
         for (int i = available.size() - 1; i >= 0; i--) {
             ItemStack stack = available.get(i);
-            if (stack.getItem() == Item.getItemFromBlock(ModBlocks.livingrock) && stack.getMetadata() == 0) {
+            if (stack.getItem() == Item.getItemFromBlock(BotaniaReflectionHelper.BLOCK_LIVINGROCK) && stack.getMetadata() == 0) {
                 hasLivingrock = true;
                 available.remove(i);
                 break;
             }
         }
-        return hasLivingrock && matchRecipeInputs(recipe.getInputs(), available);
+        return hasLivingrock && matchRecipeInputs(BotaniaReflectionHelper.petalsGetInputs(recipe), available);
     }
 
     private List<IAEStack> getVirtualCostRuneAltar(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs, long count) {
         List<IAEStack> costs = new ArrayList<>();
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return costs;
-        RecipeRuneAltar recipe = findRuneAltarRecipeByOutput(outputs[0].createItemStack());
+        Object recipe = findRuneAltarRecipeByOutput(outputs[0].createItemStack());
         if (recipe == null) return costs;
 
         List<ItemStack> available = collectNonEmpty(ingredients);
         // 先扣活石
         for (int i = 0; i < available.size(); i++) {
             ItemStack stack = available.get(i);
-            if (stack.getItem() == Item.getItemFromBlock(ModBlocks.livingrock) && stack.getMetadata() == 0) {
+            if (stack.getItem() == Item.getItemFromBlock(BotaniaReflectionHelper.BLOCK_LIVINGROCK) && stack.getMetadata() == 0) {
                 IAEItemStack cost = AEItemStack.fromItemStack(stack.copy());
                 cost.setStackSize(count);
                 costs.add(cost);
@@ -938,7 +928,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         }
 
         // 再扣配方输入
-        for (Object req : recipe.getInputs()) {
+        for (Object req : BotaniaReflectionHelper.petalsGetInputs(recipe)) {
             for (int i = 0; i < available.size(); i++) {
                 if (matchesRecipeObject(req, available.get(i))) {
                     IAEItemStack cost = AEItemStack.fromItemStack(available.remove(i).copy());
@@ -949,14 +939,14 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
             }
         }
 
-        costs.add(AEManaStack.create((long) recipe.getManaUsage() * count));
+        costs.add(AEManaStack.create((long) BotaniaReflectionHelper.runeAltarRecipeGetManaUsage(recipe) * count));
         return costs;
     }
 
-    private RecipeRuneAltar findRuneAltarRecipeByOutput(ItemStack output) {
+    private Object findRuneAltarRecipeByOutput(ItemStack output) {
         if (output.isEmpty()) return null;
-        for (RecipeRuneAltar recipe : BotaniaAPI.runeAltarRecipes) {
-            ItemStack recipeOutput = recipe.getOutput();
+        for (Object recipe : BotaniaReflectionHelper.RUNE_ALTAR_RECIPES) {
+            ItemStack recipeOutput = BotaniaReflectionHelper.petalsGetOutput(recipe);
             if (!recipeOutput.isEmpty()
                     && recipeOutput.getItem() == output.getItem()
                     && recipeOutput.getMetadata() == output.getMetadata()) {
@@ -970,27 +960,27 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
 
     private boolean canCraftVirtuallyAltar(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs) {
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return false;
-        RecipePetals recipe = findPetalRecipeByOutput(outputs[0].createItemStack());
+        Object recipe = findPetalRecipeByOutput(outputs[0].createItemStack());
         if (recipe == null) return false;
         List<ItemStack> available = new ArrayList<>();
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             ItemStack stack = ingredients.getStackInSlot(i);
             if (!stack.isEmpty() && !isSeed(stack)) available.add(stack.copy());
         }
-        return matchRecipeInputs(recipe.getInputs(), available);
+        return matchRecipeInputs(BotaniaReflectionHelper.petalsGetInputs(recipe), available);
     }
 
     private List<IAEStack> getVirtualCostAltar(World world, BlockPos pos, InventoryCrafting ingredients, IAEItemStack[] outputs, long count) {
         List<IAEStack> costs = new ArrayList<>();
         if (outputs == null || outputs.length == 0 || outputs[0] == null) return costs;
-        RecipePetals recipe = findPetalRecipeByOutput(outputs[0].createItemStack());
+        Object recipe = findPetalRecipeByOutput(outputs[0].createItemStack());
         if (recipe == null) return costs;
         List<ItemStack> available = new ArrayList<>();
         for (int i = 0; i < ingredients.getSizeInventory(); i++) {
             ItemStack stack = ingredients.getStackInSlot(i);
             if (!stack.isEmpty() && !isSeed(stack)) available.add(stack.copy());
         }
-        for (Object req : recipe.getInputs()) {
+        for (Object req : BotaniaReflectionHelper.petalsGetInputs(recipe)) {
             for (int i = 0; i < available.size(); i++) {
                 if (matchesRecipeObject(req, available.get(i))) {
                     IAEItemStack cost = AEItemStack.fromItemStack(available.remove(i).copy());
@@ -1003,10 +993,10 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         return costs;
     }
 
-    private RecipePetals findPetalRecipeByOutput(ItemStack output) {
+    private Object findPetalRecipeByOutput(ItemStack output) {
         if (output.isEmpty()) return null;
-        for (RecipePetals recipe : BotaniaAPI.petalRecipes) {
-            ItemStack recipeOutput = recipe.getOutput();
+        for (Object recipe : BotaniaReflectionHelper.PETAL_RECIPES) {
+            ItemStack recipeOutput = BotaniaReflectionHelper.petalsGetOutput(recipe);
             if (!recipeOutput.isEmpty()
                     && recipeOutput.getItem() == output.getItem()
                     && recipeOutput.getMetadata() == output.getMetadata()) {
@@ -1027,7 +1017,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
         return list;
     }
 
-    private boolean matchRecipeInputs(List<Object> required, List<ItemStack> available) {
+    private boolean matchRecipeInputs(List<?> required, List<ItemStack> available) {
         for (Object req : required) {
             boolean found = false;
             for (int i = 0; i < available.size(); i++) {
@@ -1149,7 +1139,7 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
             }
 
             // 2. 收集返还物品(整合包可能有非符文返还；活石是催化剂不应收集)
-            if (!collectedThis && !(stack.getItem() == Item.getItemFromBlock(ModBlocks.livingrock) && stack.getMetadata() == 0)) {
+            if (!collectedThis && !(stack.getItem() == Item.getItemFromBlock(BotaniaReflectionHelper.BLOCK_LIVINGROCK) && stack.getMetadata() == 0)) {
                 collected.add(stack.copy());
                 entityItem.setDead();
             }
@@ -1158,9 +1148,9 @@ public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHand
     }
 
     private boolean isValidElvenTradeInput(ItemStack stack) {
-        if (stack.getItem() == ModItems.lexicon) return true;
-        for (RecipeElvenTrade recipe : BotaniaAPI.elvenTradeRecipes) {
-            for (Object o : recipe.getInputs()) {
+        if (stack.getItem() == BotaniaReflectionHelper.ITEM_LEXICON) return true;
+        for (Object recipe : BotaniaReflectionHelper.ELVEN_TRADE_RECIPES) {
+            for (Object o : BotaniaReflectionHelper.elvenTradeGetInputs(recipe)) {
                 if (o instanceof String) {
                     for (ItemStack target : OreDictionary.getOres((String) o)) {
                         if (OreDictionary.itemMatches(target, stack, false)) return true;

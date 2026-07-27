@@ -6,8 +6,12 @@
   "minVersion": "0.8",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
-    "MixinIProcessor",
-    "MixinRadiationHandler"
+    "MixinNCOEnergyProcessor",
+    "MixinNCONuclearFurnace",
+    "MixinRadiationHandler",
+    "MixinTileFluidProcessor",
+    "MixinTileItemFluidProcessor",
+    "MixinTileItemProcessor"
   ],
   "client": [],
   "server": []

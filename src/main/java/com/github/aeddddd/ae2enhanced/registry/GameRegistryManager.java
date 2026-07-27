@@ -261,6 +261,10 @@ public final class GameRegistryManager {
                 ).setRegistryName(AE2Enhanced.MOD_ID, "omni_tool_bedrock_upgrade"));
             }
         }
+
+        // 智能样板合并配方（动态：智能样板 + 已编码样板 → 追加配方）
+        event.getRegistry().register(new com.github.aeddddd.ae2enhanced.crafting.smartpattern.RecipeSmartPatternMerge()
+                .setRegistryName(AE2Enhanced.MOD_ID, "smart_pattern_merge"));
     }
 
     @SubscribeEvent
