@@ -3,6 +3,8 @@ package com.github.aeddddd.ae2enhanced.mixin.late.nuclearcraft;
 import nc.tile.processor.IProcessor;
 import net.minecraft.entity.player.EntityPlayer;
 import org.spongepowered.asm.mixin.Mixin;
+import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+import com.github.aeddddd.ae2enhanced.recycler.NCProcessorRedirectHelper;
 
 /**
  * NuclearCraft Overhauled (2o.x) 能量机器产物直注 Mixin（Tier 2）。
@@ -26,6 +28,9 @@ public abstract class MixinNCOEnergyProcessor implements IProcessor {
     @Override
     public abstract boolean isUsableByPlayer(EntityPlayer player);
 
+    /** 重定向熔断标记：辅助类加载失败等致命错误时置位，保证机器原逻辑不受影响。 */
+    private static boolean ae2enhanced$redirectBroken = false;
+
     /**
      * 类级重写接口 default 方法：执行原逻辑后重定向产物。
      * Mixin 合并时目标类未声明该方法，将作为新方法加入并覆盖接口 default。
@@ -33,6 +38,13 @@ public abstract class MixinNCOEnergyProcessor implements IProcessor {
     @Override
     public void produceProducts() {
         IProcessor.super.produceProducts();
-        NCProcessorRedirectHelper.redirectOverhauled(this);
+        if (!ae2enhanced$redirectBroken) {
+            try {
+                NCProcessorRedirectHelper.redirectOverhauled(this);
+            } catch (Throwable t) {
+                ae2enhanced$redirectBroken = true;
+                AE2Enhanced.LOGGER.warn("[AE2E] NuclearCraft output redirect disabled due to error", t);
+            }
+        }
     }
 }

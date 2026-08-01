@@ -77,4 +77,102 @@ public final class SpecialPlanInfo {
         }
         return 0;
     }
+
+    /**
+     * 从合成树自恢复显示信息（纯函数,服务端调用,与 1.20.1 的 compute(ICraftingPlan) 对齐）.
+     * <p>1.12.2 没有独立计划对象——树即计划:patternTimes 遍历树收集,
+     * usedItems 经 populatePlan 取"有数量且非可请求"的条目.
+     * 自增殖样板经 {@link RecursiveCraftingHelper#isNetPositiveSelfRef} 识别;
+     * 循环链(含催化环)复用 {@link RoundQuotaScheduler#deriveQuota} 的闭包 + GCD 轮次推导.</p>
+     */
+    public static SpecialPlanInfo compute(appeng.crafting.CraftingJob job) {
+        Map<IAEItemStack, Entry> entries = new LinkedHashMap<>();
+        IAEItemStack finalWhat = RecursiveCraftingHelper.canon(job.getOutput());
+        Map<appeng.api.networking.crafting.ICraftingPatternDetails, Long> patternTimes = new LinkedHashMap<>();
+        Map<IAEItemStack, Long> usedItems = new LinkedHashMap<>();
+        collectFromTree(job.getTree(), patternTimes, usedItems);
+
+        // 全计划通用:各主产出键的样板调用次数(普通计划也显示)
+        Map<IAEItemStack, Long> callCounts = new LinkedHashMap<>();
+        for (Map.Entry<appeng.api.networking.crafting.ICraftingPatternDetails, Long> e : patternTimes.entrySet()) {
+            IAEItemStack primary = e.getKey().getPrimaryOutput();
+            if (primary != null) {
+                callCounts.merge(RecursiveCraftingHelper.canon(primary), e.getValue(), Long::sum);
+            }
+        }
+
+        // 自增殖样板(与求解器阶段 1 一致,优先于循环链)
+        for (Map.Entry<appeng.api.networking.crafting.ICraftingPatternDetails, Long> e : patternTimes.entrySet()) {
+            appeng.api.networking.crafting.ICraftingPatternDetails pattern = e.getKey();
+            if (RecursiveCraftingHelper.isNetPositiveSelfRef(pattern, finalWhat)) {
+                long inPer = RecursiveCraftingHelper.selfInputPerCraft(pattern, finalWhat);
+                long outPer = RecursiveCraftingHelper.selfOutputPerCraft(pattern, finalWhat);
+                entries.put(finalWhat.copy(), new Entry(KIND_SELF_DUP, 1, outPer, inPer, e.getValue(),
+                        usedItems.getOrDefault(finalWhat, 0L)));
+                return new SpecialPlanInfo(entries, callCounts);
+            }
+        }
+
+        // 循环链(闭包 + GCD 轮次;催化环的环外副产物输出也会出现在 perRound 中)
+        RoundQuotaScheduler.Quota quota = RoundQuotaScheduler.deriveQuota(patternTimes, finalWhat);
+        if (quota == null) {
+            return new SpecialPlanInfo(entries, callCounts);
+        }
+        long rounds = 0;
+        for (Map.Entry<appeng.api.networking.crafting.ICraftingPatternDetails, Long> e : quota.perRound.entrySet()) {
+            rounds = patternTimes.get(e.getKey()) / e.getValue();
+            break;
+        }
+        Map<IAEItemStack, long[]> perRound = new LinkedHashMap<>(); // [consume, produce]
+        for (Map.Entry<appeng.api.networking.crafting.ICraftingPatternDetails, Long> e : quota.perRound.entrySet()) {
+            long t = e.getValue();
+            for (IAEItemStack input : e.getKey().getCondensedInputs()) {
+                if (input != null) {
+                    perRound.computeIfAbsent(RecursiveCraftingHelper.canon(input), k -> new long[2])[0] +=
+                            input.getStackSize() * t;
+                }
+            }
+            for (IAEItemStack output : e.getKey().getCondensedOutputs()) {
+                if (output != null) {
+                    perRound.computeIfAbsent(RecursiveCraftingHelper.canon(output), k -> new long[2])[1] +=
+                            output.getStackSize() * t;
+                }
+            }
+        }
+        for (Map.Entry<IAEItemStack, long[]> e : perRound.entrySet()) {
+            entries.put(e.getKey().copy(), new Entry(KIND_CYCLE, rounds, e.getValue()[1], e.getValue()[0], 0,
+                    usedItems.getOrDefault(e.getKey(), 0L)));
+        }
+        return new SpecialPlanInfo(entries, callCounts);
+    }
+
+    /**
+     * 遍历合成树:收集各样板的总执行次数(crafts > 0 的 process)与各键的 used 提取量.
+     * <p>used 必须直读节点的 used 列表——populatePlan 的输出会把 used 与
+     * requestable 条目按类型合并成同一条记录,无法还原.</p>
+     */
+    private static void collectFromTree(appeng.crafting.CraftingTreeNode node,
+            Map<appeng.api.networking.crafting.ICraftingPatternDetails, Long> patternTimes,
+            Map<IAEItemStack, Long> usedItems) {
+        if (node == null) {
+            return;
+        }
+        appeng.api.storage.data.IItemList<IAEItemStack> used = Ae2CraftingReflect.getNodeUsed(node);
+        if (used != null) {
+            for (IAEItemStack is : used) {
+                if (is != null && is.getStackSize() > 0) {
+                    usedItems.merge(RecursiveCraftingHelper.canon(is), is.getStackSize(), Long::sum);
+                }
+            }
+        }
+        for (appeng.crafting.CraftingTreeProcess pro : Ae2CraftingReflect.getNodeProcesses(node)) {
+            long crafts = Ae2CraftingReflect.getProcessCrafts(pro);
+            if (crafts > 0) {
+                patternTimes.merge(Ae2CraftingReflect.getProcessDetails(pro), crafts, Long::sum);
+            }
+            for (appeng.crafting.CraftingTreeNode child : Ae2CraftingReflect.getProcessNodes(pro).keySet()) {
+                collectFromTree(child, patternTimes, usedItems);
+            }
+        }
+    }
 }

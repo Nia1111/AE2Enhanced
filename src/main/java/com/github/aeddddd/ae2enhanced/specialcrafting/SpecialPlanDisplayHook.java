@@ -28,9 +28,11 @@ public final class SpecialPlanDisplayHook {
     }
 
     /**
-     * 原生 job 计算完成后发送调用次数表（仅玩家发起的请求）.
+     * 计算完成后发送显示信息（仅玩家发起的请求）.
+     * <p>统一经 {@link SpecialPlanInfo#compute} 从树自恢复:特殊/DAG 计划含结构标注,
+     * 普通计划含调用次数;空信息也发送以清空客户端上一次计划的缓存.</p>
      */
-    public static void sendCallCounts(CraftingJob job) {
+    public static void sendPlanInfo(CraftingJob job) {
         try {
             IActionSource src = Ae2CraftingReflect.getActionSrc(job);
             if (src == null || !src.player().isPresent()) {
@@ -40,15 +42,21 @@ public final class SpecialPlanDisplayHook {
             if (!(player instanceof EntityPlayerMP)) {
                 return;
             }
-            Map<IAEItemStack, Long> callCounts = computeCallCounts(job);
-            if (callCounts.isEmpty()) {
-                return;
-            }
-            SpecialPlanInfo info = new SpecialPlanInfo(new LinkedHashMap<>(), callCounts);
+            SpecialPlanInfo info = SpecialPlanInfo.compute(job);
             AE2Enhanced.network.sendTo(new PacketSpecialPlanInfo(job.getOutput(), info), (EntityPlayerMP) player);
         } catch (Throwable t) {
-            AE2Enhanced.LOGGER.debug("[特殊配方] 调用次数显示钩子异常: {}", t.toString());
+            AE2Enhanced.LOGGER.debug("[特殊配方] 计划显示钩子异常: {}", t.toString());
         }
+    }
+
+    /**
+     * 原生 job 计算完成后发送调用次数表（仅玩家发起的请求）.
+     *
+     * @deprecated 由 {@link #sendPlanInfo} 取代(统一全计划覆盖 + 缓存清空).
+     */
+    @Deprecated
+    public static void sendCallCounts(CraftingJob job) {
+        sendPlanInfo(job);
     }
 
     /**

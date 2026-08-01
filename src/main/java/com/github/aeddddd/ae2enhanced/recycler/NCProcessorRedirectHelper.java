@@ -1,4 +1,4 @@
-package com.github.aeddddd.ae2enhanced.mixin.late.nuclearcraft;
+package com.github.aeddddd.ae2enhanced.recycler;
 
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
 import com.github.aeddddd.ae2enhanced.recycler.MachineOutputRedirector;
@@ -19,6 +19,9 @@ import java.util.List;
  *
  * <p>所有 NuclearCraft 类均通过字符串 + 反射访问；本类只会在对应版本的 NC
  * 存在且对应 Mixin 被应用时才被加载，NC 未安装时不会触发类加载错误。</p>
+ *
+ * <p>注意：本类刻意放在 recycler 包而非 mixin 包下——mixin 包在部分启动器/核心mod
+ * 环境中会接受特殊处理，非 mixin 类放在其中有加载失败的风险。</p>
  *
  * <p>支持两个大版本：</p>
  * <ul>

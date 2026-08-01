@@ -3,6 +3,8 @@ package com.github.aeddddd.ae2enhanced.mixin.late.nuclearcraft;
 import nc.tile.processor.IBasicProcessor;
 import net.minecraft.entity.player.EntityPlayer;
 import org.spongepowered.asm.mixin.Mixin;
+import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+import com.github.aeddddd.ae2enhanced.recycler.NCProcessorRedirectHelper;
 
 /**
  * NuclearCraft Overhauled (2o.x) 核燃料炉产物直注 Mixin（Tier 2）。
@@ -23,12 +25,22 @@ public abstract class MixinNCONuclearFurnace implements IBasicProcessor {
     @Override
     public abstract boolean isUsableByPlayer(EntityPlayer player);
 
+    /** 重定向熔断标记：辅助类加载失败等致命错误时置位，保证机器原逻辑不受影响。 */
+    private static boolean ae2enhanced$redirectBroken = false;
+
     /**
      * 类级重写接口 default 方法：执行原逻辑后重定向产物。
      */
     @Override
     public void produceProducts() {
         IBasicProcessor.super.produceProducts();
-        NCProcessorRedirectHelper.redirectOverhauled(this);
+        if (!ae2enhanced$redirectBroken) {
+            try {
+                NCProcessorRedirectHelper.redirectOverhauled(this);
+            } catch (Throwable t) {
+                ae2enhanced$redirectBroken = true;
+                AE2Enhanced.LOGGER.warn("[AE2E] NuclearCraft output redirect disabled due to error", t);
+            }
+        }
     }
 }

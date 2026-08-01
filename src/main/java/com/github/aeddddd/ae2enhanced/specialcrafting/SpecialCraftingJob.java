@@ -43,9 +43,6 @@ public class SpecialCraftingJob extends CraftingJob {
 
     private final World world;
 
-    /** 求解成功后待发送的显示信息（仅玩家发起的请求发送）. */
-    private SpecialPlanInfo planInfo = SpecialPlanInfo.EMPTY;
-
     public SpecialCraftingJob(World w, IGrid grid, IActionSource actionSrc, IAEItemStack what,
             ICraftingCallback callback) {
         super(w, grid, actionSrc, what, callback);
@@ -100,7 +97,7 @@ public class SpecialCraftingJob extends CraftingJob {
             return true;
         } catch (InterruptedException e) {
             // 与原生一致:取消即收尾,不再回落
-            AE2Enhanced.LOGGER.info("[特殊配方] 计算被取消");
+            SpecialLog.info("[特殊配方] 计算被取消");
             Ae2CraftingReflect.finish(this);
             return true;
         } catch (Throwable t) {
@@ -138,7 +135,7 @@ public class SpecialCraftingJob extends CraftingJob {
         }
 
         if (!selfRefAnyCandidates.isEmpty()) {
-            AE2Enhanced.LOGGER.info("[特殊配方] 广义自引用路径: {}×{},{} 个候选样板", what, target,
+            SpecialLog.info("[特殊配方] 广义自引用路径: {}×{},{} 个候选样板", what, target,
                     selfRefAnyCandidates.size());
             // 广义自引用:自引用 key ≠ 请求 key 的候选迭代求解;催化剂型(X==Y 进出等量)
             // 无法净增殖,留待最后统一报缺料,不阻塞后续 X≠Y 候选.
@@ -223,14 +220,6 @@ public class SpecialCraftingJob extends CraftingJob {
         Map<IAEItemStack, Long> seeds = new LinkedHashMap<>();
         seeds.put(RecursiveCraftingHelper.canon(what), inPer);
         this.rebateUsed(root, seeds);
-
-        // 4) 显示信息
-        Map<IAEItemStack, SpecialPlanInfo.Entry> entries = new LinkedHashMap<>();
-        Map<IAEItemStack, Long> callCounts = new LinkedHashMap<>();
-        entries.put(RecursiveCraftingHelper.canon(what),
-                new SpecialPlanInfo.Entry(SpecialPlanInfo.KIND_SELF_DUP, 1, outPer, inPer, crafts, inPer));
-        mergeCallCount(callCounts, selfRef, crafts);
-        this.planInfo = new SpecialPlanInfo(entries, callCounts);
         return root;
     }
 
@@ -291,14 +280,6 @@ public class SpecialCraftingJob extends CraftingJob {
         Map<IAEItemStack, Long> seeds = new LinkedHashMap<>();
         seeds.put(RecursiveCraftingHelper.canon(selfKey), inX);
         this.rebateUsed(root, seeds);
-
-        Map<IAEItemStack, SpecialPlanInfo.Entry> entries = new LinkedHashMap<>();
-        Map<IAEItemStack, Long> callCounts = new LinkedHashMap<>();
-        entries.put(selfKey.copy(),
-                new SpecialPlanInfo.Entry(SpecialPlanInfo.KIND_SELF_DUP, 1,
-                        RecursiveCraftingHelper.selfOutputPerCraft(pattern, selfKey), inX, crafts, inX));
-        mergeCallCount(callCounts, pattern, crafts);
-        this.planInfo = new SpecialPlanInfo(entries, callCounts);
         return root;
     }
 
@@ -309,36 +290,91 @@ public class SpecialCraftingJob extends CraftingJob {
     private CraftingTreeNode solveCycle(ICraftingGrid cc, IAEItemStack what, long target, IActionSource src)
             throws InterruptedException {
         List<List<CycleAnalyzer.CycleStep>> cycles = CycleAnalyzer.findCyclesThrough(cc, what, this.world);
-        if (cycles.isEmpty()) {
+        if (!cycles.isEmpty()) {
+            SpecialLog.info("[特殊配方] 循环链求解: {}×{},找到 {} 个候选环", what, target, cycles.size());
+            // θ 形共享结构(多个环共享同一中间样板)先尝试候选环并集联立求解
+            CycleAnalyzer.Analysis union = CycleAnalyzer.analyzeUnion(cycles);
+            if (union != null && union.rateClass() == CycleAnalyzer.RateClass.PRODUCTIVE) {
+                CraftingTreeNode root = this.tryCycleAnalysis(cc, union, what, target, src);
+                if (root != null) {
+                    return root;
+                }
+            }
+            for (List<CycleAnalyzer.CycleStep> cycle : cycles) {
+                CycleAnalyzer.Analysis analysis = CycleAnalyzer.analyze(cycle);
+                if (analysis == null) {
+                    SpecialLog.info("[特殊配方] 候选环({} 步)不可解(秩不足/无正整数解/超 long),跳过",
+                            cycle.size());
+                    continue;
+                }
+                if (analysis.rateClass() != CycleAnalyzer.RateClass.PRODUCTIVE) {
+                    SpecialLog.info("[特殊配方] 候选环({} 步)为 {},不接管", cycle.size(), analysis.rateClass());
+                    continue;
+                }
+                CraftingTreeNode root = this.tryCycleAnalysis(cc, analysis, what, target, src);
+                if (root != null) {
+                    return root;
+                }
+            }
+        }
+        // 所有候选环均不适用 → 尝试催化环(请求物是某中性/增殖环发射的环外副产物,
+        // 如 1A→1X+1B、1B→1A 请求 X——X 不在环键上,常规环枚举不可见)
+        for (List<CycleAnalyzer.CycleStep> cycle : CycleAnalyzer.findCatalyticCycles(cc, what, this.world)) {
+            CycleAnalyzer.Analysis analysis = CycleAnalyzer.analyze(cycle);
+            if (analysis == null || analysis.rateClass() == CycleAnalyzer.RateClass.DISSIPATIVE) {
+                continue;
+            }
+            long xPerRound = CycleAnalyzer.byproductPerRound(analysis, what);
+            if (xPerRound <= 0) {
+                continue;
+            }
+            CraftingTreeNode root = this.tryCatalyticAnalysis(cc, analysis, xPerRound, what, target, src);
+            if (root != null) {
+                return root;
+            }
+        }
+        SpecialLog.info("[特殊配方] 无可用候选环,回落原生计算: {}×{}", what, target);
+        return null;
+    }
+
+    /**
+     * 对催化环(中性/增殖环发射环外副产物)尝试求解并构建树.
+     *
+     * @return 成功的根节点;失败返回 null,溢出返回缺料计划根.
+     */
+    @Nullable
+    private CraftingTreeNode tryCatalyticAnalysis(ICraftingGrid cc, CycleAnalyzer.Analysis analysis,
+            long xPerRound, IAEItemStack what, long target, IActionSource src) throws InterruptedException {
+        SpecialLog.info("[特殊配方] 尝试催化环({} 步):副产物 {} 每轮 +{}", analysis.steps().size(),
+                what, xPerRound);
+        MECraftingInventory inv = new MECraftingInventory(Ae2CraftingReflect.getOriginal(this), true, false, true);
+        CraftingTreeNode root = new CraftingTreeNode(cc, this, what.copy(), null, -1, 0);
+        CycleSolver.SolveResult result = CycleSolver.trySolveCatalytic(cc, this, analysis, xPerRound, inv,
+                what, target, root, src);
+        if (result == CycleSolver.SolveResult.OVERFLOW) {
+            return this.missingRoot(cc, what, target);
+        }
+        if (result != CycleSolver.SolveResult.SUCCESS) {
             return null;
         }
-        AE2Enhanced.LOGGER.info("[特殊配方] 循环链求解: {}×{},找到 {} 个候选环", what, target, cycles.size());
-        // θ 形共享结构(多个环共享同一中间样板)先尝试候选环并集联立求解
-        CycleAnalyzer.Analysis union = CycleAnalyzer.analyzeUnion(cycles);
-        if (union != null && union.rateClass() == CycleAnalyzer.RateClass.PRODUCTIVE) {
-            CraftingTreeNode root = this.tryCycleAnalysis(cc, union, what, target, src);
-            if (root != null) {
-                return root;
-            }
+        // 与增殖环一致的运行时安全守护
+        if (this.hasUnsafeExternalSubcraft(root, analysis)) {
+            SpecialLog.info("[特殊配方] 催化环求解回落:环外子合成触及环键,运行时语义不安全");
+            return null;
         }
-        for (List<CycleAnalyzer.CycleStep> cycle : cycles) {
-            CycleAnalyzer.Analysis analysis = CycleAnalyzer.analyze(cycle);
-            if (analysis == null) {
-                AE2Enhanced.LOGGER.info("[特殊配方] 候选环({} 步)不可解(秩不足/无正整数解/超 long),跳过",
-                        cycle.size());
-                continue;
-            }
-            if (analysis.rateClass() != CycleAnalyzer.RateClass.PRODUCTIVE) {
-                AE2Enhanced.LOGGER.info("[特殊配方] 候选环({} 步)为 {},不接管", cycle.size(), analysis.rateClass());
-                continue;
-            }
-            CraftingTreeNode root = this.tryCycleAnalysis(cc, analysis, what, target, src);
-            if (root != null) {
-                return root;
-            }
+        SpecialLog.info("[特殊配方] 催化环求解成功: {}×{}", what, target);
+
+        // used 返利:环键种子(与增殖环同);交付键 what 无种子
+        List<IAEItemStack> keys = analysis.keys();
+        long[] times = analysis.timesPerRound();
+        long[] seeds = analysis.seedsPerKey();
+        long[] batchSeeds = analysis.batchSeedPerKey();
+        Map<IAEItemStack, Long> plannedSeeds = new LinkedHashMap<>();
+        for (int i = 0; i < keys.size(); i++) {
+            plannedSeeds.put(keys.get(i), batchSeeds[i] > 0 ? Math.max(seeds[i], batchSeeds[i]) : seeds[i]);
         }
-        AE2Enhanced.LOGGER.info("[特殊配方] 无可用候选环,回落原生计算: {}×{}", what, target);
-        return null;
+        this.rebateUsed(root, plannedSeeds);
+        return root;
     }
 
     /**
@@ -364,11 +400,11 @@ public class SpecialCraftingJob extends CraftingJob {
         // (与 1.20.1 的 G11 语义对齐:θ 缺中间物种子时,2 键环 + 环外子合成
         // 偷吃 root 键的"可行解"在执行层不可行.)
         if (this.hasUnsafeExternalSubcraft(root, analysis)) {
-            AE2Enhanced.LOGGER.info("[特殊配方] 环求解回落:环外子合成触及环键,运行时语义不安全");
+            SpecialLog.info("[特殊配方] 环求解回落:环外子合成触及环键,运行时语义不安全");
             return null;
         }
 
-        AE2Enhanced.LOGGER.info("[特殊配方] 循环链求解成功: {}×{}", what, target);
+        SpecialLog.info("[特殊配方] 循环链求解成功: {}×{}", what, target);
 
         // used 返利:各环键的 used 回填为计划种子量(多消费者键 = max(前缀种子,每轮消耗))
         List<IAEItemStack> keys = analysis.keys();
@@ -380,41 +416,6 @@ public class SpecialCraftingJob extends CraftingJob {
             plannedSeeds.put(keys.get(i), batchSeeds[i] > 0 ? Math.max(seeds[i], batchSeeds[i]) : seeds[i]);
         }
         this.rebateUsed(root, plannedSeeds);
-
-        // 显示信息:闭包 + GCD 轮次(总次数对 timesPerRound 约分即得轮次)
-        long rounds = (target + analysis.netGain() - 1) / analysis.netGain();
-        Map<IAEItemStack, long[]> perRound = new LinkedHashMap<>(); // [consume, produce]
-        Map<IAEItemStack, Long> callCounts = new LinkedHashMap<>();
-        List<CycleAnalyzer.CycleStep> steps = analysis.steps();
-        for (int i = 0; i < steps.size(); i++) {
-            long t = times[i];
-            ICraftingPatternDetails pattern = steps.get(i).pattern();
-            for (IAEItemStack input : pattern.getCondensedInputs()) {
-                if (input == null) {
-                    continue;
-                }
-                IAEItemStack key = RecursiveCraftingHelper.canon(input);
-                long[] pair = perRound.computeIfAbsent(key, k -> new long[2]);
-                pair[0] += input.getStackSize() * t;
-            }
-            for (IAEItemStack output : pattern.getCondensedOutputs()) {
-                if (output == null) {
-                    continue;
-                }
-                IAEItemStack key = RecursiveCraftingHelper.canon(output);
-                long[] pair = perRound.computeIfAbsent(key, k -> new long[2]);
-                pair[1] += output.getStackSize() * t;
-            }
-            mergeCallCount(callCounts, pattern, rounds * t);
-        }
-        Map<IAEItemStack, SpecialPlanInfo.Entry> entries = new LinkedHashMap<>();
-        for (int i = 0; i < keys.size(); i++) {
-            long requiredStock = plannedSeeds.get(keys.get(i));
-            long[] pair = perRound.getOrDefault(keys.get(i), new long[2]);
-            entries.put(keys.get(i).copy(), new SpecialPlanInfo.Entry(SpecialPlanInfo.KIND_CYCLE, rounds,
-                    pair[1], pair[0], 0, requiredStock));
-        }
-        this.planInfo = new SpecialPlanInfo(entries, callCounts);
         return root;
     }
 
@@ -426,33 +427,7 @@ public class SpecialCraftingJob extends CraftingJob {
      * （种子 ≤ 每轮消耗,gross = 轮次 × 消耗）,回填不会突破实际可用量.</p>
      */
     private void rebateUsed(CraftingTreeNode root, Map<IAEItemStack, Long> plannedSeeds) {
-        Map<IAEItemStack, java.util.List<IAEItemStack>> found = new LinkedHashMap<>();
-        this.collectUsedEntries(root, plannedSeeds, found);
-        for (Map.Entry<IAEItemStack, Long> plan : plannedSeeds.entrySet()) {
-            java.util.List<IAEItemStack> entries = found.get(plan.getKey());
-            if (entries == null || entries.isEmpty()) {
-                continue;
-            }
-            for (int i = 0; i < entries.size(); i++) {
-                entries.get(i).setStackSize(i == 0 ? plan.getValue() : 0);
-            }
-        }
-    }
-
-    private void collectUsedEntries(CraftingTreeNode node, Map<IAEItemStack, Long> plannedSeeds,
-            Map<IAEItemStack, java.util.List<IAEItemStack>> found) {
-        appeng.api.storage.data.IItemList<IAEItemStack> used = Ae2CraftingReflect.getNodeUsed(node);
-        for (IAEItemStack key : plannedSeeds.keySet()) {
-            IAEItemStack entry = used.findPrecise(key);
-            if (entry != null && entry.getStackSize() > 0) {
-                found.computeIfAbsent(key, k -> new java.util.ArrayList<>()).add(entry);
-            }
-        }
-        for (CraftingTreeProcess pro : Ae2CraftingReflect.getNodeProcesses(node)) {
-            for (CraftingTreeNode child : Ae2CraftingReflect.getProcessNodes(pro).keySet()) {
-                this.collectUsedEntries(child, plannedSeeds, found);
-            }
-        }
+        TreeUsedRebate.rebate(root, plannedSeeds);
     }
 
     /**
@@ -509,34 +484,17 @@ public class SpecialCraftingJob extends CraftingJob {
         return root;
     }
 
-    private static void mergeCallCount(Map<IAEItemStack, Long> callCounts, ICraftingPatternDetails pattern,
-            long crafts) {
-        IAEItemStack primary = pattern.getPrimaryOutput();
-        if (primary == null || crafts <= 0) {
-            return;
-        }
-        IAEItemStack key = RecursiveCraftingHelper.canon(primary);
-        callCounts.merge(key, crafts, Long::sum);
-    }
-
     /**
-     * 求解成功后回填的显示信息（测试与展示层共用）.
+     * 显示信息（测试与展示层共用）:统一从合成树自恢复,覆盖特殊/DAG/普通计划.
      */
     public SpecialPlanInfo getPlanInfo() {
-        return this.planInfo;
+        return SpecialPlanInfo.compute(this);
     }
 
     /**
-     * 求解成功后向发起玩家发送显示信息（机器发起的请求无 GUI,跳过）.
+     * 求解成功后向发起玩家发送显示信息（机器发起的请求无 GUI,由钩子内部跳过）.
      */
     private void sendPlanInfo(IActionSource src) {
-        if (this.planInfo.isEmpty() || !src.player().isPresent()) {
-            return;
-        }
-        EntityPlayer player = src.player().get();
-        if (player instanceof EntityPlayerMP) {
-            AE2Enhanced.network.sendTo(new PacketSpecialPlanInfo(this.getOutput(), this.planInfo),
-                    (EntityPlayerMP) player);
-        }
+        SpecialPlanDisplayHook.sendPlanInfo(this);
     }
 }

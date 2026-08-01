@@ -35,8 +35,10 @@ import appeng.api.networking.crafting.ICraftingGrid;
 import appeng.api.storage.data.IAEItemStack;
 
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+import com.github.aeddddd.ae2enhanced.config.AE2EnhancedConfig;
 import com.github.aeddddd.ae2enhanced.specialcrafting.SpecialCraftingJob;
 import com.github.aeddddd.ae2enhanced.specialcrafting.SpecialCraftingRuntime;
+import com.github.aeddddd.ae2enhanced.specialcrafting.SpecialLog;
 import com.github.aeddddd.ae2enhanced.specialcrafting.SpecialPlanMarker;
 import com.github.aeddddd.ae2enhanced.specialcrafting.SpecialRecipeDetector;
 
@@ -52,11 +54,15 @@ import com.github.aeddddd.ae2enhanced.specialcrafting.SpecialRecipeDetector;
  * </ul>
  */
 @Mixin(value = CraftingGridCache.class, remap = false)
-public class MixinCraftingGridCache {
+public class MixinCraftingGridCache implements com.github.aeddddd.ae2enhanced.mixin.bridge.ICraftingGridCacheAccess {
 
     @Shadow
     @Final
     private Set<CraftingCPUCluster> craftingCPUClusters;
+
+    @Shadow
+    @Final
+    private it.unimi.dsi.fastutil.objects.Object2ObjectMap<IAEItemStack, com.google.common.collect.ImmutableList<appeng.api.networking.crafting.ICraftingPatternDetails>> craftableItems;
 
     @Shadow
     @Final
@@ -75,6 +81,11 @@ public class MixinCraftingGridCache {
     @Unique
     private final Set<TileComputationCore> ae2enhanced$computationCores = new HashSet<>();
 
+    @Override
+    public Set<IAEItemStack> ae2enhanced$craftableKeys() {
+        return new HashSet<>(this.craftableItems.keySet());
+    }
+
     @Shadow
     @Final
     private static ExecutorService CRAFTING_POOL;
@@ -89,16 +100,34 @@ public class MixinCraftingGridCache {
     private void ae2enhanced$routeSpecialCalculation(World world, IGrid grid, IActionSource actionSrc,
             IAEItemStack slotItem, ICraftingCallback cb, CallbackInfoReturnable<Future<ICraftingJob>> cir) {
         try {
-            if (!SpecialCraftingRuntime.isEnabled() || world == null || grid == null
-                    || actionSrc == null || slotItem == null) {
+            if (world == null || grid == null || actionSrc == null || slotItem == null) {
                 return;
             }
             ICraftingGrid cc = grid.getCache(ICraftingGrid.class);
-            if (!SpecialRecipeDetector.mayInvolveSpecialRecipes(cc, slotItem, world)) {
+            // 特殊配方路由:detector 命中才提交专用求解器(O(1) 闭式)
+            if (SpecialCraftingRuntime.isEnabled()
+                    && SpecialRecipeDetector.mayInvolveSpecialRecipes(cc, slotItem, world)) {
+                SpecialLog.info("[特殊配方] 路由命中,提交专用求解器: {}", slotItem);
+                SpecialCraftingJob job = new SpecialCraftingJob(world, grid, actionSrc, slotItem, cb);
+                cir.setReturnValue(CRAFTING_POOL.submit(job, job));
                 return;
             }
-            AE2Enhanced.LOGGER.info("[特殊配方] 路由命中,提交专用求解器: {}", slotItem);
-            SpecialCraftingJob job = new SpecialCraftingJob(world, grid, actionSrc, slotItem, cb);
+            // DAG 引擎路由(阶段 4):其余非特殊请求按配置模式接线——
+            // OFF 放行;DEFAULT 直接 DAG;FALLBACK 原生先算、缺料时 DAG 重算.
+            AE2EnhancedConfig.DagPlannerMode mode = AE2EnhancedConfig.crafting.dagPlannerMode;
+            if (mode == null || mode == AE2EnhancedConfig.DagPlannerMode.OFF) {
+                return;
+            }
+            if (mode == AE2EnhancedConfig.DagPlannerMode.DEFAULT) {
+                com.github.aeddddd.ae2enhanced.craftingplan.dag.DagCraftingJob job =
+                        new com.github.aeddddd.ae2enhanced.craftingplan.dag.DagCraftingJob(world, grid,
+                                actionSrc, slotItem, cb);
+                cir.setReturnValue(CRAFTING_POOL.submit(job, job));
+                return;
+            }
+            com.github.aeddddd.ae2enhanced.craftingplan.dag.FallbackDagCraftingJob job =
+                    new com.github.aeddddd.ae2enhanced.craftingplan.dag.FallbackDagCraftingJob(world, grid,
+                            actionSrc, slotItem, cb);
             cir.setReturnValue(CRAFTING_POOL.submit(job, job));
         } catch (Throwable t) {
             // 宁可漏判不可误判:路由层任何异常都放行原生

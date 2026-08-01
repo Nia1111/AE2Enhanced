@@ -4,6 +4,7 @@ import java.util.List;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.crafting.ICraftingGrid;
+import appeng.api.networking.crafting.ICraftingPatternDetails;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.storage.data.IAEItemStack;
 import appeng.crafting.CraftBranchFailure;
@@ -11,8 +12,6 @@ import appeng.crafting.CraftingJob;
 import appeng.crafting.CraftingTreeNode;
 import appeng.crafting.CraftingTreeProcess;
 import appeng.crafting.MECraftingInventory;
-
-import com.github.aeddddd.ae2enhanced.AE2Enhanced;
 
 /**
  * 跨样板增殖环求解器（阶段 2,泛化版,移植自 1.20.1）.
@@ -58,6 +57,33 @@ public final class CycleSolver {
     public static SolveResult trySolve(ICraftingGrid cc, CraftingJob job, CycleAnalyzer.Analysis analysis,
             MECraftingInventory inv, IAEItemStack what, long target, CraftingTreeNode rootNode,
             IActionSource src) throws InterruptedException {
+        return solveCore(cc, job, analysis, inv, what, target, rootNode, src, analysis.netGain(),
+                analysis.seedsPerKey()[0]);
+    }
+
+    /**
+     * 尝试以催化环闭式解满足请求:what 不在环键上,是环每超轮发射的环外副产物
+     * (如 1A→1X+1B、1B→1A 请求 X).环键种子语义与增殖环一致;what 无种子、
+     * 每超轮净得 {@code xPerRound}.
+     */
+    public static SolveResult trySolveCatalytic(ICraftingGrid cc, CraftingJob job,
+            CycleAnalyzer.Analysis analysis, long xPerRound, MECraftingInventory inv, IAEItemStack what,
+            long target, CraftingTreeNode rootNode, IActionSource src) throws InterruptedException {
+        if (xPerRound <= 0) {
+            return SolveResult.FALLBACK;
+        }
+        return solveCore(cc, job, analysis, inv, what, target, rootNode, src, xPerRound, 0);
+    }
+
+    /**
+     * 环闭式解共用内核.
+     *
+     * @param gainPerRound 每超轮交付键的净得数量(增殖环=环键净增益;催化环=副产物/轮)
+     * @param deliverSeed 交付键的保留种子(催化环为 0)
+     */
+    private static SolveResult solveCore(ICraftingGrid cc, CraftingJob job, CycleAnalyzer.Analysis analysis,
+            MECraftingInventory inv, IAEItemStack what, long target, CraftingTreeNode rootNode,
+            IActionSource src, long gainPerRound, long deliverSeed) throws InterruptedException {
         List<IAEItemStack> keys = analysis.keys();
         long[] seeds = analysis.seedsPerKey();
         long[] batchSeeds = analysis.batchSeedPerKey();
@@ -70,7 +96,7 @@ public final class CycleSolver {
             return SolveResult.SUCCESS;
         }
 
-        long rounds = (remaining + analysis.netGain() - 1) / analysis.netGain();
+        long rounds = (remaining + gainPerRound - 1) / gainPerRound;
         // T_i = rounds × timesPerRound[i],任一溢出即天文数字订单
         long[] totalTimes = new long[times.length];
         for (int i = 0; i < totalTimes.length; i++) {
@@ -90,7 +116,7 @@ public final class CycleSolver {
             if (requiredStock[i] > 0) {
                 long stock = invAmount(inv, keys.get(i));
                 if (stock < requiredStock[i]) {
-                    AE2Enhanced.LOGGER.info(
+                    SpecialLog.info(
                             "[特殊配方] 环求解回落: {} 种子不足(需要 {},库存 {}{})",
                             keys.get(i), requiredStock[i], stock,
                             batchSeeds[i] > 0 ? ",多消费者键按每轮消耗记账" : "");
@@ -142,7 +168,7 @@ public final class CycleSolver {
             // 必须是其输出之一,故按"谁产出谁"把平挂的 process 重接为层级链
             reattachProcesses(rootNode, what, proSteps, pros);
         } catch (CraftBranchFailure failure) {
-            AE2Enhanced.LOGGER.info("[特殊配方] 环求解回落:环外输入不足({})", failure.toString());
+            SpecialLog.info("[特殊配方] 环求解回落:环外输入不足({})", failure.toString());
             return SolveResult.FALLBACK; // 环外输入不足 → 原生兜底(缺料报告)
         } finally {
             for (int i = 0; i < seeds.length; i++) {
@@ -157,25 +183,34 @@ public final class CycleSolver {
         // 3) 结算校验(对应 1.20.1 的 settle 步骤):线性系统的守恒记账必须经得起
         // 实际模拟检验——环外子合成若偷吃了环键(如外部输入的子合成消耗请求物),
         // 最终库存将低于 请求量+种子,该方案运行时必死锁,必须回落.
-        // 预期库存 = 种子 + rounds×netGain ≥ 请求量 + 种子(种子保留).
+        // 预期库存 = 种子 + rounds×gainPerRound ≥ 请求量 + 种子(种子保留;催化环为 0).
         long avail = invAmount(inv, what);
-        long keep = avail > target ? seeds[0] : 0;
+        long keep = avail > target ? deliverSeed : 0;
         long drainable = Math.min(target, Math.max(0, avail - keep));
         if (drainable < target) {
-            AE2Enhanced.LOGGER.info("[特殊配方] 环求解回落:结算校验失败(库存 {} < 请求 {} + 种子 {})",
+            SpecialLog.info("[特殊配方] 环求解回落:结算校验失败(库存 {} < 请求 {} + 种子 {})",
                     avail, target, keep);
             return SolveResult.FALLBACK;
+        }
+        // 结算:取走交付量(种子保留)——防止共享模拟库存(DAG 边界)时同一批产出
+        // 被其他节点重复取用;根请求路径模拟库存随后即弃,无行为差异.
+        if (drainable > 0) {
+            IAEItemStack drainStack = RecursiveCraftingHelper.canon(what);
+            drainStack.setStackSize(drainable);
+            inv.extractItems(drainStack, Actionable.MODULATE, src);
         }
         return SolveResult.SUCCESS;
     }
 
     /**
-     * 循环链层级重建(1.12.2 树语义).
-     * <p>贷款模拟阶段 process 平挂在根节点下(顺序执行以匹配贷款水位);但
+     * 循环链层级重建（1.12.2 树语义）.
+     * <p>贷款模拟阶段 process 平挂在根节点下（顺序执行以匹配贷款水位）;但
      * {@code CraftingTreeProcess.dive → getAmountCrafted} 要求父节点的 what 是
      * 该样板的输出之一,否则抛出 "Crafting Tree construction failed"。此处按
-     * 产出关系重接:产出 root 键的样板留在根下,其余样板挂到消费其 toKey 的
-     * 样板的对应输入子节点下;最末端输入节点保持为叶子(种子喂养).</p>
+     * 产出关系重接:<b>根节点 what 是其输出之一</b>的样板留在根下（常规环 =
+     * 产出请求键的样板;催化环 = 产出交付副产物的样板,如 1A→1X+1B 中的该样板）,
+     * 其余样板挂到消费其 toKey 的样板的对应输入子节点下;最末端输入节点保持为叶子
+     * （种子喂养）.</p>
      */
     private static void reattachProcesses(CraftingTreeNode rootNode, IAEItemStack rootWhat,
             List<CycleAnalyzer.CycleStep> proSteps, List<CraftingTreeProcess> pros) {
@@ -183,7 +218,7 @@ public final class CycleSolver {
         for (int i = 0; i < pros.size(); i++) {
             CycleAnalyzer.CycleStep step = proSteps.get(i);
             CraftingTreeNode parentNode;
-            if (step.toKey().equals(rootWhat)) {
+            if (producesKey(step.pattern(), rootWhat)) {
                 parentNode = rootNode;
             } else {
                 parentNode = findConsumerChildNode(step, proSteps, pros);
@@ -194,6 +229,16 @@ public final class CycleSolver {
             Ae2CraftingReflect.setProcessParent(pros.get(i), parentNode);
             Ae2CraftingReflect.addProcessToNode(parentNode, pros.get(i));
         }
+    }
+
+    /** 样板的任一输出（含副产物）是否为 key——dive 的 getAmountCrafted 父锚定判据. */
+    private static boolean producesKey(ICraftingPatternDetails pattern, IAEItemStack key) {
+        for (IAEItemStack output : pattern.getCondensedOutputs()) {
+            if (output != null && key.equals(output)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -98,10 +98,13 @@ public final class RoundQuotaScheduler {
     }
 
     /**
-     * 推导配额（纯函数）:任务集中"既消耗又产出"的键构成闭包键,最终产出必须是
-     * 闭包键（否则非自消耗 job,不调度）;闭包内 pattern 的总次数对 GCD 约分.
+     * 推导配额（纯函数）:任务集中"既消耗又产出"的键为候选闭包键;
+     * 候选键必须**真的成环**(沿闭包内样板能从自身回到自身)才纳入——
+     * 线性副产物复用(产出也被消耗但不成环)不调度,避免误伤死锁.
+     * 自 1.1.0 起不再要求最终产出在闭包内:深层循环(DAG 边界)计划的
+     * 最终产出是根物品,环在中间层,同样需要限推.
      *
-     * @return 配额;非自消耗/无法推导时返回 null（调用方退化原生推送）.
+     * @return 配额;无真环/无法推导时返回 null（调用方退化原生推送）.
      */
     @Nullable
     public static Quota deriveQuota(Map<ICraftingPatternDetails, Long> totals, IAEItemStack finalOutputWhat) {
@@ -120,21 +123,40 @@ public final class RoundQuotaScheduler {
             }
         }
         produced.retainAll(consumed);
-        IAEItemStack finalKey = RecursiveCraftingHelper.canon(finalOutputWhat);
-        boolean selfConsuming = false;
-        for (IAEItemStack key : produced) {
-            if (key.equals(finalKey)) {
-                selfConsuming = true;
-                break;
+        if (produced.isEmpty()) {
+            return null; // 非自消耗 job
+        }
+        // 真环判定:候选键 K 成环 ⟺ 从消费 K 的样板出发,沿"样板→产出候选键→
+        // 消费该键的样板"能回到产出 K 的样板(自增殖 = 单样板自环)
+        Map<IAEItemStack, java.util.List<ICraftingPatternDetails>> consumersOf = new LinkedHashMap<>();
+        Map<IAEItemStack, java.util.List<ICraftingPatternDetails>> producersOf = new LinkedHashMap<>();
+        for (ICraftingPatternDetails pattern : totals.keySet()) {
+            for (IAEItemStack output : pattern.getCondensedOutputs()) {
+                if (output != null && produced.contains(RecursiveCraftingHelper.canon(output))) {
+                    producersOf.computeIfAbsent(RecursiveCraftingHelper.canon(output),
+                            k -> new java.util.ArrayList<>()).add(pattern);
+                }
+            }
+            for (IAEItemStack input : pattern.getCondensedInputs()) {
+                if (input != null && produced.contains(RecursiveCraftingHelper.canon(input))) {
+                    consumersOf.computeIfAbsent(RecursiveCraftingHelper.canon(input),
+                            k -> new java.util.ArrayList<>()).add(pattern);
+                }
             }
         }
-        if (!selfConsuming) {
-            return null; // 非自消耗 job
+        Set<IAEItemStack> cyclicKeys = new HashSet<>();
+        for (IAEItemStack key : produced) {
+            if (isCyclicKey(key, produced, consumersOf, producersOf)) {
+                cyclicKeys.add(key);
+            }
+        }
+        if (cyclicKeys.isEmpty()) {
+            return null; // 线性副产物复用,不成环,不调度
         }
         Map<ICraftingPatternDetails, Long> closureTotals = new LinkedHashMap<>();
         long gcd = 0;
         for (Map.Entry<ICraftingPatternDetails, Long> entry : totals.entrySet()) {
-            if (touchesAny(entry.getKey(), produced)) {
+            if (touchesAny(entry.getKey(), cyclicKeys)) {
                 closureTotals.put(entry.getKey(), entry.getValue());
                 gcd = gcd(gcd, entry.getValue());
             }
@@ -147,6 +169,36 @@ public final class RoundQuotaScheduler {
             perRound.put(entry.getKey(), entry.getValue() / gcd);
         }
         return new Quota(perRound);
+    }
+
+    /**
+     * 键 K 是否成环:从消费 K 的样板出发,沿"样板产出候选键 → 消费该键的样板"
+     * 可达产出 K 的样板(自增殖样板一步即成环).
+     */
+    private static boolean isCyclicKey(IAEItemStack key, Set<IAEItemStack> candidates,
+            Map<IAEItemStack, java.util.List<ICraftingPatternDetails>> consumersOf,
+            Map<IAEItemStack, java.util.List<ICraftingPatternDetails>> producersOf) {
+        java.util.List<ICraftingPatternDetails> producers = producersOf.getOrDefault(key,
+                java.util.Collections.emptyList());
+        Set<ICraftingPatternDetails> visited = new HashSet<>();
+        java.util.ArrayDeque<ICraftingPatternDetails> stack = new java.util.ArrayDeque<>(
+                consumersOf.getOrDefault(key, java.util.Collections.emptyList()));
+        while (!stack.isEmpty()) {
+            ICraftingPatternDetails pattern = stack.pop();
+            if (!visited.add(pattern)) {
+                continue;
+            }
+            if (producers.contains(pattern)) {
+                return true;
+            }
+            for (IAEItemStack output : pattern.getCondensedOutputs()) {
+                if (output != null && candidates.contains(RecursiveCraftingHelper.canon(output))) {
+                    stack.addAll(consumersOf.getOrDefault(RecursiveCraftingHelper.canon(output),
+                            java.util.Collections.emptyList()));
+                }
+            }
+        }
+        return false;
     }
 
     /**

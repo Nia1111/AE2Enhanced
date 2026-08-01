@@ -62,6 +62,7 @@ public class SimulationEnv {
 
     private final Map<IAEItemStack, List<ICraftingPatternDetails>> patterns = new LinkedHashMap<>();
     private final IItemList<IAEItemStack> networkStorage;
+    private final java.util.Set<IAEItemStack> emitables = new java.util.HashSet<>();
 
     private final ICraftingGrid craftingGrid;
     private final IGrid grid;
@@ -91,6 +92,11 @@ public class SimulationEnv {
         this.networkStorage.add(stack.copy());
     }
 
+    /** 标记某物可由发射台提供(level emitter). */
+    public void addEmitable(IAEItemStack stack) {
+        this.emitables.add(RecursiveCraftingHelper.canon(stack));
+    }
+
     public ICraftingGrid craftingGrid() {
         return this.craftingGrid;
     }
@@ -107,6 +113,19 @@ public class SimulationEnv {
      */
     public CraftingJob runNative(IAEItemStack what) {
         return this.runJob(new CraftingJob(this.world, this.grid, this.actionSource, what, null));
+    }
+
+    /**
+     * 以 {@link com.github.aeddddd.ae2enhanced.craftingplan.dag.DagCraftingJob} 运行模拟
+     * （DAG 计划引擎默认路径）.
+     */
+    public CraftingJob runDag(IAEItemStack what) {
+        return this.runJob(new com.github.aeddddd.ae2enhanced.craftingplan.dag.DagCraftingJob(this.world,
+                this.grid, this.actionSource, what, null));
+    }
+
+    public World world() {
+        return this.world;
     }
 
     private CraftingJob runJob(CraftingJob job) {
@@ -127,13 +146,27 @@ public class SimulationEnv {
     // ===== mock 基础设施 =====
 
     private ICraftingGrid createCraftingGrid() {
-        return new ICraftingGrid() {
-            @Override
-            public ImmutableCollection<ICraftingPatternDetails> getCraftingFor(IAEItemStack whatToCraft,
-                    ICraftingPatternDetails details, int slotIndex, World world) {
-                List<ICraftingPatternDetails> list = patterns.get(RecursiveCraftingHelper.canon(whatToCraft));
-                return list == null ? ImmutableList.of() : ImmutableList.copyOf(list);
-            }
+        return new AnonymousCraftingGrid();
+    }
+
+    /**
+     * 匿名样板索引网格:同时实现 {@code ICraftingGridCacheAccess}
+     * （循环分析的全样板键扫描——副产物边/催化环发现依赖它）.
+     */
+    private class AnonymousCraftingGrid implements ICraftingGrid,
+            com.github.aeddddd.ae2enhanced.mixin.bridge.ICraftingGridCacheAccess {
+
+        @Override
+        public java.util.Set<IAEItemStack> ae2enhanced$craftableKeys() {
+            return new java.util.HashSet<>(patterns.keySet());
+        }
+
+        @Override
+        public ImmutableCollection<ICraftingPatternDetails> getCraftingFor(IAEItemStack whatToCraft,
+                ICraftingPatternDetails details, int slotIndex, World world) {
+            List<ICraftingPatternDetails> list = patterns.get(RecursiveCraftingHelper.canon(whatToCraft));
+            return list == null ? ImmutableList.of() : ImmutableList.copyOf(list);
+        }
 
             @Override
             public Future<ICraftingJob> beginCraftingJob(World world, IGrid grid, IActionSource actionSrc,
@@ -154,7 +187,7 @@ public class SimulationEnv {
 
             @Override
             public boolean canEmitFor(IAEItemStack what) {
-                return false;
+                return emitables.contains(RecursiveCraftingHelper.canon(what));
             }
 
             @Override
@@ -190,7 +223,6 @@ public class SimulationEnv {
             @Override
             public void populateGridStorage(@Nonnull IGridStorage destinationStorage) {
             }
-        };
     }
 
     @SuppressWarnings("unchecked")

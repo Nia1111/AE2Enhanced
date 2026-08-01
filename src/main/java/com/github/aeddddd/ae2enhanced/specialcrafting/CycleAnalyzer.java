@@ -128,6 +128,8 @@ public final class CycleAnalyzer {
     /**
      * 枚举经过 {@code root} 的所有简单环（长度 ≥ 2;自引用环由阶段 1 处理,此处跳过）,
      * 按环长度降序返回（长环的键集更完整,优先尝试）.
+     * <p>生产者发现含<b>副产物边</b>(1.1.0 起):root 作为样板的任意输出(不限主产出)
+     * 都视为被该样板生产——否则经副产物闭合的催化环(如 1A→1X+1B、1B→1A)不可见.</p>
      */
     public static List<List<CycleStep>> findCyclesThrough(ICraftingGrid cc, IAEItemStack root, World world) {
         int[] budget = { MAX_VISITED };
@@ -136,9 +138,49 @@ public final class CycleAnalyzer {
         IAEItemStack rootKey = RecursiveCraftingHelper.canon(root);
         onPath.add(rootKey);
         LinkedHashMap<IAEItemStack, CycleStep> chain = new LinkedHashMap<>();
-        dfs(cc, world, rootKey, rootKey, onPath, chain, budget, cycles);
+        Map<IAEItemStack, List<ICraftingPatternDetails>> producerCache = new LinkedHashMap<>();
+        dfs(cc, world, rootKey, rootKey, onPath, chain, budget, cycles, producerCache);
         cycles.sort((a, b) -> Integer.compare(b.size(), a.size()));
         return cycles;
+    }
+
+    /**
+     * 生产 {@code current} 的全部样板:主产出索引快路径 + 副产物全扫描(按请求缓存).
+     * <p>副产物扫描依赖 {@code ICraftingGridCacheAccess} 暴露的全样板键集;
+     * 不可用时(如单元测试的模拟网格)退化为仅主产出索引.</p>
+     */
+    private static List<ICraftingPatternDetails> producersOf(ICraftingGrid cc, World world,
+            IAEItemStack current, Map<IAEItemStack, List<ICraftingPatternDetails>> cache) {
+        List<ICraftingPatternDetails> cached = cache.get(current);
+        if (cached != null) {
+            return cached;
+        }
+        List<ICraftingPatternDetails> out = new ArrayList<>();
+        for (ICraftingPatternDetails pattern : cc.getCraftingFor(current, null, -1, world)) {
+            out.add(pattern);
+        }
+        // 副产物生产者:getCraftingFor 只按主产出索引,需全样板扫描补漏
+        if (cc instanceof com.github.aeddddd.ae2enhanced.mixin.bridge.ICraftingGridCacheAccess) {
+            for (IAEItemStack craftable : ((com.github.aeddddd.ae2enhanced.mixin.bridge.ICraftingGridCacheAccess) cc)
+                    .ae2enhanced$craftableKeys()) {
+                IAEItemStack craftableKey = RecursiveCraftingHelper.canon(craftable);
+                if (craftableKey.equals(current)) {
+                    continue;
+                }
+                for (ICraftingPatternDetails pattern : cc.getCraftingFor(craftableKey, null, -1, world)) {
+                    for (IAEItemStack output : pattern.getCondensedOutputs()) {
+                        if (output != null && current.equals(output)) {
+                            if (!out.contains(pattern)) {
+                                out.add(pattern);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        cache.put(current, out);
+        return out;
     }
 
     /**
@@ -147,13 +189,19 @@ public final class CycleAnalyzer {
      */
     private static void dfs(ICraftingGrid cc, World world, IAEItemStack root, IAEItemStack current,
             Set<IAEItemStack> onPath, LinkedHashMap<IAEItemStack, CycleStep> chain, int[] budget,
-            List<List<CycleStep>> cycles) {
+            List<List<CycleStep>> cycles, Map<IAEItemStack, List<ICraftingPatternDetails>> producerCache) {
         if (budget[0]-- <= 0 || cycles.size() >= MAX_CYCLES) {
             return;
         }
-        for (ICraftingPatternDetails pattern : cc.getCraftingFor(current, null, -1, world)) {
-            IAEItemStack primaryOut = pattern.getPrimaryOutput();
-            if (primaryOut == null || !current.equals(primaryOut) || primaryOut.getStackSize() <= 0) {
+        for (ICraftingPatternDetails pattern : producersOf(cc, world, current, producerCache)) {
+            boolean producesCurrent = false;
+            for (IAEItemStack output : pattern.getCondensedOutputs()) {
+                if (output != null && current.equals(output) && output.getStackSize() > 0) {
+                    producesCurrent = true;
+                    break;
+                }
+            }
+            if (!producesCurrent) {
                 continue;
             }
             for (IAEItemStack input : pattern.getCondensedInputs()) {
@@ -182,11 +230,137 @@ public final class CycleAnalyzer {
                 }
                 onPath.add(from);
                 chain.put(from, step);
-                dfs(cc, world, root, from, onPath, chain, budget, cycles);
+                dfs(cc, world, root, from, onPath, chain, budget, cycles, producerCache);
                 chain.remove(from);
                 onPath.remove(from);
             }
         }
+    }
+
+    /**
+     * 样板是否"成环步骤":其某输入键可经"被产生"边回溯到该样板的某输出键
+     * (含副产物输出)——即该样板参与一个环(自身可在路径中).
+     * detector / DAG 编译器共用,预算受限.
+     */
+    public static boolean isCycleStep(ICraftingGrid cc, World world, ICraftingPatternDetails pattern) {
+        Set<IAEItemStack> outputs = new HashSet<>();
+        for (IAEItemStack output : pattern.getCondensedOutputs()) {
+            if (output != null) {
+                outputs.add(RecursiveCraftingHelper.canon(output));
+            }
+        }
+        int[] budget = { MAX_VISITED };
+        Map<IAEItemStack, List<ICraftingPatternDetails>> producerCache = new LinkedHashMap<>();
+        for (IAEItemStack input : pattern.getCondensedInputs()) {
+            if (input == null || input.getStackSize() <= 0) {
+                continue;
+            }
+            if (reachesOutputs(cc, world, RecursiveCraftingHelper.canon(input), outputs, budget,
+                    new HashSet<>(), producerCache)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 沿"被产生"边回溯:current 的传递原料中是否出现 targets 中的键. */
+    private static boolean reachesOutputs(ICraftingGrid cc, World world, IAEItemStack current,
+            Set<IAEItemStack> targets, int[] budget, Set<IAEItemStack> visited,
+            Map<IAEItemStack, List<ICraftingPatternDetails>> producerCache) {
+        if (!visited.add(current) || budget[0]-- <= 0) {
+            return false;
+        }
+        for (ICraftingPatternDetails producer : producersOf(cc, world, current, producerCache)) {
+            boolean produces = false;
+            for (IAEItemStack output : producer.getCondensedOutputs()) {
+                if (output != null && current.equals(output)) {
+                    produces = true;
+                    break;
+                }
+            }
+            if (!produces) {
+                continue;
+            }
+            for (IAEItemStack input : producer.getCondensedInputs()) {
+                if (input == null || input.getStackSize() <= 0) {
+                    continue;
+                }
+                IAEItemStack from = RecursiveCraftingHelper.canon(input);
+                if (targets.contains(from)) {
+                    return true;
+                }
+                if (reachesOutputs(cc, world, from, targets, budget, visited, producerCache)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 枚举"发射 what 作为环外副产物"的催化环:对生产 what 的每个样板
+     * (what 不在其输入中——否则是自引用/环键,走既有路径),以其输入键为 root
+     * 枚举环并筛出包含该样板的环,按环长降序去重返回.
+     */
+    public static List<List<CycleStep>> findCatalyticCycles(ICraftingGrid cc, IAEItemStack what,
+            World world) {
+        IAEItemStack whatKey = RecursiveCraftingHelper.canon(what);
+        List<List<CycleStep>> out = new ArrayList<>();
+        Set<List<ICraftingPatternDetails>> seen = new HashSet<>();
+        Map<IAEItemStack, List<ICraftingPatternDetails>> producerCache = new LinkedHashMap<>();
+        for (ICraftingPatternDetails pattern : producersOf(cc, world, whatKey, producerCache)) {
+            boolean selfInput = false;
+            for (IAEItemStack input : pattern.getCondensedInputs()) {
+                if (input != null && whatKey.equals(input)) {
+                    selfInput = true;
+                    break;
+                }
+            }
+            if (selfInput) {
+                continue;
+            }
+            for (IAEItemStack input : pattern.getCondensedInputs()) {
+                if (input == null || input.getStackSize() <= 0) {
+                    continue;
+                }
+                for (List<CycleStep> cycle : findCyclesThrough(cc, input, world)) {
+                    boolean contains = false;
+                    List<ICraftingPatternDetails> signature = new ArrayList<>();
+                    for (CycleStep step : cycle) {
+                        signature.add(step.pattern());
+                        if (step.pattern() == pattern) {
+                            contains = true;
+                        }
+                    }
+                    if (contains && seen.add(signature)) {
+                        out.add(cycle);
+                    }
+                }
+            }
+        }
+        out.sort((a, b) -> Integer.compare(b.size(), a.size()));
+        return out;
+    }
+
+    /**
+     * 催化环每超轮发射的环外副产物 what 数量(what 必须不在环键上).
+     */
+    public static long byproductPerRound(Analysis analysis, IAEItemStack what) {
+        for (IAEItemStack key : analysis.keys()) {
+            if (key.equals(what)) {
+                return 0;
+            }
+        }
+        long perRound = 0;
+        long[] times = analysis.timesPerRound();
+        for (int i = 0; i < analysis.steps().size(); i++) {
+            for (IAEItemStack output : analysis.steps().get(i).pattern().getCondensedOutputs()) {
+                if (output != null && what.equals(output)) {
+                    perRound += output.getStackSize() * times[i];
+                }
+            }
+        }
+        return perRound;
     }
 
     /**

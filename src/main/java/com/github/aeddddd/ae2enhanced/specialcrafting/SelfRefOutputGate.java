@@ -159,23 +159,33 @@ public final class SelfRefOutputGate {
         }
         IAEItemStack deliverStack = finalOutput.copy();
         deliverStack.setStackSize(deliver);
-        inventory.extractItems(deliverStack.copy(), Actionable.MODULATE, src);
-        finalOutput.decStackSize(deliver);
         ICraftingLink link = acc.ae2e$myLastLink();
+        long delivered = 0;
+        // standalone(玩家终端提交)任务的原生 link 交付恒拒收;机器任务的 link 也可能已满.
+        // 先用 SIMULATE 探测:可收则提取直付;拒收则一律留在 CPU 库存,由 completeJob→
+        // storeItems 兜底送入网络存储(不能在此同步插网络:本方法运行在回流调用栈内,
+        // 同步插入有重入风险).
+        boolean linkAccepts = false;
         if (link != null) {
+            IAEItemStack probeOne = finalOutput.copy();
+            probeOne.setStackSize(1);
+            IAEItemStack probeLeft = ((CraftingLink) link).injectItems(probeOne, Actionable.SIMULATE);
+            linkAccepts = probeLeft == null || probeLeft.getStackSize() < 1;
+        }
+        if (linkAccepts) {
+            inventory.extractItems(deliverStack.copy(), Actionable.MODULATE, src);
             IAEItemStack rejected = ((CraftingLink) link).injectItems(deliverStack, Actionable.MODULATE);
+            delivered = deliver - (rejected == null ? 0 : rejected.getStackSize());
             if (rejected != null && rejected.getStackSize() > 0) {
                 // 与原生一致:忽略 link 拒收余量,还回库存(执行结束随 storeItems 返回网络)
                 inventory.injectItems(rejected, Actionable.MODULATE, src);
             }
-        } else {
-            // 无 link 时不应发生;保险起见还回库存
-            inventory.injectItems(deliverStack, Actionable.MODULATE, src);
         }
-        AE2Enhanced.LOGGER.info("[特殊配方] 门控交付: {} × {}", finalOutput, deliver);
-        if (finalOutput.getStackSize() <= 0) {
-            acc.ae2e$completeJob();
-        }
+        // 拒收部分随 storeItems 入网络,语义上视为交付完成
+        finalOutput.setStackSize(0);
+        SpecialLog.info("[特殊配方] 门控收官: {} 直付 {},库存兜底 {}", finalOutput, delivered,
+                deliver - delivered);
+        acc.ae2e$completeJob();
         acc.ae2e$updateCPU();
     }
 }

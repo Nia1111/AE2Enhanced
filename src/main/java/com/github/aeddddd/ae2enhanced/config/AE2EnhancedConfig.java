@@ -59,6 +59,23 @@ public class AE2EnhancedConfig {
     })
     public static ChannelPathing channelPathing = new ChannelPathing();
 
+    @Config.Name("Debug")
+    @Config.Comment({
+        "Debug/diagnostic settings.",
+        "Default: all off."
+    })
+    public static Debug debug = new Debug();
+
+    public static class Debug {
+
+        @Config.Comment({
+            "Enable verbose diagnostic logging for the crafting plan engine",
+            "(special recipes routing/solving, DAG planner, gate/quota execution).",
+            "Default: false"
+        })
+        public boolean debugMode = false;
+    }
+
     @Config.Name("Terminal")
     @Config.Comment({
         "Omni Terminal settings."
@@ -238,6 +255,26 @@ public class AE2EnhancedConfig {
             "Default: true"
         })
         public boolean specialCrafting = true;
+
+        @Config.Comment({
+            "DAG crafting plan engine mode:",
+            "OFF = vanilla recursive tree + special solver only;",
+            "FALLBACK = vanilla first, DAG re-computes when vanilla reports missing;",
+            "DEFAULT = all non-special requests go through the DAG engine",
+            "(deduplicated plan graph, deep-cycle boundary delegation), vanilla as fallback.",
+            "Default: DEFAULT"
+        })
+        public DagPlannerMode dagPlannerMode = DagPlannerMode.DEFAULT;
+    }
+
+    /** DAG 计划引擎模式(kill-switch). */
+    public enum DagPlannerMode {
+        /** 关闭:原生递归 + 特殊求解器. */
+        OFF,
+        /** 兜底:原生先算,得出缺料模拟计划时 DAG 重算,更优则采用. */
+        FALLBACK,
+        /** 默认:一切非特殊根请求直接走 DAG 引擎,其内部按需回落原生. */
+        DEFAULT
     }
 
     public static class Terminal {

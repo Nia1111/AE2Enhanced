@@ -45,6 +45,10 @@ public final class Ae2CraftingReflect {
     private static final Field PROCESS_CRAFTS;
     private static final Field PROCESS_DETAILS;
     private static final Field PROCESS_PARENT;
+    private static final Field NODE_BYTES;
+    private static final Method NODE_SET_SIMULATE;
+    private static final Method INV_IGNORE;
+    private static final Method PROCESS_ADD_PROCESS;
 
     static {
         try {
@@ -90,6 +94,14 @@ public final class Ae2CraftingReflect {
             NODE_WHAT.setAccessible(true);
             PROCESS_PARENT = CraftingTreeProcess.class.getDeclaredField("parent");
             PROCESS_PARENT.setAccessible(true);
+            NODE_BYTES = CraftingTreeNode.class.getDeclaredField("bytes");
+            NODE_BYTES.setAccessible(true);
+            NODE_SET_SIMULATE = CraftingTreeNode.class.getDeclaredMethod("setSimulate");
+            NODE_SET_SIMULATE.setAccessible(true);
+            INV_IGNORE = MECraftingInventory.class.getDeclaredMethod("ignore", IAEItemStack.class);
+            INV_IGNORE.setAccessible(true);
+            PROCESS_ADD_PROCESS = CraftingTreeProcess.class.getDeclaredMethod("addProcess");
+            PROCESS_ADD_PROCESS.setAccessible(true);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -98,7 +110,7 @@ public final class Ae2CraftingReflect {
     private Ae2CraftingReflect() {
     }
 
-    static MECraftingInventory getOriginal(CraftingJob job) {
+    public static MECraftingInventory getOriginal(CraftingJob job) {
         try {
             return (MECraftingInventory) JOB_ORIGINAL.get(job);
         } catch (ReflectiveOperationException e) {
@@ -106,7 +118,7 @@ public final class Ae2CraftingReflect {
         }
     }
 
-    static ICraftingGrid getCc(CraftingJob job) {
+    public static ICraftingGrid getCc(CraftingJob job) {
         try {
             return (ICraftingGrid) JOB_CC.get(job);
         } catch (ReflectiveOperationException e) {
@@ -114,7 +126,7 @@ public final class Ae2CraftingReflect {
         }
     }
 
-    static IActionSource getActionSrc(CraftingJob job) {
+    public static IActionSource getActionSrc(CraftingJob job) {
         try {
             return (IActionSource) JOB_ACTION_SRC.get(job);
         } catch (ReflectiveOperationException e) {
@@ -122,7 +134,7 @@ public final class Ae2CraftingReflect {
         }
     }
 
-    static net.minecraft.world.World getWorld(CraftingJob job) {
+    public static net.minecraft.world.World getWorld(CraftingJob job) {
         try {
             return (net.minecraft.world.World) JOB_GET_WORLD.invoke(job);
         } catch (ReflectiveOperationException e) {
@@ -130,7 +142,7 @@ public final class Ae2CraftingReflect {
         }
     }
 
-    static void setAvailableCheck(CraftingJob job, MECraftingInventory inv) {
+    public static void setAvailableCheck(CraftingJob job, MECraftingInventory inv) {
         try {
             JOB_AVAILABLE_CHECK.set(job, inv);
         } catch (ReflectiveOperationException e) {
@@ -138,7 +150,7 @@ public final class Ae2CraftingReflect {
         }
     }
 
-    static void setSimulate(CraftingJob job, boolean simulate) {
+    public static void setSimulate(CraftingJob job, boolean simulate) {
         try {
             JOB_SIMULATE.setBoolean(job, simulate);
         } catch (ReflectiveOperationException e) {
@@ -146,7 +158,7 @@ public final class Ae2CraftingReflect {
         }
     }
 
-    static void setTree(CraftingJob job, CraftingTreeNode tree) {
+    public static void setTree(CraftingJob job, CraftingTreeNode tree) {
         try {
             JOB_SET_TREE.invoke(job, tree);
         } catch (ReflectiveOperationException e) {
@@ -154,7 +166,7 @@ public final class Ae2CraftingReflect {
         }
     }
 
-    static void handlePausing(CraftingJob job) throws InterruptedException {
+    public static void handlePausing(CraftingJob job) throws InterruptedException {
         try {
             JOB_HANDLE_PAUSING.invoke(job);
         } catch (java.lang.reflect.InvocationTargetException e) {
@@ -167,7 +179,7 @@ public final class Ae2CraftingReflect {
         }
     }
 
-    static void finish(CraftingJob job) {
+    public static void finish(CraftingJob job) {
         try {
             JOB_FINISH.invoke(job);
         } catch (ReflectiveOperationException e) {
@@ -175,7 +187,7 @@ public final class Ae2CraftingReflect {
         }
     }
 
-    static IAEItemStack nodeRequest(CraftingTreeNode node, MECraftingInventory inv, long amount,
+    public static IAEItemStack nodeRequest(CraftingTreeNode node, MECraftingInventory inv, long amount,
             IActionSource src) throws CraftBranchFailure, InterruptedException {
         try {
             return (IAEItemStack) NODE_REQUEST.invoke(node, inv, amount, src);
@@ -192,7 +204,7 @@ public final class Ae2CraftingReflect {
         }
     }
 
-    static void nodeDive(CraftingTreeNode node, CraftingJob job) {
+    public static void nodeDive(CraftingTreeNode node, CraftingJob job) {
         try {
             NODE_DIVE.invoke(node, job);
         } catch (ReflectiveOperationException e) {
@@ -201,7 +213,7 @@ public final class Ae2CraftingReflect {
     }
 
     @SuppressWarnings("unchecked")
-    static void addProcessToNode(CraftingTreeNode node, CraftingTreeProcess process) {
+    public static void addProcessToNode(CraftingTreeNode node, CraftingTreeProcess process) {
         try {
             ((ArrayList<CraftingTreeProcess>) NODE_NODES.get(node)).add(process);
         } catch (ReflectiveOperationException e) {
@@ -209,7 +221,7 @@ public final class Ae2CraftingReflect {
         }
     }
 
-    static void setNodeMissing(CraftingTreeNode node, long missing) {
+    public static void setNodeMissing(CraftingTreeNode node, long missing) {
         try {
             NODE_MISSING.setLong(node, missing);
         } catch (ReflectiveOperationException e) {
@@ -217,7 +229,7 @@ public final class Ae2CraftingReflect {
         }
     }
 
-    static void treeProcessRequest(CraftingTreeProcess pro, MECraftingInventory inv, long times,
+    public static void treeProcessRequest(CraftingTreeProcess pro, MECraftingInventory inv, long times,
             IActionSource src) throws CraftBranchFailure, InterruptedException {
         try {
             PROCESS_REQUEST.invoke(pro, inv, times, src);
@@ -290,6 +302,54 @@ public final class Ae2CraftingReflect {
             PROCESS_PARENT.set(pro, parent);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("写入 CraftingTreeProcess.parent 失败", e);
+        }
+    }
+
+    public static void setProcessCrafts(CraftingTreeProcess pro, long crafts) {
+        try {
+            PROCESS_CRAFTS.setLong(pro, crafts);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("写入 CraftingTreeProcess.crafts 失败", e);
+        }
+    }
+
+    /** CraftingTreeNode.bytes 为 int 字段（原生如此）,超出时钳制. */
+    public static void setNodeBytes(CraftingTreeNode node, long bytes) {
+        try {
+            NODE_BYTES.setInt(node, bytes > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) bytes);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("写入 CraftingTreeNode.bytes 失败", e);
+        }
+    }
+
+    public static void treeSetSimulate(CraftingTreeNode node) {
+        try {
+            NODE_SET_SIMULATE.invoke(node);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("调用 CraftingTreeNode.setSimulate 失败", e);
+        }
+    }
+
+    /** MECraftingInventory.ignore(包私有):把某物在模拟库存中清零,防止"用存量合成自己". */
+    public static void invIgnore(MECraftingInventory inv, IAEItemStack what) {
+        try {
+            INV_IGNORE.invoke(inv, what);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("调用 MECraftingInventory.ignore 失败", e);
+        }
+    }
+
+    /**
+     * CraftingTreeProcess.addProcess(包私有,惰性):构造函数不建输入子节点,
+     * 仅 request() 时惰性调用——需要提前访问子节点(如 DAG 物化)时显式触发.
+     * <p>注意:子节点的 wantedSize 会按当前 availableCheck 库存被钳制/拆分,
+     * 各项 value 之和仍等于单次消耗的 per-craft 数量.</p>
+     */
+    public static void processAddProcess(CraftingTreeProcess pro) {
+        try {
+            PROCESS_ADD_PROCESS.invoke(pro);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("调用 CraftingTreeProcess.addProcess 失败", e);
         }
     }
 }
