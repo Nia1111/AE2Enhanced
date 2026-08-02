@@ -26,8 +26,6 @@ import java.util.Map;
  * - 默认(无 modifier)：crafting 配方同时填充左 3×3 crafting grid 和右编码区；处理配方只填充编码区
  * - Shift(maxTransfer=true)：只填充右编码区
  * - Alt(Keyboard.KEY_LMENU)：只填充左 3×3 crafting grid(仅 crafting 配方有效)
- * - Ctrl(仅 crafting 配方)：强制填充合成台,并对仍缺失且可合成的原料自动下单(需安装 NAE2)
- * - Shift+Ctrl：同上,且在确认界面自动开始合成
  */
 public class OmniTermRecipeTransferHandler implements IRecipeTransferHandler<ContainerOmniTerm> {
 
@@ -83,12 +81,7 @@ public class OmniTermRecipeTransferHandler implements IRecipeTransferHandler<Con
 
         byte mode;
         boolean isAlt = Keyboard.isKeyDown(Keyboard.KEY_LMENU) || Keyboard.isKeyDown(Keyboard.KEY_RMENU);
-        // Ctrl: NAE2 缺失物品自动合成(仅 crafting 配方),Shift+Ctrl 附加自动开始
-        boolean isCtrl = Keyboard.isKeyDown(Keyboard.KEY_LCONTROL) || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
-        boolean craftMissing = isCtrl && isCrafting;
-        if (craftMissing) {
-            mode = 0; // 强制填充合成台,缺失原料才能被识别
-        } else if (isAlt) {
+        if (isAlt) {
             mode = 2; // Alt: crafting → 合成栏, processing → 右侧存储区(从网络提取)
         } else if (maxTransfer) {
             mode = 1; // Shift: 只到编码区
@@ -96,8 +89,7 @@ public class OmniTermRecipeTransferHandler implements IRecipeTransferHandler<Con
             mode = 0; // 默认: 两边
         }
 
-        AE2Enhanced.network.sendToServer(new PacketLoadOmniRecipe(mode, isCrafting, gridSize, inputs, outputs,
-                craftMissing, craftMissing && maxTransfer));
+        AE2Enhanced.network.sendToServer(new PacketLoadOmniRecipe(mode, isCrafting, gridSize, inputs, outputs));
         return null;
     }
 

@@ -1,25 +1,34 @@
 package com.github.aeddddd.ae2enhanced.block;
 
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+import com.github.aeddddd.ae2enhanced.crafting.SingularityFuelRecipe;
+import com.github.aeddddd.ae2enhanced.crafting.SingularityFuelRegistry;
 import com.github.aeddddd.ae2enhanced.tile.TileMicroSingularity;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.SoundEvent;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
+import net.minecraft.util.EnumParticleTypes;
+import net.minecraft.util.SoundCategory;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldServer;
 
 import javax.annotation.Nullable;
 
 /**
  * 微型奇点 —�?仪式召唤的临时黑洞方块�?
  * 不可破坏,发光,有较小的碰撞箱,300 秒后自动坍缩�?
- * 玩家右键可主动触发黑洞合成(配方不匹配时不销毁物品)�?
+ * 玩家右键可主动触发黑洞合成(配方不匹配时不销毁物品);
+ * 手持燃料物品右键可延长存在时间或使奇点永久存在.
  */
 public class BlockMicroSingularity extends Block {
 
@@ -72,9 +81,37 @@ public class BlockMicroSingularity extends Block {
         if (!world.isRemote) {
             TileEntity te = world.getTileEntity(pos);
             if (te instanceof TileMicroSingularity) {
-                ((TileMicroSingularity) te).activateCrafting();
+                TileMicroSingularity singularity = (TileMicroSingularity) te;
+                ItemStack held = player.getHeldItem(hand);
+                SingularityFuelRecipe fuel = SingularityFuelRegistry.findFor(held);
+                if (fuel != null) {
+                    feedFuel(world, pos, player, held, singularity, fuel);
+                } else {
+                    singularity.activateCrafting();
+                }
             }
         }
         return true;
+    }
+
+    /**
+     * 喂入燃料：延长存在时间,或使奇点永久存在.
+     */
+    private static void feedFuel(World world, BlockPos pos, EntityPlayer player, ItemStack held,
+                                 TileMicroSingularity singularity, SingularityFuelRecipe fuel) {
+        if (!player.isCreative()) {
+            held.shrink(1);
+        }
+        if (fuel.isPermanent()) {
+            singularity.setPermanent(true);
+        } else {
+            singularity.addLifetimeTicks(fuel.getTicks());
+        }
+        ((WorldServer) world).spawnParticle(EnumParticleTypes.END_ROD, false,
+                pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
+                8, 0.2, 0.2, 0.2, 0.02);
+        world.playSound(null, pos,
+                SoundEvent.REGISTRY.getObject(new ResourceLocation("block.beacon.power_select")),
+                SoundCategory.BLOCKS, 0.8f, 1.5f);
     }
 }

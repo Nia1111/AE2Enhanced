@@ -517,7 +517,16 @@ public class DualityCentralInterface implements appeng.util.inv.IAEAppEngInvento
             IRemoteHandler handler = HandlerRegistry.findHandler(binding.blockId);
             if (handler == null) continue;
 
-            if (handler.isValidTarget(world, binding.pos)) {
+            // handler 反射可能抛异常/Error,隔离防止网格 tick 崩溃
+            boolean valid;
+            try {
+                valid = handler.isValidTarget(world, binding.pos);
+            } catch (Throwable t) {
+                AE2Enhanced.LOGGER.warn("[AE2E] recoverUnavailableTargets: isValidTarget threw for {} at {}: {}",
+                        binding.blockId, binding.pos, t.toString());
+                continue;
+            }
+            if (valid) {
                 session.recoverFromUnavailable();
             }
         }

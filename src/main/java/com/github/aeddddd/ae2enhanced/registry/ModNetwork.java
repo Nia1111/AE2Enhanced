@@ -17,6 +17,9 @@ import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniCraftingUpdate;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniInventoryUpdate;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniSearchRequest;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniSearchResult;
+import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniPageRequest;
+import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniPageResult;
+import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniUpdateNotify;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOpenOmniTerminal;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketToggleMagnet;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketPickerAction;
@@ -83,6 +86,9 @@ public final class ModNetwork {
         nw.registerMessage(PacketOmniInventoryUpdate.Handler.class, PacketOmniInventoryUpdate.class, 33, Side.CLIENT);
         nw.registerMessage(PacketOmniSearchRequest.Handler.class, PacketOmniSearchRequest.class, 34, Side.SERVER);
         nw.registerMessage(PacketOmniSearchResult.Handler.class, PacketOmniSearchResult.class, 35, Side.CLIENT);
+        nw.registerMessage(PacketOmniPageRequest.Handler.class, PacketOmniPageRequest.class, 36, Side.SERVER);
+        nw.registerMessage(PacketOmniPageResult.Handler.class, PacketOmniPageResult.class, 37, Side.CLIENT);
+        nw.registerMessage(PacketOmniUpdateNotify.Handler.class, PacketOmniUpdateNotify.class, 38, Side.CLIENT);
         nw.registerMessage(PacketOpenOmniTerminal.Handler.class, PacketOpenOmniTerminal.class, 11, Side.SERVER);
         nw.registerMessage(PacketToggleMagnet.Handler.class, PacketToggleMagnet.class, 12, Side.SERVER);
         nw.registerMessage(PacketPickerAction.Handler.class, PacketPickerAction.class, 13, Side.SERVER);
@@ -111,7 +117,5 @@ public final class ModNetwork {
         nw.registerMessage(PacketPersonalDimensionRulesSync.Handler.class, PacketPersonalDimensionRulesSync.class, 51, Side.CLIENT);
         nw.registerMessage(PacketPersonalDimensionRegistrySync.Handler.class, PacketPersonalDimensionRegistrySync.class, 52, Side.CLIENT);
         nw.registerMessage(PacketEnergyStorageBusAction.Handler.class, PacketEnergyStorageBusAction.class, 53, Side.SERVER);
-        nw.registerMessage(com.github.aeddddd.ae2enhanced.network.packet.PacketSpecialPlanInfo.Handler.class,
-                com.github.aeddddd.ae2enhanced.network.packet.PacketSpecialPlanInfo.class, 54, Side.CLIENT);
     }
 }

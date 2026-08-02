@@ -52,7 +52,9 @@ public class ThermalExpansionMachineHandler implements IRemoteHandler {
         try {
             if (Loader.isModLoaded("thermalexpansion")) {
                 TILE_INVENTORY_CLASS = Class.forName("cofh.core.block.TileInventory");
-                INVENTORY_FIELD = TILE_INVENTORY_CLASS.getField("inventory");
+                // inventory 为 protected 字段,必须使用 getDeclaredField + setAccessible
+                INVENTORY_FIELD = TILE_INVENTORY_CLASS.getDeclaredField("inventory");
+                INVENTORY_FIELD.setAccessible(true);
                 try {
                     TILE_MACHINE_BASE_CLASS = Class.forName("cofh.thermalexpansion.block.machine.TileMachineBase");
                     PROCESS_REM_FIELD = TILE_MACHINE_BASE_CLASS.getDeclaredField("processRem");
@@ -85,6 +87,8 @@ public class ThermalExpansionMachineHandler implements IRemoteHandler {
 
     @Override
     public boolean isValidTarget(World world, BlockPos pos) {
+        // 反射初始化失败时（类/字段缺失）直接拒绝,避免 NPE 逃逸导致服务端 tick 崩溃
+        if (!AVAILABLE || TILE_INVENTORY_CLASS == null) return false;
         TileEntity te = world.getTileEntity(pos);
         return te instanceof IInventory && TILE_INVENTORY_CLASS.isInstance(te);
     }

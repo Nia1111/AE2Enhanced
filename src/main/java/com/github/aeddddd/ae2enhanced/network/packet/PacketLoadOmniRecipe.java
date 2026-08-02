@@ -24,17 +24,10 @@ public class PacketLoadOmniRecipe implements IMessage {
     }
 
     public PacketLoadOmniRecipe(byte mode, boolean isCrafting, int gridSize, Map<Integer, ItemStack> inputs, Map<Integer, ItemStack> outputs) {
-        this(mode, isCrafting, gridSize, inputs, outputs, false, false);
-    }
-
-    public PacketLoadOmniRecipe(byte mode, boolean isCrafting, int gridSize, Map<Integer, ItemStack> inputs, Map<Integer, ItemStack> outputs,
-                                boolean craftMissing, boolean autoStart) {
         this.data = new NBTTagCompound();
         this.data.setByte("mode", mode);
         this.data.setBoolean("isCrafting", isCrafting);
         this.data.setInteger("gridSize", gridSize);
-        this.data.setBoolean("craftMissing", craftMissing);
-        this.data.setBoolean("autoStart", autoStart);
 
         NBTTagCompound inputsTag = new NBTTagCompound();
         for (Map.Entry<Integer, ItemStack> entry : inputs.entrySet()) {
@@ -100,12 +93,6 @@ public class PacketLoadOmniRecipe implements IMessage {
                 }
 
                 c.loadPattern(mode, isCrafting, gridSize, inputs, outputs);
-
-                // NAE2 缺失物品自动合成：Ctrl+JEI转移 时对仍缺失且可合成的原料下单
-                if (isCrafting && data.getBoolean("craftMissing")) {
-                    com.github.aeddddd.ae2enhanced.util.compat.NAE2CraftHelper.tryCraftMissing(
-                            ctx.getServerHandler().player, c, inputs, outputs, data.getBoolean("autoStart"));
-                }
             });
             return null;
         }

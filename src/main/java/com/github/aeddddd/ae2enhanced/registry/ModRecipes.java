@@ -6,6 +6,8 @@ import com.github.aeddddd.ae2enhanced.registry.content.PartRegistry;
 import com.github.aeddddd.ae2enhanced.item.ItemVirtualParallelCard;
 import com.github.aeddddd.ae2enhanced.crafting.BlackHoleRecipe;
 import com.github.aeddddd.ae2enhanced.crafting.BlackHoleRecipeRegistry;
+import com.github.aeddddd.ae2enhanced.crafting.SingularityFuelRecipe;
+import com.github.aeddddd.ae2enhanced.crafting.SingularityFuelRegistry;
 import com.github.aeddddd.ae2enhanced.crafting.SingularityRecipe;
 import com.github.aeddddd.ae2enhanced.crafting.SingularityRecipeRegistry;
 import net.minecraft.block.Block;
@@ -54,9 +56,26 @@ public final class ModRecipes {
         // 系统 B：黑洞合成配方
         registerBlackHoleRecipes();
 
+        // 系统 C：微型奇点燃料配方（右键喂食：延寿 / 永久化）
+        registerSingularityFuels();
+
         // 执行 CraftTweaker 延迟移除
         SingularityRecipeRegistry.applyPendingRemovals();
         BlackHoleRecipeRegistry.applyPendingRemovals();
+        SingularityFuelRegistry.applyPendingRemovals();
+    }
+
+    private static void registerSingularityFuels() {
+        // 与 1.20.1 分支 data/ae2enhanced/recipes/singularity_fuel/*.json 保持一致
+        SingularityFuelRegistry.register(new SingularityFuelRecipe(
+                "stable_spacetime_manifold",
+                new ItemStack(ItemRegistry.STABLE_SPACETIME_MANIFOLD), 12000, false));
+        SingularityFuelRegistry.register(new SingularityFuelRecipe(
+                "differential_form_stabilizer",
+                new ItemStack(ItemRegistry.DIFFERENTIAL_FORM_STABILIZER), 48000, false));
+        SingularityFuelRegistry.register(new SingularityFuelRecipe(
+                "conformal_invariant_charge",
+                new ItemStack(ItemRegistry.CONFORMAL_CHARGE), 0, true));
     }
 
     private static void registerBlackHoleRecipes() {

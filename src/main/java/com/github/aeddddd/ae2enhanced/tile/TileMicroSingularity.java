@@ -19,7 +19,8 @@ import net.minecraft.util.text.TextComponentTranslation;
 
 /**
  * 微型奇点的 TileEntity.
- * 默认 300 秒(6000 ticks)后自动坍缩消失,可通过 setLifetimeTicks 自定义.
+ * 默认 300 秒(6000 ticks)后自动坍缩消失,可通过 setLifetimeTicks 自定义;
+ * 喂入永久燃料后不再倒计时.
  * 期间对 3×3×3 范围内的生物执行稳定击杀,物品不会受影响.
  * 黑洞合成由玩家右键方块主动触发,而非自动吸入.
  */
@@ -28,8 +29,10 @@ public class TileMicroSingularity extends TileEntity implements ITickable {
     public static final int DEFAULT_LIFE_TICKS = 6000;
     private static final int HORIZON_RADIUS = 1; // 3×3×3 范围：origin ± 1
     private static final String NBT_LIFE_TICKS = "LifeTicks";
+    private static final String NBT_PERMANENT = "Permanent";
 
     private int lifeTicks = DEFAULT_LIFE_TICKS;
+    private boolean permanent = false;
 
     private static final DamageSource SPACETIME = new DamageSource("spacetime") {
         @Override
@@ -44,6 +47,21 @@ public class TileMicroSingularity extends TileEntity implements ITickable {
 
     public int getLifetimeTicks() {
         return lifeTicks;
+    }
+
+    /** 追加存在时间(燃料喂入). */
+    public void addLifetimeTicks(int ticks) {
+        this.lifeTicks += Math.max(0, ticks);
+        markDirty();
+    }
+
+    public boolean isPermanent() {
+        return permanent;
+    }
+
+    public void setPermanent(boolean permanent) {
+        this.permanent = permanent;
+        markDirty();
     }
 
     @Override
@@ -87,8 +105,8 @@ public class TileMicroSingularity extends TileEntity implements ITickable {
             }
         }
 
-        // 倒计时(黑洞合成不再自动触发,改由玩家右键主动触发)
-        if (--lifeTicks <= 0) {
+        // 倒计时(黑洞合成不再自动触发,改由玩家右键主动触发;永久奇点不坍缩)
+        if (!permanent && --lifeTicks <= 0) {
             collapse();
         }
     }
@@ -116,12 +134,14 @@ public class TileMicroSingularity extends TileEntity implements ITickable {
     public void readFromNBT(NBTTagCompound compound) {
         super.readFromNBT(compound);
         this.lifeTicks = compound.hasKey(NBT_LIFE_TICKS) ? compound.getInteger(NBT_LIFE_TICKS) : DEFAULT_LIFE_TICKS;
+        this.permanent = compound.getBoolean(NBT_PERMANENT);
     }
 
     @Override
     public NBTTagCompound writeToNBT(NBTTagCompound compound) {
         compound = super.writeToNBT(compound);
         compound.setInteger(NBT_LIFE_TICKS, this.lifeTicks);
+        compound.setBoolean(NBT_PERMANENT, this.permanent);
         return compound;
     }
 }

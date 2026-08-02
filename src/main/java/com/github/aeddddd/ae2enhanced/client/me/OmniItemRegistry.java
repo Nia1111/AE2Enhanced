@@ -38,11 +38,9 @@ public class OmniItemRegistry {
         this.idToCount.put(id, count);
         this.stackToId.put(copy, id);
 
-        // 预分词并缓存（处理 null 名称）
-        String rawName = Platform.getItemDisplayName(stack);
-        String rawModId = Platform.getModId(stack);
-        String name = rawName != null ? rawName.toLowerCase() : "";
-        String modId = rawModId != null ? rawModId.toLowerCase() : "unknown";
+        // 预分词并缓存
+        String name = Platform.getItemDisplayName(stack).toLowerCase();
+        String modId = Platform.getModId(stack).toLowerCase();
         this.idToNameWords.put(id, splitWords(name).toArray(new String[0]));
         this.idToModId.put(id, modId);
     }

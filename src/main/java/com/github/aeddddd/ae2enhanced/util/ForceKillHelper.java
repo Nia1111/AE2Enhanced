@@ -180,6 +180,29 @@ public final class ForceKillHelper {
     // ==================== Public API ====================
 
     /**
+     * 读取实体的真实血量。
+     * <p>
+     * 禁疗实体的 {@code getHealth()} 会被 MixinEntityLivingBase 伪装为 0（用于对外表现"已死"），
+     * 因此涉及存活判断/伤害计算时必须通过 DataManager 读取底层真实值。
+     * 读取失败时回退到 {@code getHealth()}。
+     */
+    public static float getRawHealth(EntityLivingBase target) {
+        try {
+            net.minecraft.network.datasync.DataParameter<Float> healthParam =
+                    com.github.aeddddd.ae2enhanced.mixin.late.accessor.IEntityLivingBaseAccessor.ae2e$getHEALTH();
+            if (healthParam != null) {
+                Float value = target.getDataManager().get(healthParam);
+                if (value != null) {
+                    return value;
+                }
+            }
+        } catch (Throwable ignored) {
+            // accessor mixin 未生效等场景,回退到 getHealth()
+        }
+        return target.getHealth();
+    }
+
+    /**
      * 综合强制击杀流程。
      * <p>
      * 依次执行：绕过内部保护开关 → 直接扣除血量（必要时回退到 DataEntry 修改）
@@ -193,21 +216,23 @@ public final class ForceKillHelper {
      */
     public static void applyForceKill(EntityLivingBase target, Entity attacker, float damage, net.minecraft.util.DamageSource deathSource) {
         if (target.world.isRemote) return;
-        if (target.getHealth() <= 0.0f) return;
+        // 必须读取真实血量：禁疗实体的 getHealth() 会被 Mixin 伪装为 0,
+        // 若直接用 getHealth() 判断,强杀流程会被误判为"目标已死"而整体跳过
+        float rawHealth = getRawHealth(target);
+        if (rawHealth <= 0.0f) return;
 
         if (attacker instanceof EntityLivingBase) {
             target.setRevengeTarget((EntityLivingBase) attacker);
         }
 
-        float newHealth = target.getHealth() - damage;
+        float newHealth = rawHealth - damage;
 
         // Bypass internal protection gates
         forceBypassProtection(target);
 
         // Attempt standard setHealth; if overridden and blocked, fallback to DataManager
-        float healthBefore = target.getHealth();
         target.setHealth(Math.max(0.0f, newHealth));
-        if (target.getHealth() >= healthBefore) {
+        if (getRawHealth(target) >= rawHealth) {
             forceSetHealthViaDataManager(target, Math.max(0.0f, newHealth));
         }
 

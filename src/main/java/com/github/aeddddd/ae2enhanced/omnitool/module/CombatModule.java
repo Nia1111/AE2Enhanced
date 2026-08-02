@@ -201,10 +201,29 @@ public class CombatModule implements IOmniToolModule {
 
         // 直接血量修改（绕过所有伤害计算事件和修饰）
         if (newHealth <= 0.0f) {
-            // 设置玩家击杀标记，帮助自定义 Boss 掉落逻辑识别击杀来源
-            markAsPlayerKill(target, player);
+            // 设置玩家击杀标记，帮助自定义 Boss 掉落逻辑识别击杀来源。
+            // 必须隔离异常：服务端数据包任务会静默吞掉异常（FutureTask），
+            // 一旦此处抛异常，击杀分支将整体中断，表现为"只能削血、永远无法击杀"。
+            try {
+                markAsPlayerKill(target, player);
+            } catch (Throwable t) {
+                AE2Enhanced.LOGGER.warn("[AE2E] markAsPlayerKill failed for {}", target.getClass().getName(), t);
+            }
             target.setHealth(0.0f);
             target.onDeath(source);
+            // setHealth/onDeath 可能被目标实体或外部 mod 拦截（覆盖 setHealth、取消 LivingDeathEvent 等），
+            // 若实体仍存活则走强制击杀兜底，与 ForceKillHelper.applyForceKill 流程对齐
+            if (target.isEntityAlive()) {
+                ForceKillHelper.forceBypassProtection(target);
+                ForceKillHelper.forceSetHealthViaDataManager(target, 0.0f);
+                target.onDeath(source);
+                if (!target.isDead) {
+                    target.setDead();
+                    ForceKillHelper.forceSetIsDead(target, true);
+                }
+                ForceKillHelper.removeMultipartChildren(target);
+                ForceKillHelper.tryNotifyBossManager(target);
+            }
             // 尝试生成特殊 Boss 掉落物
             if (!target.world.isRemote && !target.isEntityAlive()) {
                 BossDropHelper.trySpawnBossDrops(target, player, source, fortune);

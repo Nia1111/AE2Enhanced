@@ -72,7 +72,17 @@ public class PhysicalDispatcher {
             return false;
         }
 
-        if (!handler.isValidTarget(world, target.pos)) {
+        // handler 反射可能因目标 mod 类结构变化而抛异常/Error,必须隔离,
+        // 否则异常会逃逸到 AE2 CPU tick 导致服务端崩溃
+        boolean validTarget;
+        try {
+            validTarget = handler.isValidTarget(world, target.pos);
+        } catch (Throwable t) {
+            AE2Enhanced.LOGGER.warn("[AE2E] isValidTarget threw for {} at {}: {}",
+                    target.blockId, target.pos, t.toString());
+            validTarget = false;
+        }
+        if (!validTarget) {
             session.setUnavailable();
             return false;
         }
