@@ -64,24 +64,43 @@ public class PersonalDimensionRulesTest {
     }
 
     /**
-     * 行为固化：readFromNBT 传入空 NBTTagCompound 时，所有字段变为 NBT 缺省值
-     * （boolean=false、long=0、float=0），即 daylightCycle 会从默认 true 变为 false。
-     * 注意：这只是当前实现的行为记录。实际读档时传入的都是 writeToNBT 产出的完整 tag，
-     * 空 tag 路径在正常流程中不会出现。
+     * 向后兼容：readFromNBT 传入空 NBTTagCompound 时，所有字段保留构造时的默认值
+     * （daylightCycle 仍为 true、timeValue 仍为 6000 等），不会被 NBT 缺省值覆盖。
      */
     @Test
-    public void testReadFromEmptyTagYieldsNbtDefaults() {
+    public void testReadFromEmptyTagKeepsDefaults() {
         PersonalDimensionRules rules = new PersonalDimensionRules();
         rules.readFromNBT(new NBTTagCompound());
 
         assertThat(rules.disableMobSpawning).isFalse();
         assertThat(rules.lockWeather).isFalse();
         assertThat(rules.lockTime).isFalse();
-        // 关键行为：默认 true 被 NBT 缺省值 false 覆盖
-        assertThat(rules.daylightCycle).isFalse();
-        assertThat(rules.timeValue).isEqualTo(0L);
+        assertThat(rules.daylightCycle).isTrue();
+        assertThat(rules.timeValue).isEqualTo(6000L);
         assertThat(rules.flightEnabled).isFalse();
-        assertThat(rules.movementSpeed).isEqualTo(0.0f);
+        assertThat(rules.movementSpeed).isEqualTo(0.1f);
+        assertThat(rules.noFlightInertia).isFalse();
+    }
+
+    /** 向后兼容：tag 仅含部分字段时，仅覆盖存在的字段，缺失字段保留当前值。 */
+    @Test
+    public void testReadFromPartialTagOnlyOverridesPresentKeys() {
+        NBTTagCompound tag = new NBTTagCompound();
+        tag.setBoolean("lockTime", true);
+        tag.setLong("timeValue", 18000L);
+
+        PersonalDimensionRules rules = new PersonalDimensionRules();
+        rules.readFromNBT(tag);
+
+        // 存在的字段被覆盖
+        assertThat(rules.lockTime).isTrue();
+        assertThat(rules.timeValue).isEqualTo(18000L);
+        // 缺失的字段保留默认值
+        assertThat(rules.disableMobSpawning).isFalse();
+        assertThat(rules.lockWeather).isFalse();
+        assertThat(rules.daylightCycle).isTrue();
+        assertThat(rules.flightEnabled).isFalse();
+        assertThat(rules.movementSpeed).isEqualTo(0.1f);
         assertThat(rules.noFlightInertia).isFalse();
     }
 

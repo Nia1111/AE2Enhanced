@@ -379,15 +379,50 @@ public final class PersonalDimensionManager {
         sendRulesToPlayer(playerId);
     }
 
-    private static void sendRulesToPlayer(UUID playerId) {
+    /**
+     * 计算玩家当前可编辑规则的维度所有者。
+     *
+     * <p>玩家位于他人个人维度内，且拥有 {@link PersonalDimPermission#MANAGE_RULES}
+     * 权限（或为 OP）时，编辑所在维度所有者的规则；其余情况编辑自己的规则。</p>
+     */
+    public static UUID getRuleEditTarget(EntityPlayer player) {
+        UUID self = player.getUniqueID();
+        int dimId = player.dimension;
+        if (!isPersonalDimension(dimId)) return self;
+        PlayerDimEntry entry = getEntryByDimension(dimId);
+        if (entry == null || entry.playerId.equals(self)) return self;
+        if (player.canUseCommand(2, "") || entry.hasPermission(self, PersonalDimPermission.MANAGE_RULES)) {
+            return entry.playerId;
+        }
+        return self;
+    }
+
+    /**
+     * 检查玩家是否有权管理指定所有者维度的规则（所有者本人与 OP 恒为 true）。
+     */
+    public static boolean canManageRules(EntityPlayer player, UUID ownerId) {
+        if (player.getUniqueID().equals(ownerId)) return true;
+        if (player.canUseCommand(2, "")) return true;
+        PlayerDimEntry entry = getEntry(ownerId);
+        return entry != null && entry.hasPermission(player.getUniqueID(), PersonalDimPermission.MANAGE_RULES);
+    }
+
+    /**
+     * 将指定所有者的规则同步给指定玩家（用于委托编辑场景）。
+     */
+    public static void sendRulesToPlayer(UUID rulesOwnerId, EntityPlayerMP target) {
         if (AE2Enhanced.network == null) return;
-        PlayerDimEntry entry = getEntry(playerId);
+        PlayerDimEntry entry = getEntry(rulesOwnerId);
         if (entry == null) return;
+        AE2Enhanced.network.sendTo(new com.github.aeddddd.ae2enhanced.network.packet.PacketPersonalDimensionRulesSync(entry.rules), target);
+    }
+
+    private static void sendRulesToPlayer(UUID playerId) {
         MinecraftServer server = getOverworld() != null ? getOverworld().getMinecraftServer() : null;
         if (server == null) return;
         EntityPlayerMP player = server.getPlayerList().getPlayerByUUID(playerId);
         if (player != null) {
-            AE2Enhanced.network.sendTo(new com.github.aeddddd.ae2enhanced.network.packet.PacketPersonalDimensionRulesSync(entry.rules), player);
+            sendRulesToPlayer(playerId, player);
         }
     }
 

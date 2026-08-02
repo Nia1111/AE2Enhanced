@@ -19,8 +19,9 @@ public class BlackHoleRecipe {
 
     public BlackHoleRecipe(String id, Map<String, Integer> inputs, ItemStack output) {
         this.id = id;
-        this.inputs = new HashMap<>(inputs);
-        this.output = output.copy();
+        // null 归一化：inputs 视为空 Map,output 视为 ItemStack.EMPTY
+        this.inputs = inputs != null ? new HashMap<>(inputs) : new HashMap<>();
+        this.output = output != null ? output.copy() : ItemStack.EMPTY;
     }
 
     public String getId() {

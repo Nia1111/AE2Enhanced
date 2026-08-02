@@ -26,6 +26,7 @@ import com.github.aeddddd.ae2enhanced.crafting.AssemblyHubUpgradeRegistry;
 import com.github.aeddddd.ae2enhanced.item.ItemUpgradeCard;
 import com.github.aeddddd.ae2enhanced.storage.ItemDescriptor;
 import com.github.aeddddd.ae2enhanced.structure.AssemblyStructure;
+import com.github.aeddddd.ae2enhanced.util.compat.Ae2fcFluidPatternHelper;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
@@ -743,6 +744,10 @@ public class TileAssemblyController extends TileAENetworkBase implements ICrafti
     @Override
     public boolean pushPattern(ICraftingPatternDetails patternDetails, InventoryCrafting table) {
         if (world == null || world.isRemote || isBusy()) return false;
+        // ae2fc 流体替换合成样板:走专用分支(批量 Mixin 不可用时的逐次回退路径)
+        if (Ae2fcFluidPatternHelper.isFluidCraftPattern(patternDetails)) {
+            return executeFluidCrafting(patternDetails, table);
+        }
         if (!patternDetails.isCraftable()) return false;
 
         Boolean cached = patternVirtualCache.get(patternDetails);
@@ -814,6 +819,18 @@ public class TileAssemblyController extends TileAENetworkBase implements ICrafti
         }
         jobTimers.add(getCraftingTicks());
         return true;
+    }
+
+    /**
+     * ae2fc 流体替换合成样板的逐次派发路径.
+     * ae2fc 的 CPU Mixin 已将传入 table Packet 化(FLUID_DROP -> FluidPacket,
+     * Packet 带流体容器 capability,可命中原版流体容器配方),因此直接按真实合成处理：
+     * 被流体替换的槽位 Packet 被消耗、不产生空容器；未替换的容器槽位按配方 remaining 返还.
+     */
+    private boolean executeFluidCrafting(ICraftingPatternDetails patternDetails, InventoryCrafting table) {
+        IRecipe recipe = CraftingManager.findMatchingRecipe(table, world);
+        if (recipe == null) return false;
+        return executeRealCrafting(patternDetails, table, recipe, recipe.getRemainingItems(table));
     }
 
     /**
@@ -989,6 +1006,13 @@ public class TileAssemblyController extends TileAENetworkBase implements ICrafti
     }
 
     /**
+     * 供 Mixin 调用：检查指定样板是否为 ae2fc 流体替换合成样板.
+     */
+    public boolean isFluidPattern(ICraftingPatternDetails details) {
+        return Ae2fcFluidPatternHelper.isFluidCraftPattern(details);
+    }
+
+    /**
      * 供 Mixin 调用：批量执行虚拟合成,一次性扣除原材料并注入 batchSize 份产物.
      */
     public boolean executeBatch(ICraftingPatternDetails details, long batchSize) {
@@ -1144,7 +1168,8 @@ public class TileAssemblyController extends TileAENetworkBase implements ICrafti
 
             if (stack.getItem() instanceof ICraftingPatternItem) {
                 ICraftingPatternDetails pattern = ((ICraftingPatternItem) stack.getItem()).getPatternForItem(stack, world);
-                if (pattern != null && pattern.isCraftable()) {
+                // ae2fc 流体替换合成样板 isCraftable() 恒为 false,需显式放行
+                if (pattern != null && (pattern.isCraftable() || Ae2fcFluidPatternHelper.isFluidCraftPattern(pattern))) {
                     craftingTracker.addCraftingOption(medium, pattern);
                     prefillVirtualCache(pattern);
                 }
@@ -1159,7 +1184,9 @@ public class TileAssemblyController extends TileAENetworkBase implements ICrafti
     private void prefillVirtualCache(ICraftingPatternDetails pattern) {
         if (world == null || world.isRemote) return;
         if (patternVirtualCache.containsKey(pattern)) return;
-        if (!pattern.isCraftable()) {
+        // ae2fc 流体替换合成样板永不走虚拟轨道(其 getOutput 恒 null),
+        // 批量结算由 MixinCraftingCPUClusterBatch 的流体专用分支处理
+        if (Ae2fcFluidPatternHelper.isFluidCraftPattern(pattern) || !pattern.isCraftable()) {
             patternVirtualCache.put(pattern, false);
             return;
         }

@@ -543,6 +543,8 @@ gui.ae2enhanced.personal_dimension.save=保存
 chat.ae2enhanced.personal_dimension.bound=进入点已绑定到 [%d, %d, %d]
 chat.ae2enhanced.personal_dimension.bind_only_in_dim=只能在个人维度内绑定进入点。
 chat.ae2enhanced.personal_dimension.create_failed=创建个人维度失败。
+chat.ae2enhanced.personal_dimension.no_permission_build=你没有在此个人维度中建造的权限。
+chat.ae2enhanced.personal_dimension.no_permission_interact=你没有在此个人维度中交互的权限。
 
 item.ae2enhanced.virtual_parallel_card.tooltip.parallel=§7虚拟并行：§r%s
 item.ae2enhanced.virtual_parallel_card.tooltip.detail=§7每次虚拟合成消耗 §r%.0f AE

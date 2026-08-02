@@ -25,10 +25,13 @@ public class BatchManager {
         long fullBatches = divRem[0].longValueExact();
         long remainder = divRem[1].longValueExact();
 
-        if (fullBatches > Integer.MAX_VALUE - (remainder > 0 ? 1 : 0)) {
+        // JVM 数组实际最大长度为 Integer.MAX_VALUE - 2(部分 VM 为 -8),
+        // 批次总数(含余数尾批)超过 Integer.MAX_VALUE - 8 即拒绝,避免 OOM
+        long totalBatches = fullBatches + (remainder > 0 ? 1 : 0);
+        if (totalBatches > Integer.MAX_VALUE - 8) {
             throw new IllegalArgumentException("Batch count exceeds maximum array size");
         }
-        int size = (int) fullBatches + (remainder > 0 ? 1 : 0);
+        int size = (int) totalBatches;
         long[] result = new long[size];
         for (int i = 0; i < fullBatches; i++) {
             result[i] = Long.MAX_VALUE;
@@ -55,10 +58,12 @@ public class BatchManager {
         long fullBatches = divRem[0].longValueExact();
         long remainder = divRem[1].longValueExact();
 
-        if (fullBatches > Integer.MAX_VALUE - (remainder > 0 ? 1 : 0)) {
+        // 与 splitToLongBatches 一致：批次总数超过 Integer.MAX_VALUE - 8 即拒绝
+        long totalBatches = fullBatches + (remainder > 0 ? 1 : 0);
+        if (totalBatches > Integer.MAX_VALUE - 8) {
             throw new IllegalArgumentException("Batch count exceeds maximum array size");
         }
-        int size = (int) fullBatches + (remainder > 0 ? 1 : 0);
+        int size = (int) totalBatches;
         long[] result = new long[size];
         for (int i = 0; i < fullBatches; i++) {
             result[i] = parallelLimit;

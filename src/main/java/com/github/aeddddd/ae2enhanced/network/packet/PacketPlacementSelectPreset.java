@@ -17,6 +17,11 @@ public class PacketPlacementSelectPreset implements IMessage {
     }
 
     public PacketPlacementSelectPreset(int slot) {
+        // toBytes 仅写入单字节，越界会静默截断，构造时直接拒绝
+        if (slot < Byte.MIN_VALUE || slot > Byte.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "slot 超出单字节范围 [" + Byte.MIN_VALUE + ", " + Byte.MAX_VALUE + "]: " + slot);
+        }
         this.slot = slot;
     }
 

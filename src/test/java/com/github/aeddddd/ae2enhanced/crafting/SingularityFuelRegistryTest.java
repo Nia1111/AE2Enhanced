@@ -67,18 +67,18 @@ public class SingularityFuelRegistryTest {
         assertThat(SingularityFuelRegistry.findFor(ItemStack.EMPTY)).isNull();
     }
 
-    /** 重复注册（同 id）不去重：两条都保留，findFor 返回先注册的一条。 */
+    /** 重复注册（同 id）后者覆盖前者：仅保留一条，findFor 返回后注册的一条。 */
     @Test
-    public void testDuplicateRegisterKeepsBoth() {
+    public void testDuplicateRegisterOverwrites() {
         SingularityFuelRecipe first = coalFuel(ID_A);
         SingularityFuelRecipe second = coalFuel(ID_A);
         SingularityFuelRegistry.register(first);
         SingularityFuelRegistry.register(second);
 
-        assertThat(SingularityFuelRegistry.findFor(new ItemStack(Items.COAL, 1, 0))).isSameAs(first);
+        assertThat(SingularityFuelRegistry.findFor(new ItemStack(Items.COAL, 1, 0))).isSameAs(second);
         long count = SingularityFuelRegistry.getRecipes().stream()
                 .filter(r -> r.getId().equals(ID_A)).count();
-        assertThat(count).isEqualTo(2);
+        assertThat(count).isEqualTo(1);
     }
 
     /** 多个配方时按注册顺序返回第一个匹配者。 */

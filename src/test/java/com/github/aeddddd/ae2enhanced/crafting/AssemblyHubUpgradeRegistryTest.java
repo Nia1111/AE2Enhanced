@@ -2,14 +2,12 @@ package com.github.aeddddd.ae2enhanced.crafting;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.lang.reflect.Field;
-import java.util.Map;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import net.minecraft.init.Items;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 
 import com.github.aeddddd.ae2enhanced.item.ItemUpgradeCard;
@@ -23,8 +21,7 @@ import com.github.aeddddd.ae2enhanced.test.util.AE2TestBootstrap;
  * getSpeedValue 的取值与回退逻辑，以及 isParallelUpgrade / isSpeedUpgrade
  * 的原生卡与注册表两条判定路径。</p>
  *
- * <p>该注册表没有公开的移除/清空 API，{@link AfterEach} 通过反射从
- * DEFINITIONS 中删除本类注册的 key，避免污染其它测试。</p>
+ * <p>{@link AfterEach} 通过 removeById 删除本类注册的 key，避免污染其它测试。</p>
  */
 public class AssemblyHubUpgradeRegistryTest {
 
@@ -39,13 +36,10 @@ public class AssemblyHubUpgradeRegistryTest {
     }
 
     @AfterEach
-    public void cleanup() throws ReflectiveOperationException {
-        // 注册表无公开移除 API，反射清理本类注册的条目
-        Field field = AssemblyHubUpgradeRegistry.class.getDeclaredField("DEFINITIONS");
-        field.setAccessible(true);
-        Map<?, ?> definitions = (Map<?, ?>) field.get(null);
-        definitions.remove(KEY_REDSTONE);
-        definitions.remove(KEY_GLOWSTONE);
+    public void cleanup() {
+        // 清理本类注册的条目
+        AssemblyHubUpgradeRegistry.removeById(KEY_REDSTONE);
+        AssemblyHubUpgradeRegistry.removeById(KEY_GLOWSTONE);
     }
 
     private static AssemblyHubUpgradeRegistry.UpgradeDefinition parallelDef(ItemStack stack,
@@ -128,6 +122,72 @@ public class AssemblyHubUpgradeRegistryTest {
         AssemblyHubUpgradeRegistry.register(second);
 
         assertThat(AssemblyHubUpgradeRegistry.findFor(new ItemStack(Items.REDSTONE))).isSameAs(second);
+    }
+
+    // ------------------------------------------------------------------
+    // keyOf
+    // ------------------------------------------------------------------
+
+    /** 无注册名的不同 Item 实例生成不同 key，不再碰撞为 "unknown#meta"。 */
+    @Test
+    public void testKeyOfUnregisteredItemsDoNotCollide() {
+        Item itemA = new Item();
+        Item itemB = new Item();
+        ItemStack stackA = new ItemStack(itemA, 1);
+        ItemStack stackB = new ItemStack(itemB, 1);
+
+        assertThat(stackA.getItem().getRegistryName()).isNull();
+        assertThat(stackB.getItem().getRegistryName()).isNull();
+        assertThat(AssemblyHubUpgradeRegistry.keyOf(stackA))
+                .isNotEqualTo(AssemblyHubUpgradeRegistry.keyOf(stackB));
+    }
+
+    /** 无注册名的同一 Item 实例两次调用 keyOf 结果稳定一致。 */
+    @Test
+    public void testKeyOfUnregisteredItemStable() {
+        Item item = new Item();
+
+        assertThat(AssemblyHubUpgradeRegistry.keyOf(new ItemStack(item, 1)))
+                .isEqualTo(AssemblyHubUpgradeRegistry.keyOf(new ItemStack(item, 64)));
+    }
+
+    /** 无注册名物品注册后 findFor 可命中，且不会被其它未注册物品误命中。 */
+    @Test
+    public void testRegisterUnregisteredItem() {
+        Item itemA = new Item();
+        Item itemB = new Item();
+        AssemblyHubUpgradeRegistry.UpgradeDefinition def = parallelDef(
+                new ItemStack(itemA, 1), 4, 2L);
+        AssemblyHubUpgradeRegistry.register(def);
+        try {
+            assertThat(AssemblyHubUpgradeRegistry.findFor(new ItemStack(itemA, 1))).isSameAs(def);
+            assertThat(AssemblyHubUpgradeRegistry.findFor(new ItemStack(itemB, 1))).isNull();
+        } finally {
+            AssemblyHubUpgradeRegistry.removeById(
+                    AssemblyHubUpgradeRegistry.keyOf(new ItemStack(itemA, 1)));
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // removeById
+    // ------------------------------------------------------------------
+
+    /** removeById 移除已注册条目，移除后 findFor 不再命中。 */
+    @Test
+    public void testRemoveByIdRemoves() {
+        AssemblyHubUpgradeRegistry.register(parallelDef(new ItemStack(Items.REDSTONE), 4, 2L));
+
+        assertThat(AssemblyHubUpgradeRegistry.removeById(KEY_REDSTONE)).isTrue();
+        assertThat(AssemblyHubUpgradeRegistry.findFor(new ItemStack(Items.REDSTONE))).isNull();
+    }
+
+    /** 对不存在的 key / null / 空串调用 removeById 返回 false，幂等无副作用。 */
+    @Test
+    public void testRemoveByIdNonExistentIsIdempotent() {
+        assertThat(AssemblyHubUpgradeRegistry.removeById("ahreg_test:nonexistent#0")).isFalse();
+        assertThat(AssemblyHubUpgradeRegistry.removeById("ahreg_test:nonexistent#0")).isFalse();
+        assertThat(AssemblyHubUpgradeRegistry.removeById(null)).isFalse();
+        assertThat(AssemblyHubUpgradeRegistry.removeById("")).isFalse();
     }
 
     // ------------------------------------------------------------------

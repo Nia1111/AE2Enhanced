@@ -24,7 +24,8 @@ public class SingularityFuelRecipe {
      */
     public SingularityFuelRecipe(String id, ItemStack fuelItem, int ticks, boolean permanent) {
         this.id = id;
-        this.fuelItem = fuelItem;
+        // 防御性拷贝：避免调用方后续修改传入栈影响配方;null 归一化为空栈
+        this.fuelItem = fuelItem != null ? fuelItem.copy() : ItemStack.EMPTY;
         this.ticks = ticks;
         this.permanent = permanent;
     }
@@ -34,7 +35,7 @@ public class SingularityFuelRecipe {
     }
 
     public ItemStack getFuelItem() {
-        return fuelItem;
+        return fuelItem.copy();
     }
 
     public int getTicks() {

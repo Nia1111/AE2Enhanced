@@ -55,7 +55,8 @@ public class FluidDescriptor implements Descriptor {
 
     public NBTTagCompound toNBT() {
         NBTTagCompound tag = new NBTTagCompound();
-        tag.setString("id", fluid != null ? fluid.getName() : "water");
+        // null 流体写入空 id,fromNBT 读回为 null,保证 null->null 往返保真
+        tag.setString("id", fluid != null ? fluid.getName() : "");
         if (nbt != null) {
             tag.setTag("tag", nbt.copy());
         }
@@ -95,7 +96,8 @@ public class FluidDescriptor implements Descriptor {
     }
 
     public NBTTagCompound getNbt() {
-        return nbt;
+        // 返回副本,避免调用方修改内部 NBT 破坏 equals/hashCode 契约
+        return nbt != null ? nbt.copy() : null;
     }
 
     @Override

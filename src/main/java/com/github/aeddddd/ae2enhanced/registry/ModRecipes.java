@@ -79,13 +79,6 @@ public final class ModRecipes {
     }
 
     private static void registerBlackHoleRecipes() {
-        // 测试配方：8 石头 + 1 钻石 → 1 黑曜石
-        Map<String, Integer> bhInputs = new HashMap<>();
-        bhInputs.put(BlackHoleRecipe.keyOf(new ItemStack(Blocks.STONE)), 8);
-        bhInputs.put(BlackHoleRecipe.keyOf(new ItemStack(Items.DIAMOND)), 1);
-        BlackHoleRecipeRegistry.register(new BlackHoleRecipe(
-                "test_obsidian", bhInputs, new ItemStack(Blocks.OBSIDIAN, 1)));
-
         Item ae2Material = Item.REGISTRY.getObject(new ResourceLocation("appliedenergistics2", "material"));
         if (ae2Material != null) {
             // 稳态时空流形：16 空间组件 + 64 奇点

@@ -15,6 +15,7 @@ public class OmniTerminalStorage {
     private static final String KEY_PATTERN_OUTPUTS = "patternOutputs";
     private static final String KEY_RIGHT_STORAGE = "rightStorage";
     private static final String KEY_PATTERN = "pattern";
+    private static final String KEY_UPGRADE = "upgrade";
 
     public static final int SIZE_CRAFTING = 9;
     public static final int SIZE_PATTERN_INPUTS = 81;
@@ -91,8 +92,8 @@ public class OmniTerminalStorage {
         if (compound.hasKey(KEY_RIGHT_STORAGE, Constants.NBT.TAG_COMPOUND)) {
             rightStorageInventory.deserializeNBT(compound.getCompoundTag(KEY_RIGHT_STORAGE));
         }
-        if (compound.hasKey("upgrade", Constants.NBT.TAG_COMPOUND)) {
-            upgradeInventory.deserializeNBT(compound.getCompoundTag("upgrade"));
+        if (compound.hasKey(KEY_UPGRADE, Constants.NBT.TAG_COMPOUND)) {
+            upgradeInventory.deserializeNBT(compound.getCompoundTag(KEY_UPGRADE));
         }
         if (compound.hasKey(KEY_PATTERN, Constants.NBT.TAG_COMPOUND)) {
             patternInventory.deserializeNBT(compound.getCompoundTag(KEY_PATTERN));
@@ -104,7 +105,7 @@ public class OmniTerminalStorage {
         compound.setTag(KEY_PATTERN_INPUTS, patternInputInventory.serializeNBT());
         compound.setTag(KEY_PATTERN_OUTPUTS, patternOutputInventory.serializeNBT());
         compound.setTag(KEY_RIGHT_STORAGE, rightStorageInventory.serializeNBT());
-        compound.setTag("upgrade", upgradeInventory.serializeNBT());
+        compound.setTag(KEY_UPGRADE, upgradeInventory.serializeNBT());
         compound.setTag(KEY_PATTERN, patternInventory.serializeNBT());
         return compound;
     }

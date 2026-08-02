@@ -22,6 +22,7 @@ public class ContainerPersonalDimensionConfig extends Container {
 
     @Override
     public boolean canInteractWith(EntityPlayer player) {
-        return player.getUniqueID().equals(playerId);
+        // 所有者本人、OP 以及拥有 MANAGE_RULES 权限的受邀玩家均可编辑
+        return com.github.aeddddd.ae2enhanced.dimension.PersonalDimensionManager.canManageRules(player, playerId);
     }
 }

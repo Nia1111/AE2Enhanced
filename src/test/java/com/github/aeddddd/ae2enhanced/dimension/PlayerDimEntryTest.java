@@ -139,20 +139,25 @@ public class PlayerDimEntryTest {
         assertThat(entry.hasPermission(GUEST_B, PersonalDimPermission.ENTER)).isTrue();
     }
 
-    /** 权限字符串为空时该玩家仍会被放入权限表，但权限集合为空（当前实现行为固化）。 */
+    /** 权限字符串解析后为空（空串或全部非法）的条目被跳过，不会在权限表留下空集合占位。 */
     @Test
-    public void testReadEmptyPermissionStringYieldsEmptySetEntry() {
+    public void testReadSkipsPermissionEntryWithEmptySet() {
         NBTTagCompound tag = baseTag();
         NBTTagList perms = new NBTTagList();
-        NBTTagCompound t = uuidTag(GUEST_A.toString());
-        t.setString("permissions", "");
-        perms.appendTag(t);
+        NBTTagCompound empty = uuidTag(GUEST_A.toString());
+        empty.setString("permissions", "");
+        perms.appendTag(empty);
+        NBTTagCompound bogus = uuidTag(GUEST_B.toString());
+        bogus.setString("permissions", "BOGUS");
+        perms.appendTag(bogus);
         tag.setTag("permissions", perms);
 
         PlayerDimEntry entry = new PlayerDimEntry(OWNER);
         entry.readFromNBT(tag);
 
-        assertThat(entry.permissions).containsKey(GUEST_A);
+        assertThat(entry.permissions).isEmpty();
+        assertThat(entry.permissions).doesNotContainKey(GUEST_A);
+        assertThat(entry.permissions).doesNotContainKey(GUEST_B);
         assertThat(entry.getPermissions(GUEST_A)).isEmpty();
         assertThat(entry.hasPermission(GUEST_A, PersonalDimPermission.ENTER)).isFalse();
     }

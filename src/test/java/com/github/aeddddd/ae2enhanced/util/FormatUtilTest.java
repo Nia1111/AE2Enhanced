@@ -44,12 +44,20 @@ public class FormatUtilTest {
     }
 
     /**
-     * 固化行为：999999 按 K 级计算为 999.999K，%.1f 进位后输出 "1000.0K"，
-     * 单位并不会因此升级为 M（阈值判断在舍入之前）。
+     * 进位升级：%.1f 舍入后达到 1000.0 时升入下一档，
+     * 999999 输出 "1.0M" 而非 "1000.0K"。
      */
     @Test
     public void testKiloUpperBoundaryCarry() {
-        assertThat(FormatUtil.formatCount(999999)).isEqualTo("1000.0K");
+        assertThat(FormatUtil.formatCount(999999)).isEqualTo("1.0M");
+    }
+
+    /** 进位升级边界：999950 起升入 M 档，999949 及以下保持 K 档。 */
+    @Test
+    public void testCarryUpgradeThreshold() {
+        assertThat(FormatUtil.formatCount(999949)).isEqualTo("999.9K");
+        assertThat(FormatUtil.formatCount(999499)).isEqualTo("999.5K");
+        assertThat(FormatUtil.formatCount(999950)).isEqualTo("1.0M");
     }
 
     // ------------------------------------------------------------------
@@ -61,7 +69,7 @@ public class FormatUtilTest {
     public void testMegaRange() {
         assertThat(FormatUtil.formatCount(1_000_000L)).isEqualTo("1.0M");
         assertThat(FormatUtil.formatCount(2_500_000L)).isEqualTo("2.5M");
-        assertThat(FormatUtil.formatCount(999_999_999L)).isEqualTo("1000.0M");
+        assertThat(FormatUtil.formatCount(999_999_999L)).isEqualTo("1.0G");
     }
 
     // ------------------------------------------------------------------
@@ -72,7 +80,7 @@ public class FormatUtilTest {
     @Test
     public void testGigaRange() {
         assertThat(FormatUtil.formatCount(1_000_000_000L)).isEqualTo("1.0G");
-        assertThat(FormatUtil.formatCount(999_999_999_999L)).isEqualTo("1000.0G");
+        assertThat(FormatUtil.formatCount(999_999_999_999L)).isEqualTo("1.0T");
     }
 
     // ------------------------------------------------------------------
@@ -83,14 +91,14 @@ public class FormatUtilTest {
     @Test
     public void testTeraRange() {
         assertThat(FormatUtil.formatCount(1_000_000_000_000L)).isEqualTo("1.0T");
-        assertThat(FormatUtil.formatCount(999_999_999_999_999L)).isEqualTo("1000.0T");
+        assertThat(FormatUtil.formatCount(999_999_999_999_999L)).isEqualTo("1.0P");
     }
 
     /** P 级（1e15）阈值边界。 */
     @Test
     public void testPetaRange() {
         assertThat(FormatUtil.formatCount(1_000_000_000_000_000L)).isEqualTo("1.0P");
-        assertThat(FormatUtil.formatCount(999_999_999_999_999_999L)).isEqualTo("1000.0P");
+        assertThat(FormatUtil.formatCount(999_999_999_999_999_999L)).isEqualTo("1.0E");
     }
 
     /** E 级（1e18）阈值边界，Long.MAX_VALUE 落入 E 级输出 "9.2E"。 */
@@ -98,6 +106,23 @@ public class FormatUtilTest {
     public void testExaRangeAndLongMax() {
         assertThat(FormatUtil.formatCount(1_000_000_000_000_000_000L)).isEqualTo("1.0E");
         assertThat(FormatUtil.formatCount(Long.MAX_VALUE)).isEqualTo("9.2E");
+    }
+
+    // ------------------------------------------------------------------
+    // Locale：小数点锁定为 '.'
+    // ------------------------------------------------------------------
+
+    /** 小数点为逗号的 Locale 下仍输出 '.'（String.format 锁定 Locale.ROOT）。 */
+    @Test
+    public void testLocaleIndependentDecimalPoint() {
+        java.util.Locale original = java.util.Locale.getDefault();
+        java.util.Locale.setDefault(java.util.Locale.GERMANY);
+        try {
+            assertThat(FormatUtil.formatCount(1500)).isEqualTo("1.5K");
+            assertThat(FormatUtil.formatCount(999999)).isEqualTo("1.0M");
+        } finally {
+            java.util.Locale.setDefault(original);
+        }
     }
 
     // ------------------------------------------------------------------

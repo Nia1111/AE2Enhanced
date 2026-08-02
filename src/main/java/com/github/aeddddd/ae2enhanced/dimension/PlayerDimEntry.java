@@ -127,6 +127,8 @@ public class PlayerDimEntry {
                         } catch (IllegalArgumentException ignored) {
                         }
                     }
+                    // 解析后无任何有效权限的条目直接跳过，避免留下空集合占位
+                    if (set.isEmpty()) continue;
                     permissions.put(id, set);
                 } catch (IllegalArgumentException ignored) {
                 }

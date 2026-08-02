@@ -69,18 +69,20 @@ public class BlackHoleRecipeRegistryTest {
         assertThat(BlackHoleRecipeRegistry.findMatching(found("other", 99))).isNull();
     }
 
-    /** 重复注册（同 id）不去重：两条都保留，findMatching 返回先注册的一条。 */
+    /** 重复注册（同 id）后者覆盖前者：仅保留一条，findMatching 返回后注册的一条。 */
     @Test
-    public void testDuplicateRegisterKeepsBoth() {
+    public void testDuplicateRegisterOverwrites() {
         BlackHoleRecipe first = recipe(ID_A, "k", 1);
-        BlackHoleRecipe second = recipe(ID_A, "k", 1);
+        BlackHoleRecipe second = recipe(ID_A, "k", 2);
         BlackHoleRecipeRegistry.register(first);
         BlackHoleRecipeRegistry.register(second);
 
-        assertThat(BlackHoleRecipeRegistry.findMatching(found("k", 1))).isSameAs(first);
+        assertThat(BlackHoleRecipeRegistry.findMatching(found("k", 2))).isSameAs(second);
+        // 前者已被覆盖移除：仅满足前者输入的 found 不再命中
+        assertThat(BlackHoleRecipeRegistry.findMatching(found("k", 1))).isNull();
         long count = BlackHoleRecipeRegistry.getRecipes().stream()
                 .filter(r -> r.getId().equals(ID_A)).count();
-        assertThat(count).isEqualTo(2);
+        assertThat(count).isEqualTo(1);
     }
 
     /** 多个配方时按注册顺序返回第一个匹配者。 */
@@ -107,7 +109,7 @@ public class BlackHoleRecipeRegistryTest {
         assertThat(BlackHoleRecipeRegistry.findMatching(found("k", 1))).isNull();
     }
 
-    /** removeById 会移除所有同 id 的配方（removeIf 语义）。 */
+    /** removeById 移除同 id 配方（覆盖语义下同 id 至多一条）。 */
     @Test
     public void testRemoveByIdRemovesAllDuplicates() {
         BlackHoleRecipeRegistry.register(recipe(ID_A, "k", 1));

@@ -44,6 +44,11 @@ public class AssemblyHubCraftTweaker {
         CraftTweakerAPI.apply(new RegisterUpgradeAction(card, "speed", maxStack, values));
     }
 
+    @ZenMethod
+    public static void removeUpgrade(IItemStack card) {
+        CraftTweakerAPI.apply(new RemoveUpgradeAction(card));
+    }
+
     public static class RegisterUpgradeAction implements IAction {
         private final IItemStack card;
         private final String type;
@@ -81,6 +86,26 @@ public class AssemblyHubCraftTweaker {
         @Override
         public String describe() {
             return "Registering AssemblyHub " + type + " upgrade: " + card.getName();
+        }
+    }
+
+    public static class RemoveUpgradeAction implements IAction {
+        private final IItemStack card;
+
+        public RemoveUpgradeAction(IItemStack card) {
+            this.card = card;
+        }
+
+        @Override
+        public void apply() {
+            // 升级定义仅由 CraftTweaker 注册,无脚本先于注册执行的问题,可直接移除
+            ItemStack internal = (ItemStack) card.getInternal();
+            AssemblyHubUpgradeRegistry.removeById(AssemblyHubUpgradeRegistry.keyOf(internal));
+        }
+
+        @Override
+        public String describe() {
+            return "Removing AssemblyHub upgrade: " + card.getName();
         }
     }
 }

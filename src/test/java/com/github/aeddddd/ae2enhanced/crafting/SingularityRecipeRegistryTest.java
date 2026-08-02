@@ -57,13 +57,17 @@ public class SingularityRecipeRegistryTest {
         assertThat(SingularityRecipeRegistry.getRecipes()).contains(recipe);
     }
 
-    /** 重复注册（同 id）不去重：两条都保留。 */
+    /** 重复注册（同 id）后者覆盖前者：仅保留后注册的一条。 */
     @Test
-    public void testDuplicateRegisterKeepsBoth() {
-        SingularityRecipeRegistry.register(recipe(ID_A));
-        SingularityRecipeRegistry.register(recipe(ID_A));
+    public void testDuplicateRegisterOverwrites() {
+        SingularityRecipe first = recipe(ID_A);
+        SingularityRecipe second = recipe(ID_A);
+        SingularityRecipeRegistry.register(first);
+        SingularityRecipeRegistry.register(second);
 
-        assertThat(countOf(ID_A)).isEqualTo(2);
+        assertThat(countOf(ID_A)).isEqualTo(1);
+        assertThat(SingularityRecipeRegistry.getRecipes()).contains(second);
+        assertThat(SingularityRecipeRegistry.getRecipes()).doesNotContain(first);
     }
 
     // ------------------------------------------------------------------
@@ -79,7 +83,7 @@ public class SingularityRecipeRegistryTest {
         assertThat(contains(ID_A)).isFalse();
     }
 
-    /** removeById 会移除所有同 id 的配方（removeIf 语义）。 */
+    /** removeById 移除同 id 配方（覆盖语义下同 id 至多一条）。 */
     @Test
     public void testRemoveByIdRemovesAllDuplicates() {
         SingularityRecipeRegistry.register(recipe(ID_A));

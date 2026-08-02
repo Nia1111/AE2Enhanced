@@ -1,0 +1,24 @@
+{
+  "package": "com.github.aeddddd.ae2enhanced.mixin.late",
+  "refmap": "mixin.refmap.json",
+  "target": "@env(DEFAULT)",
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "ae2.MixinInventoryPlayer",
+    "entity.MixinEntityDataManager",
+    "entity.MixinEntityLivingBase",
+    "world.MixinBlockSpawnAsEntity",
+    "world.MixinEntityPlayerDropItem",
+    "world.MixinGameRegistry",
+    "world.MixinInventoryHelperDropItems",
+    "world.MixinPlayerInteractionManager",
+    "world.MixinWorldSpawnEntity",
+    "accessor.IEntityAccessor",
+    "accessor.IEntityLivingBaseAccessor"
+  ],
+  "client": [
+    "world.MixinPlayerControllerMP"
+  ],
+  "server": []
+}

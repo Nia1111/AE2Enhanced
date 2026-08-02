@@ -5,14 +5,9 @@
   "minVersion": "0.8",
   "compatibilityLevel": "JAVA_8",
   "plugin": "com.github.aeddddd.ae2enhanced.mixin.ProjectEMixinPlugin",
-  "mixins": [
-    "MixinKnowledgeImpl",
-    "MixinTransmutationInventory",
-    "MixinSlotLock"
-  ],
+  "mixins": [],
   "client": [
-    "MixinGUITransmutation",
-    "MixinTransmutationEMCFormatter"
+    "MixinGuiIngame"
   ],
   "server": []
 }

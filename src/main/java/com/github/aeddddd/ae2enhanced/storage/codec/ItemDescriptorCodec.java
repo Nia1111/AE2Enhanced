@@ -22,7 +22,9 @@ public class ItemDescriptorCodec implements DescriptorCodec<ItemDescriptor> {
 
     @Override
     public void write(DataOutput out, ItemDescriptor descriptor) throws IOException {
-        String id = descriptor.getItem().getRegistryName().toString();
+        // 与 ItemDescriptor.toNBT 一致:未注册物品没有 registryName,回退为 "minecraft:air"
+        ResourceLocation regName = descriptor.getItem().getRegistryName();
+        String id = regName != null ? regName.toString() : "minecraft:air";
         byte[] idBytes = id.getBytes("UTF-8");
         out.writeInt(idBytes.length);
         out.write(idBytes);

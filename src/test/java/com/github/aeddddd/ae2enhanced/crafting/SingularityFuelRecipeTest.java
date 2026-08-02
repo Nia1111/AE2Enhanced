@@ -34,16 +34,46 @@ public class SingularityFuelRecipeTest {
     // getter
     // ------------------------------------------------------------------
 
-    /** getter 返回构造参数。 */
+    /** getter 返回构造参数（fuelItem 为防御性拷贝）。 */
     @Test
     public void testGetters() {
         ItemStack fuel = new ItemStack(Items.COAL, 1, 1);
         SingularityFuelRecipe recipe = new SingularityFuelRecipe("sfr_test:g", fuel, 250, true);
 
         assertThat(recipe.getId()).isEqualTo("sfr_test:g");
-        assertThat(recipe.getFuelItem()).isSameAs(fuel);
+        assertThat(recipe.getFuelItem()).isNotSameAs(fuel);
+        assertThat(recipe.getFuelItem().getItem()).isSameAs(Items.COAL);
+        assertThat(recipe.getFuelItem().getMetadata()).isEqualTo(1);
         assertThat(recipe.getTicks()).isEqualTo(250);
         assertThat(recipe.isPermanent()).isTrue();
+    }
+
+    /** 构造时拷贝传入栈：修改原栈不影响配方。 */
+    @Test
+    public void testConstructorCopiesFuelItem() {
+        ItemStack fuel = new ItemStack(Items.COAL, 1, 0);
+        SingularityFuelRecipe recipe = new SingularityFuelRecipe("sfr_test:copy", fuel, 100, false);
+
+        // 修改传入栈：附加 NBT、改变数量
+        NBTTagCompound tag = new NBTTagCompound();
+        tag.setInteger("k", 1);
+        fuel.setTagCompound(tag);
+        fuel.setCount(64);
+
+        assertThat(recipe.getFuelItem().hasTagCompound()).isFalse();
+        assertThat(recipe.getFuelItem().getCount()).isEqualTo(1);
+    }
+
+    /** getFuelItem 每次返回副本，修改返回值不影响后续获取。 */
+    @Test
+    public void testGetFuelItemReturnsCopy() {
+        SingularityFuelRecipe recipe = coalRecipe();
+
+        ItemStack first = recipe.getFuelItem();
+        first.setCount(64);
+
+        assertThat(recipe.getFuelItem().getCount()).isEqualTo(1);
+        assertThat(recipe.getFuelItem()).isNotSameAs(first);
     }
 
     // ------------------------------------------------------------------

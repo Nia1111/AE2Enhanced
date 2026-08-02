@@ -97,6 +97,27 @@ public class ItemDescriptorTest {
         assertThat(descriptor.getNbt().hasKey("extra")).isFalse();
     }
 
+    /** getNbt 返回副本：修改返回值不影响内部状态，equals/hashCode 契约不被外部破坏。 */
+    @Test
+    public void testGetNbtReturnsCopy() {
+        ItemDescriptor descriptor = new ItemDescriptor(stackWithTag(Items.APPLE, 0, "k", "original"));
+        ItemDescriptor expected = new ItemDescriptor(stackWithTag(Items.APPLE, 0, "k", "original"));
+        int hashBefore = descriptor.hashCode();
+
+        // 每次调用返回不同实例
+        assertThat(descriptor.getNbt()).isNotSameAs(descriptor.getNbt());
+
+        // 修改返回的副本，descriptor 内部状态与哈希不变
+        NBTTagCompound leaked = descriptor.getNbt();
+        leaked.setString("k", "mutated");
+        leaked.setString("extra", "x");
+
+        assertThat(descriptor.getNbt().getString("k")).isEqualTo("original");
+        assertThat(descriptor.getNbt().hasKey("extra")).isFalse();
+        assertThat(descriptor).isEqualTo(expected);
+        assertThat(descriptor.hashCode()).isEqualTo(hashBefore);
+    }
+
     /** toItemStack 还原 item/meta/NBT；还原出的 NBT 是副本，修改不影响 descriptor。 */
     @Test
     public void testToItemStackRestores() {

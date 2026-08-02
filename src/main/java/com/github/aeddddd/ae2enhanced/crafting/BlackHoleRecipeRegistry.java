@@ -17,6 +17,9 @@ public class BlackHoleRecipeRegistry {
     private static final Set<String> PENDING_REMOVALS = ConcurrentHashMap.newKeySet();
 
     public static void register(BlackHoleRecipe recipe) {
+        // 同 id 覆盖语义：先移除已有同 id 条目,保证 id 唯一,
+        // 与 AssemblyHubUpgradeRegistry(Map 型)的覆盖语义一致
+        RECIPES.removeIf(r -> r.getId().equals(recipe.getId()));
         RECIPES.add(recipe);
     }
 

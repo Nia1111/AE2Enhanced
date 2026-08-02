@@ -34,14 +34,31 @@ public class AssemblyHubUpgradeRegistry {
 
     private static final Map<String, UpgradeDefinition> DEFINITIONS = new ConcurrentHashMap<>();
 
-    private static String keyOf(ItemStack stack) {
+    public static String keyOf(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return "";
         net.minecraft.util.ResourceLocation reg = stack.getItem().getRegistryName();
-        return (reg != null ? reg.toString() : "unknown") + "#" + stack.getMetadata();
+        if (reg != null) {
+            return reg.toString() + "#" + stack.getMetadata();
+        }
+        // 无注册名：附加 Item 实例的稳定标识,避免不同未注册物品碰撞
+        net.minecraft.item.Item item = stack.getItem();
+        return "unknown#" + stack.getMetadata() + "#" + item.getClass().getName()
+                + "@" + System.identityHashCode(item);
     }
 
     public static void register(UpgradeDefinition def) {
         DEFINITIONS.put(keyOf(def.item), def);
+    }
+
+    /**
+     * 按 key 移除升级定义.
+     *
+     * @param id 注册表 key,即 {@link #keyOf(ItemStack)} 的返回值
+     * @return 是否实际移除了条目
+     */
+    public static boolean removeById(String id) {
+        if (id == null || id.isEmpty()) return false;
+        return DEFINITIONS.remove(id) != null;
     }
 
     @Nullable

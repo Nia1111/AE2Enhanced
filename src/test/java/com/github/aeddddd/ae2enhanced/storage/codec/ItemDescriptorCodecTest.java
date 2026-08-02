@@ -76,6 +76,27 @@ public class ItemDescriptorCodecTest {
         assertThat(restored.getNbt()).isNull();
     }
 
+    /** 无注册名物品 write 走 "minecraft:air" 回退（与 ItemDescriptor.toNBT 一致），不抛 NPE。 */
+    @Test
+    public void testWriteUnregisteredItemFallsBackToAir() throws IOException {
+        // 未注册的 Item 没有 registryName
+        ItemDescriptor unregistered = new ItemDescriptor(new ItemStack(new net.minecraft.item.Item(), 1, 0));
+
+        byte[] bytes = write(unregistered);
+
+        // 解析字节流首部：id 长度 + id 字符串，断言回退为 "minecraft:air"
+        DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));
+        int idLen = in.readInt();
+        byte[] idBytes = new byte[idLen];
+        in.readFully(idBytes);
+        assertThat(new String(idBytes, StandardCharsets.UTF_8)).isEqualTo("minecraft:air");
+
+        // 完整读回应为 air 描述符而非 null
+        ItemDescriptor restored = read(bytes);
+        assertThat(restored).isNotNull();
+        assertThat(restored.getItem()).isEqualTo(Items.AIR);
+    }
+
     /**
      * 未知物品 id 反序列化返回 null。
      * 已验证 Forge 1.12.2 中 Item.REGISTRY 为普通 NamespacedWrapper，

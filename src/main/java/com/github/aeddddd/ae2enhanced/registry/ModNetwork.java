@@ -57,6 +57,7 @@ import com.github.aeddddd.ae2enhanced.network.packet.PacketPlacementSelectPreset
 import com.github.aeddddd.ae2enhanced.network.packet.PacketPlacementSelectPresetHandler;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniToolPlacementSubMode;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketOmniToolPlacementSubModeHandler;
+import com.github.aeddddd.ae2enhanced.network.packet.PacketSpecialPlanInfo;
 import net.minecraftforge.fml.common.network.simpleimpl.SimpleNetworkWrapper;
 import net.minecraftforge.fml.relauncher.Side;
 
@@ -117,5 +118,6 @@ public final class ModNetwork {
         nw.registerMessage(PacketPersonalDimensionRulesSync.Handler.class, PacketPersonalDimensionRulesSync.class, 51, Side.CLIENT);
         nw.registerMessage(PacketPersonalDimensionRegistrySync.Handler.class, PacketPersonalDimensionRegistrySync.class, 52, Side.CLIENT);
         nw.registerMessage(PacketEnergyStorageBusAction.Handler.class, PacketEnergyStorageBusAction.class, 53, Side.SERVER);
+        nw.registerMessage(PacketSpecialPlanInfo.Handler.class, PacketSpecialPlanInfo.class, 43, Side.CLIENT);
     }
 }

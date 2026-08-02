@@ -30,15 +30,19 @@ public class PersonalDimensionRules {
         return tag;
     }
 
+    /**
+     * 从 NBT 读取规则。缺失的键保留当前字段值，以兼容旧版本存档
+     * （对象在构造时已带默认值）。
+     */
     public void readFromNBT(NBTTagCompound tag) {
-        disableMobSpawning = tag.getBoolean("disableMobSpawning");
-        lockWeather = tag.getBoolean("lockWeather");
-        lockTime = tag.getBoolean("lockTime");
-        daylightCycle = tag.getBoolean("daylightCycle");
-        timeValue = tag.getLong("timeValue");
-        flightEnabled = tag.getBoolean("flightEnabled");
-        movementSpeed = tag.getFloat("movementSpeed");
-        noFlightInertia = tag.getBoolean("noFlightInertia");
+        if (tag.hasKey("disableMobSpawning")) disableMobSpawning = tag.getBoolean("disableMobSpawning");
+        if (tag.hasKey("lockWeather")) lockWeather = tag.getBoolean("lockWeather");
+        if (tag.hasKey("lockTime")) lockTime = tag.getBoolean("lockTime");
+        if (tag.hasKey("daylightCycle")) daylightCycle = tag.getBoolean("daylightCycle");
+        if (tag.hasKey("timeValue")) timeValue = tag.getLong("timeValue");
+        if (tag.hasKey("flightEnabled")) flightEnabled = tag.getBoolean("flightEnabled");
+        if (tag.hasKey("movementSpeed")) movementSpeed = tag.getFloat("movementSpeed");
+        if (tag.hasKey("noFlightInertia")) noFlightInertia = tag.getBoolean("noFlightInertia");
     }
 
     public PersonalDimensionRules copy() {

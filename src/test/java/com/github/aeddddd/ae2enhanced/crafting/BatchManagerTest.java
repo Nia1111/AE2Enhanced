@@ -138,6 +138,31 @@ public class BatchManagerTest {
                 .hasMessage("Batch count exceeds maximum array size");
     }
 
+    /**
+     * 满批数恰为 Integer.MAX_VALUE 且无余数时也抛 IllegalArgumentException。
+     * JVM 数组实际最大长度为 Integer.MAX_VALUE - 2(部分 VM 为 -8)，
+     * 此场景下尝试分配会 OOM，必须被上限校验拦截。
+     */
+    @Test
+    public void testSplitToLongBatchesThrowsWhenFullBatchesAtIntMaxNoRemainder() {
+        BigInteger amount = BIG_MAX.multiply(BigInteger.valueOf(Integer.MAX_VALUE)); // 满批 2^31-1 个，余数 0
+
+        assertThatThrownBy(() -> BatchManager.splitToLongBatches(amount))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Batch count exceeds maximum array size");
+    }
+
+    /** 批次总数超过 Integer.MAX_VALUE - 8（满批 2^31-8 个 + 余数 1）时抛 IllegalArgumentException。 */
+    @Test
+    public void testSplitToLongBatchesThrowsWhenTotalBatchesAboveIntMaxMinus8() {
+        BigInteger amount = BIG_MAX.multiply(BigInteger.valueOf(Integer.MAX_VALUE - 8L))
+                .add(BigInteger.ONE); // 满批 2^31-8 个 + 余数尾批，总数 2^31-7
+
+        assertThatThrownBy(() -> BatchManager.splitToLongBatches(amount))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Batch count exceeds maximum array size");
+    }
+
     // ------------------------------------------------------------------
     // splitToParallelBatches：防御分支
     // ------------------------------------------------------------------
@@ -233,6 +258,31 @@ public class BatchManagerTest {
         // 满批 2^31-1 个 + 余数 1：amount = 2 * (2^31-1) + 1
         BigInteger amount = BigInteger.valueOf(2)
                 .multiply(BigInteger.valueOf(Integer.MAX_VALUE))
+                .add(BigInteger.ONE);
+
+        assertThatThrownBy(() -> BatchManager.splitToParallelBatches(amount, 2))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Batch count exceeds maximum array size");
+    }
+
+    /** 满批数恰为 Integer.MAX_VALUE 且无余数时，同样触发上限异常（漏网路径回归）。 */
+    @Test
+    public void testSplitToParallelBatchesThrowsWhenFullBatchesAtIntMaxNoRemainder() {
+        // 满批 2^31-1 个，余数 0：amount = 2 * (2^31-1)
+        BigInteger amount = BigInteger.valueOf(2)
+                .multiply(BigInteger.valueOf(Integer.MAX_VALUE));
+
+        assertThatThrownBy(() -> BatchManager.splitToParallelBatches(amount, 2))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Batch count exceeds maximum array size");
+    }
+
+    /** 批次总数超过 Integer.MAX_VALUE - 8（满批 2^31-8 个 + 余数 1）时抛 IllegalArgumentException。 */
+    @Test
+    public void testSplitToParallelBatchesThrowsWhenTotalBatchesAboveIntMaxMinus8() {
+        // 满批 2^31-8 个 + 余数尾批：amount = 2 * (2^31-8) + 1
+        BigInteger amount = BigInteger.valueOf(2)
+                .multiply(BigInteger.valueOf(Integer.MAX_VALUE - 8L))
                 .add(BigInteger.ONE);
 
         assertThatThrownBy(() -> BatchManager.splitToParallelBatches(amount, 2))

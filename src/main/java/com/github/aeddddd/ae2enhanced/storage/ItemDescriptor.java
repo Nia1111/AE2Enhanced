@@ -110,7 +110,8 @@ public class ItemDescriptor implements Descriptor {
     }
 
     public NBTTagCompound getNbt() {
-        return nbt;
+        // 返回副本,避免调用方修改内部 NBT 破坏 equals/hashCode 契约
+        return nbt != null ? nbt.copy() : null;
     }
 
     /**

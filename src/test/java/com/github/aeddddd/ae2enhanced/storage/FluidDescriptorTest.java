@@ -102,6 +102,27 @@ public class FluidDescriptorTest {
         assertThat(descriptor.getNbt().hasKey("extra")).isFalse();
     }
 
+    /** getNbt 返回副本：修改返回值不影响内部状态，equals/hashCode 契约不被外部破坏。 */
+    @Test
+    public void testGetNbtReturnsCopy() {
+        FluidDescriptor descriptor = new FluidDescriptor(fluidWithTag("water", "k", "original"));
+        FluidDescriptor expected = new FluidDescriptor(fluidWithTag("water", "k", "original"));
+        int hashBefore = descriptor.hashCode();
+
+        // 每次调用返回不同实例
+        assertThat(descriptor.getNbt()).isNotSameAs(descriptor.getNbt());
+
+        // 修改返回的副本，descriptor 内部状态与哈希不变
+        NBTTagCompound leaked = descriptor.getNbt();
+        leaked.setString("k", "mutated");
+        leaked.setString("extra", "x");
+
+        assertThat(descriptor.getNbt().getString("k")).isEqualTo("original");
+        assertThat(descriptor.getNbt().hasKey("extra")).isFalse();
+        assertThat(descriptor).isEqualTo(expected);
+        assertThat(descriptor.hashCode()).isEqualTo(hashBefore);
+    }
+
     /** toNBT/fromNBT 往返（含 NBT 分支）。 */
     @Test
     public void testNbtRoundTripWithTag() {
@@ -170,5 +191,16 @@ public class FluidDescriptorTest {
         // fluid 引用相等（同为 null），NBT 语义与普通分支一致
         assertThat(nullFluidA).isEqualTo(nullFluidA);
         assertThat(nullFluidA).isNotEqualTo(nullFluidB); // nbt null vs 空 compound
+    }
+
+    /** null 流体序列化为空 id，fromNBT 读回 null：null->null 往返保真（不再回退为 water）。 */
+    @Test
+    public void testNullFluidNbtRoundTrip() {
+        FluidDescriptor nullFluid = FluidDescriptor.fromRaw(null, null);
+
+        NBTTagCompound nbt = nullFluid.toNBT();
+        assertThat(nbt.getString("id")).isEmpty();
+
+        assertThat(FluidDescriptor.fromNBT(nbt)).isNull();
     }
 }

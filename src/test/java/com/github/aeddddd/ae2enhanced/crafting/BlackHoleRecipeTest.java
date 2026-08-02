@@ -202,4 +202,28 @@ public class BlackHoleRecipeTest {
         assertThat(recipe.getOutput().getCount()).isEqualTo(3);
         assertThat(recipe.getOutput()).isNotSameAs(first);
     }
+
+    // ------------------------------------------------------------------
+    // null 归一化
+    // ------------------------------------------------------------------
+
+    /** 构造传 null inputs 归一化为空 Map：不抛 NPE，匹配任何 found。 */
+    @Test
+    public void testNullInputsNormalizedToEmptyMap() {
+        BlackHoleRecipe recipe = new BlackHoleRecipe("bhr_test:null_inputs", null,
+                new ItemStack(Items.APPLE, 1));
+
+        assertThat(recipe.getInputs()).isNotNull().isEmpty();
+        assertThat(recipe.matches(new HashMap<>())).isTrue();
+    }
+
+    /** 构造传 null output 归一化为 ItemStack.EMPTY：不抛 NPE。 */
+    @Test
+    public void testNullOutputNormalizedToEmpty() {
+        BlackHoleRecipe recipe = new BlackHoleRecipe("bhr_test:null_output",
+                new HashMap<>(), null);
+
+        assertThat(recipe.getOutput()).isNotNull();
+        assertThat(recipe.getOutput().isEmpty()).isTrue();
+    }
 }

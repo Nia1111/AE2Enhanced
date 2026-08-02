@@ -244,7 +244,13 @@ public class GuiHandler implements IGuiHandler {
             return new ContainerOmniToolConfig();
         }
         if (ID == GUI_PERSONAL_DIMENSION_CONFIG) {
-            return new ContainerPersonalDimensionConfig(player.getUniqueID());
+            // 在他人维度内且拥有 MANAGE_RULES 权限时，编辑所在维度所有者的规则
+            java.util.UUID target = com.github.aeddddd.ae2enhanced.dimension.PersonalDimensionManager.getRuleEditTarget(player);
+            if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
+                com.github.aeddddd.ae2enhanced.dimension.PersonalDimensionManager.sendRulesToPlayer(
+                        target, (net.minecraft.entity.player.EntityPlayerMP) player);
+            }
+            return new ContainerPersonalDimensionConfig(target);
         }
         return null;
     }

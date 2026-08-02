@@ -15,8 +15,11 @@ import com.github.aeddddd.ae2enhanced.specialcrafting.SelfRefOutputGate;
 import com.github.aeddddd.ae2enhanced.specialcrafting.SpecialCraftingRuntime;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyController;
 import com.github.aeddddd.ae2enhanced.tile.TileAssemblyMeInterface;
+import com.github.aeddddd.ae2enhanced.util.compat.Ae2fcFluidPatternHelper;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.crafting.CraftingManager;
+import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.util.NonNullList;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -190,6 +193,176 @@ public abstract class MixinCraftingCPUClusterBatch {
 
                         TileAssemblyController controller = ((TileAssemblyMeInterface) medium).getController();
                         if (controller == null) continue;
+
+                        // ===== ae2fc 流体替换合成样板：流体感知批量分支 =====
+                        // 输入模板中 FLUID_DROP 按 mB 计量、普通物品按个数计量；
+                        // 配方用容器形态输入(getOriginInputs)重建,被替换的流体槽无空容器返还.
+                        if (controller.isFluidPattern(details)) {
+                            if (!controller.canBatch()) break;
+
+                            long cap = controller.getParallelCap();
+                            long batchSize = (cap >= Long.MAX_VALUE / 2) ? remaining : Math.min(remaining, cap);
+
+                            appeng.api.networking.security.IActionSource source = cpu.getActionSource();
+                            controller.setCurrentActionSource(source);
+                            try {
+                                appeng.crafting.MECraftingInventory meInv = (appeng.crafting.MECraftingInventory) cpu.getInventory();
+                                IItemList<IAEItemStack> itemList = meInv.getItemList();
+                                appeng.api.config.Actionable SIMULATE = appeng.api.config.Actionable.SIMULATE;
+                                appeng.api.config.Actionable MODULATE = appeng.api.config.Actionable.MODULATE;
+
+                                IAEItemStack[] fluidInputs = details.getInputs();
+                                IAEItemStack[] originInputs = Ae2fcFluidPatternHelper.getOriginInputs(details);
+                                if (fluidInputs == null || originInputs == null) break; // 反射失败,安全降级到逐次派发
+
+                                // 用容器形态输入重建原版配方,取得每槽空容器返还表
+                                InventoryCrafting ic = new InventoryCrafting(new net.minecraft.inventory.Container() {
+                                    @Override
+                                    public boolean canInteractWith(net.minecraft.entity.player.EntityPlayer playerIn) {
+                                        return false;
+                                    }
+                                }, 3, 3);
+                                for (int i = 0; i < originInputs.length && i < 9; i++) {
+                                    ic.setInventorySlotContents(i, originInputs[i] != null ? originInputs[i].getDefinition() : ItemStack.EMPTY);
+                                }
+                                IRecipe recipe = CraftingManager.findMatchingRecipe(ic, controller.getWorld());
+                                if (recipe == null) break;
+                                NonNullList<ItemStack> recipeRemaining = recipe.getRemainingItems(ic);
+
+                                // 逐槽分类：Drop 槽=流体直接消耗(无返还)；普通槽 remaining 为空=纯消耗；
+                                // remaining 与输入同物品=催化剂/转换槽,降级为单份结算
+                                int[] returnCounts = new int[9];
+                                boolean forceSingle = false;
+                                int estimatedStacks = 1;
+                                for (int i = 0; i < 9; i++) {
+                                    if (i >= fluidInputs.length || fluidInputs[i] == null) continue;
+                                    if (Ae2fcFluidPatternHelper.isAe2fcFluidDrop(fluidInputs[i])) continue;
+                                    ItemStack rem = i < recipeRemaining.size() ? recipeRemaining.get(i) : ItemStack.EMPTY;
+                                    if (rem.isEmpty()) {
+                                        estimatedStacks++;
+                                        continue;
+                                    }
+                                    ItemStack inputDef = fluidInputs[i].getDefinition();
+                                    if (ItemStack.areItemsEqual(inputDef, rem) && inputDef.getMetadata() == rem.getMetadata()) {
+                                        forceSingle = true;
+                                    } else {
+                                        returnCounts[i] = rem.getCount();
+                                        estimatedStacks++;
+                                    }
+                                }
+                                long actualBatchSize = forceSingle ? 1 : batchSize;
+                                if (!controller.canAcceptRealBatch(estimatedStacks)) break;
+
+                                // SIMULATE 预检 + 网络补取,自适应缩小批量(与虚拟批量同策略)
+                                boolean canExtract = true;
+                                for (int retry = 0; retry < 5; retry++) {
+                                    canExtract = true;
+                                    for (int i = 0; i < 9; i++) {
+                                        if (i >= fluidInputs.length || fluidInputs[i] == null) continue;
+                                        long perOp = fluidInputs[i].getStackSize();
+                                        if (perOp <= 0) continue;
+                                        long totalNeed = perOp * actualBatchSize;
+                                        IAEItemStack need = fluidInputs[i].copy();
+                                        need.setStackSize(totalNeed);
+                                        IAEItemStack simResult = meInv.extractItems(need, SIMULATE, source);
+                                        if (simResult == null || simResult.getStackSize() < totalNeed) {
+                                            long available = simResult != null ? simResult.getStackSize() : 0;
+                                            long missing = totalNeed - available;
+                                            if (missing > 0) {
+                                                IAEItemStack toFetch = fluidInputs[i].copy();
+                                                toFetch.setStackSize(missing);
+                                                IAEItemStack fetched = fetchFromNetwork(cpu, toFetch, source);
+                                                if (fetched != null && fetched.getStackSize() > 0) {
+                                                    meInv.injectItems(fetched, MODULATE, source);
+                                                    simResult = meInv.extractItems(need, SIMULATE, source);
+                                                    if (simResult != null && simResult.getStackSize() >= totalNeed) {
+                                                        continue;
+                                                    }
+                                                    available = simResult != null ? simResult.getStackSize() : 0;
+                                                }
+                                            }
+                                            long maxBatch = available / perOp;
+                                            if (maxBatch > 0 && !forceSingle) {
+                                                actualBatchSize = Math.min(actualBatchSize, maxBatch);
+                                                canExtract = false; // 需要重试
+                                            } else {
+                                                canExtract = false;
+                                                actualBatchSize = 0;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (canExtract) break;
+                                }
+                                if (!canExtract || actualBatchSize <= 0) break;
+
+                                // MODULATE 实际扣料(Drop 扣 mB,物品扣个数)
+                                for (int i = 0; i < 9; i++) {
+                                    if (i >= fluidInputs.length || fluidInputs[i] == null) continue;
+                                    long totalNeed = fluidInputs[i].getStackSize() * actualBatchSize;
+                                    if (totalNeed <= 0) continue;
+                                    IAEItemStack need = fluidInputs[i].copy();
+                                    need.setStackSize(totalNeed);
+                                    IAEItemStack extracted = meInv.extractItems(need, MODULATE, source);
+                                    if (extracted != null && extracted.getStackSize() > 0) {
+                                        IAEItemStack diff = extracted.copy();
+                                        diff.setStackSize(-diff.getStackSize());
+                                        this.postChange(diff, source);
+                                        this.postCraftingStatusChange(diff);
+                                    }
+                                }
+
+                                // 产物：物品形态直接入 CPU 物品栏(与虚拟批量一致,保证嵌套配方 canCraft 可见)
+                                for (IAEItemStack outputTemplate : details.getCondensedOutputs()) {
+                                    if (outputTemplate == null || outputTemplate.getStackSize() <= 0) continue;
+                                    long totalCount = outputTemplate.getStackSize() * actualBatchSize;
+                                    if (totalCount <= 0) continue;
+
+                                    IAEItemStack product = outputTemplate.copy();
+                                    product.setStackSize(totalCount);
+                                    itemList.add(product);
+                                    this.postChange(product.copy(), source);
+                                    this.postCraftingStatusChange(product.copy());
+
+                                    if (waitingFor != null) {
+                                        IAEItemStack waiting = waitingFor.findPrecise(outputTemplate);
+                                        if (waiting != null) {
+                                            waiting.decStackSize(totalCount);
+                                            if (waiting.getStackSize() <= 0) {
+                                                waiting.setStackSize(0);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 空容器返还：仅非 Drop 的容器槽,Drop 槽流体被直接消耗无空桶
+                                for (int i = 0; i < 9; i++) {
+                                    if (returnCounts[i] <= 0) continue;
+                                    ItemStack rem = recipeRemaining.get(i).copy();
+                                    rem.setCount(returnCounts[i] * (int) actualBatchSize);
+                                    controller.addPendingOutput(rem);
+                                }
+
+                                long newRemaining = remaining - actualBatchSize;
+                                ((ITaskProgressAccessor) progress).ae2e$setValue(newRemaining);
+
+                                this.remainingOperations = (int) (this.remainingOperations - actualBatchSize);
+                                long totalOutputCount = 0;
+                                for (IAEItemStack out : details.getCondensedOutputs()) {
+                                    if (out != null) totalOutputCount += out.getStackSize() * actualBatchSize;
+                                }
+                                this.remainingItemCount = this.remainingItemCount - totalOutputCount;
+
+                                controller.setBatchBusy(true);
+                                changed = true;
+                                controller.resetBatchCooldown();
+                            } catch (Exception e) {
+                                AE2Enhanced.LOGGER.error("[AE2E] Fluid batch error: {}", e.toString());
+                            } finally {
+                                controller.setCurrentActionSource(null);
+                            }
+                            break;
+                        }
 
                         if (!controller.isVirtualPattern(details)) {
                             if (!controller.canBatch()) break;

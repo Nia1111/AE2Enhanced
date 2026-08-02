@@ -79,17 +79,34 @@ public class SingularityRecipeTest {
         assertThat(recipe.getTargetBlock()).isNull();
     }
 
-    /** droppedInputs 非 null 时按源码语义直接持有传入列表（不做防御性拷贝）。 */
+    /** 构造时拷贝传入列表：修改原列表不影响配方，getInputs 返回副本而非传入列表本身。 */
     @Test
-    public void testInputsHoldPassedList() {
-        List<ItemStack> inputs = Arrays.asList(new ItemStack(Items.APPLE, 2),
-                new ItemStack(Items.COAL, 1, 1));
+    public void testConstructorCopiesInputs() {
+        List<ItemStack> inputs = new java.util.ArrayList<>(Arrays.asList(new ItemStack(Items.APPLE, 2),
+                new ItemStack(Items.COAL, 1, 1)));
         SingularityRecipe recipe = new SingularityRecipe("sr_test:inputs", inputs,
                 ItemStack.EMPTY, null, 100);
 
-        // 源码语义：getInputs 返回传入列表本身
-        assertThat(recipe.getInputs()).isSameAs(inputs);
+        assertThat(recipe.getInputs()).isNotSameAs(inputs);
         assertThat(recipe.getInputs()).hasSize(2);
+
+        // 修改传入列表不影响配方内部状态
+        inputs.clear();
+        assertThat(recipe.getInputs()).hasSize(2);
+    }
+
+    /** getInputs 每次返回副本，修改返回值不影响后续获取。 */
+    @Test
+    public void testGetInputsReturnsCopy() {
+        List<ItemStack> inputs = Arrays.asList(new ItemStack(Items.APPLE, 2));
+        SingularityRecipe recipe = new SingularityRecipe("sr_test:inputs_copy", inputs,
+                ItemStack.EMPTY, null, 100);
+
+        List<ItemStack> exposed = recipe.getInputs();
+        exposed.clear();
+
+        assertThat(recipe.getInputs()).hasSize(1);
+        assertThat(recipe.getInputs()).isNotSameAs(exposed);
     }
 
     // ------------------------------------------------------------------
@@ -103,7 +120,8 @@ public class SingularityRecipeTest {
         SingularityRecipe recipe = new SingularityRecipe("sr_test:simple", inputs);
 
         assertThat(recipe.getId()).isEqualTo("sr_test:simple");
-        assertThat(recipe.getInputs()).isSameAs(inputs);
+        assertThat(recipe.getInputs()).isNotSameAs(inputs);
+        assertThat(recipe.getInputs()).hasSize(1);
         assertThat(recipe.getHeldItem().isEmpty()).isTrue();
         assertThat(recipe.getTargetBlock()).isNull();
         assertThat(recipe.getLifetimeTicks()).isEqualTo(DEFAULT_LIFE_TICKS);

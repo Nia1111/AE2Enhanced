@@ -9,6 +9,7 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -40,7 +41,8 @@ public class SingularityRecipe {
     public SingularityRecipe(String id, List<ItemStack> droppedInputs,
                              ItemStack heldItem, Block targetBlock, int lifetimeTicks) {
         this.id = id;
-        this.droppedInputs = droppedInputs != null ? droppedInputs : Collections.emptyList();
+        // 防御性拷贝：避免调用方后续修改传入列表影响配方
+        this.droppedInputs = droppedInputs != null ? new ArrayList<>(droppedInputs) : Collections.emptyList();
         this.heldItem = heldItem != null ? heldItem : ItemStack.EMPTY;
         this.targetBlock = targetBlock;
         this.lifetimeTicks = lifetimeTicks > 0 ? lifetimeTicks : TileMicroSingularity.DEFAULT_LIFE_TICKS;
@@ -58,7 +60,7 @@ public class SingularityRecipe {
     }
 
     public List<ItemStack> getInputs() {
-        return droppedInputs;
+        return new ArrayList<>(droppedInputs);
     }
 
     public ItemStack getHeldItem() {

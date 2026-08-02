@@ -1,6 +1,7 @@
 package com.github.aeddddd.ae2enhanced.network.packet;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
@@ -118,14 +119,25 @@ public class SimplePacketRoundTripTest {
     }
 
     /**
-     * 固化行为：slot 字段为 int 但仅写入单字节，超出 byte 范围 [-128, 127]
-     * 的值会被静默截断（如 200 读回为 -56）。协议规定取值仅 -2~9，
-     * 正常使用不会触发；此处仅固化截断语义，防止误改字段类型。
+     * 越界拒绝：slot 字段为 int 但仅写入单字节，构造函数对超出 byte 范围
+     * [-128, 127] 的值直接抛 IllegalArgumentException，避免静默截断。
      */
     @Test
-    public void testPlacementSelectPresetByteTruncation() {
-        PacketPlacementSelectPreset decoded = roundTrip(
-                new PacketPlacementSelectPreset(200), PacketPlacementSelectPreset.class);
-        assertThat(decoded.getSlot()).isEqualTo((byte) 200); // 200 截断为 -56
+    public void testPlacementSelectPresetOutOfRangeRejected() {
+        assertThatThrownBy(() -> new PacketPlacementSelectPreset(128))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("slot");
+        assertThatThrownBy(() -> new PacketPlacementSelectPreset(200))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("slot");
+        assertThatThrownBy(() -> new PacketPlacementSelectPreset(-129))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("slot");
+
+        // byte 边界值本身合法，可正常往返
+        assertThat(roundTrip(new PacketPlacementSelectPreset(127),
+                PacketPlacementSelectPreset.class).getSlot()).isEqualTo(127);
+        assertThat(roundTrip(new PacketPlacementSelectPreset(-128),
+                PacketPlacementSelectPreset.class).getSlot()).isEqualTo(-128);
     }
 }
