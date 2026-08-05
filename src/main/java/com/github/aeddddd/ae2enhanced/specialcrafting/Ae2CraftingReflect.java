@@ -229,6 +229,14 @@ public final class Ae2CraftingReflect {
         }
     }
 
+    public static long getNodeMissing(CraftingTreeNode node) {
+        try {
+            return NODE_MISSING.getLong(node);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("读取 CraftingTreeNode.missing 失败", e);
+        }
+    }
+
     public static void treeProcessRequest(CraftingTreeProcess pro, MECraftingInventory inv, long times,
             IActionSource src) throws CraftBranchFailure, InterruptedException {
         try {

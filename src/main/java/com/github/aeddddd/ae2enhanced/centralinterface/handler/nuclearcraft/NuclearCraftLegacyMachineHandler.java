@@ -94,7 +94,7 @@ public class NuclearCraftLegacyMachineHandler implements IRemoteHandler {
 
         ITILE_INVENTORY_CLASS = Class.forName("nc.tile.inventory.ITileInventory");
         GET_INVENTORY_STACKS_METHOD = ITILE_INVENTORY_CLASS.getMethod("getInventoryStacks");
-        IS_ITEM_VALID_FOR_SLOT_METHOD = ITILE_INVENTORY_CLASS.getMethod("isItemValidForSlot", int.class, ItemStack.class);
+        IS_ITEM_VALID_FOR_SLOT_METHOD = findIsItemValidForSlot(ITILE_INVENTORY_CLASS);
         return true;
     }
 
@@ -105,8 +105,21 @@ public class NuclearCraftLegacyMachineHandler implements IRemoteHandler {
 
         ITILE_INVENTORY_CLASS = Class.forName("nc.tile.inventory.ITileInventory");
         GET_INVENTORY_STACKS_METHOD = ITILE_INVENTORY_CLASS.getMethod("getInventoryStacks");
-        IS_ITEM_VALID_FOR_SLOT_METHOD = ITILE_INVENTORY_CLASS.getMethod("isItemValidForSlot", int.class, ItemStack.class);
+        IS_ITEM_VALID_FOR_SLOT_METHOD = findIsItemValidForSlot(ITILE_INVENTORY_CLASS);
         return true;
+    }
+
+    /**
+     * 查找 {@code isItemValidForSlot(int, ItemStack)}。
+     * 该方法是 vanilla {@code IInventory} 方法：开发环境为 MCP 名 {@code isItemValidForSlot}，
+     * 生产环境 reobf 后为 SRG 名 {@code func_94041_b}，需双名回退。
+     */
+    private static Method findIsItemValidForSlot(Class<?> clazz) throws NoSuchMethodException {
+        try {
+            return clazz.getMethod("isItemValidForSlot", int.class, ItemStack.class);
+        } catch (NoSuchMethodException e) {
+            return clazz.getMethod("func_94041_b", int.class, ItemStack.class);
+        }
     }
 
     @Override

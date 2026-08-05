@@ -24,9 +24,17 @@ import com.github.aeddddd.ae2enhanced.recycler.NCProcessorRedirectHelper;
 @SuppressWarnings({"rawtypes", "unchecked"})
 public abstract class MixinNCOEnergyProcessor implements IProcessor {
 
-    /** 解决 ITile(default) 与 IInventory(abstract) 的签名冲突；抽象方法不参与合并。 */
+    /**
+     * 解决 ITile(default) 与 IInventory(abstract) 的签名冲突。
+     * 必须为具体实现，且方法体与 {@code ITile} 的 default 完全一致（距离 ≤ 64 检查）；
+     * 绝不能声明为 abstract——抽象方法同样会被 Mixin 合并进目标类，
+     * 且 reobf 后被改名为 {@code func_70300_a}，成为类级抽象声明并压制
+     * {@code ITile} 的 default 实现，导致打开机器 GUI 时 AbstractMethodError。
+     */
     @Override
-    public abstract boolean isUsableByPlayer(EntityPlayer player);
+    public boolean isUsableByPlayer(EntityPlayer player) {
+        return player.getDistanceSq(getTilePos().getX() + 0.5, getTilePos().getY() + 0.5, getTilePos().getZ() + 0.5) <= 64.0;
+    }
 
     /** 重定向熔断标记：辅助类加载失败等致命错误时置位，保证机器原逻辑不受影响。 */
     private static boolean ae2enhanced$redirectBroken = false;

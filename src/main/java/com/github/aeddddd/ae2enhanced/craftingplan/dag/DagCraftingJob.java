@@ -1,5 +1,8 @@
 package com.github.aeddddd.ae2enhanced.craftingplan.dag;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.annotation.Nullable;
 
 import net.minecraft.world.World;
@@ -9,8 +12,10 @@ import appeng.api.networking.crafting.ICraftingCallback;
 import appeng.api.networking.crafting.ICraftingGrid;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.storage.data.IAEItemStack;
+import appeng.api.storage.data.IItemList;
 import appeng.crafting.CraftingJob;
 import appeng.crafting.CraftingTreeNode;
+import appeng.crafting.CraftingTreeProcess;
 import appeng.crafting.MECraftingInventory;
 import appeng.hooks.TickHandler;
 
@@ -110,5 +115,54 @@ public class DagCraftingJob extends CraftingJob {
         SpecialLog.info("[DAG] 计划完成: {}×{},节点 {},循环边界 {}", output, output.getStackSize(),
                 graph.topoOrder.size(), this.hasCycleBoundary);
         return root;
+    }
+
+    /**
+     * 缺失显示确定性修复：实测原生 {@code CraftingTreeNode.getPlan} 的 missing→plan
+     * 转移在部分环境下不稳定（节点 missing>0 时方法体概率性不执行 plan.add,呈启动级随机）,
+     * 导致 ContainerCraftConfirm 按 plan 重算缺失得到 0,缺失条目（如流体）不显示.
+     * 这里改为确定性方案：先收集并清零树上 missing,super 构建完 used/requestable 后,
+     * 由本类按原生同语义（what.copy + missing 量）统一注入 plan.used/requestable 分支
+     * 经多轮日志验证始终正常,仅 missing 分支存在该不稳定性.
+     */
+    @Override
+    public void populatePlan(IItemList<IAEItemStack> plan) {
+        List<CraftingTreeNode> missingNodes = new ArrayList<>();
+        collectMissingNodes(this.getTree(), missingNodes);
+        if (missingNodes.isEmpty()) {
+            super.populatePlan(plan);
+            return;
+        }
+        List<Long> saved = new ArrayList<>(missingNodes.size());
+        for (CraftingTreeNode node : missingNodes) {
+            saved.add(Ae2CraftingReflect.getNodeMissing(node));
+            Ae2CraftingReflect.setNodeMissing(node, 0L);
+        }
+        try {
+            super.populatePlan(plan);
+        } finally {
+            for (int i = 0; i < missingNodes.size(); i++) {
+                Ae2CraftingReflect.setNodeMissing(missingNodes.get(i), saved.get(i));
+            }
+        }
+        for (int i = 0; i < missingNodes.size(); i++) {
+            IAEItemStack o = Ae2CraftingReflect.getNodeWhat(missingNodes.get(i)).copy();
+            o.setStackSize(saved.get(i));
+            plan.add(o);
+        }
+    }
+
+    private static void collectMissingNodes(CraftingTreeNode node, List<CraftingTreeNode> out) {
+        if (node == null) {
+            return;
+        }
+        if (Ae2CraftingReflect.getNodeMissing(node) > 0) {
+            out.add(node);
+        }
+        for (CraftingTreeProcess pro : Ae2CraftingReflect.getNodeProcesses(node)) {
+            for (CraftingTreeNode child : Ae2CraftingReflect.getProcessNodes(pro).keySet()) {
+                collectMissingNodes(child, out);
+            }
+        }
     }
 }
