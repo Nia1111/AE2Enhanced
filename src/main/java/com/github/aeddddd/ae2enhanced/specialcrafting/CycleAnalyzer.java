@@ -126,6 +126,80 @@ public final class CycleAnalyzer {
     }
 
     /**
+     * 一次编译/求解共享的生产者索引:主产出查询按键缓存,副产物生产者倒排
+     * (全样板扫描<b>一次</b>建成,替代原先"每个缓存未命中键都全扫一遍"的
+     * O(键数×样板数) 开销——极端规模基准中该开销占 DAG 编译 98% 耗时).
+     * <p>副产物扫描依赖 {@code ICraftingGridCacheAccess} 暴露的全样板键集;
+     * 不可用时(如单元测试的模拟网格)退化为仅主产出索引.</p>
+     */
+    public static final class ProducerIndex {
+        private final ICraftingGrid cc;
+        private final World world;
+        private final Map<IAEItemStack, List<ICraftingPatternDetails>> cache = new LinkedHashMap<>();
+        @Nullable
+        private Map<IAEItemStack, List<ICraftingPatternDetails>> byproductIndex;
+
+        public ProducerIndex(ICraftingGrid cc, World world) {
+            this.cc = cc;
+            this.world = world;
+        }
+
+        /** 生产 {@code current} 的全部样板:主产出索引快路径 + 副产物倒排(按键缓存). */
+        List<ICraftingPatternDetails> producersOf(IAEItemStack current) {
+            List<ICraftingPatternDetails> cached = this.cache.get(current);
+            if (cached != null) {
+                return cached;
+            }
+            List<ICraftingPatternDetails> out = new ArrayList<>();
+            for (ICraftingPatternDetails pattern : this.cc.getCraftingFor(current, null, -1,
+                    this.world)) {
+                out.add(pattern);
+            }
+            for (ICraftingPatternDetails pattern : this.byproductIndex()
+                    .getOrDefault(current, Collections.emptyList())) {
+                if (!out.contains(pattern)) {
+                    out.add(pattern);
+                }
+            }
+            this.cache.put(current, out);
+            return out;
+        }
+
+        /**
+         * 副产物生产者倒排:输出键 → 以它为非主索引输出的样板列表.懒建,只扫一次.
+         */
+        private Map<IAEItemStack, List<ICraftingPatternDetails>> byproductIndex() {
+            if (this.byproductIndex == null) {
+                this.byproductIndex = new LinkedHashMap<>();
+                if (this.cc instanceof com.github.aeddddd.ae2enhanced.mixin.bridge.ICraftingGridCacheAccess) {
+                    for (IAEItemStack craftable : ((com.github.aeddddd.ae2enhanced.mixin.bridge.ICraftingGridCacheAccess) this.cc)
+                            .ae2enhanced$craftableKeys()) {
+                        IAEItemStack craftableKey = RecursiveCraftingHelper.canon(craftable);
+                        for (ICraftingPatternDetails pattern : this.cc.getCraftingFor(craftableKey,
+                                null, -1, this.world)) {
+                            for (IAEItemStack output : pattern.getCondensedOutputs()) {
+                                if (output == null) {
+                                    continue;
+                                }
+                                IAEItemStack outKey = RecursiveCraftingHelper.canon(output);
+                                if (outKey.equals(craftableKey)) {
+                                    continue; // 主索引键,已由 getCraftingFor 覆盖
+                                }
+                                List<ICraftingPatternDetails> list = this.byproductIndex
+                                        .computeIfAbsent(outKey, k -> new ArrayList<>());
+                                if (!list.contains(pattern)) {
+                                    list.add(pattern);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return this.byproductIndex;
+        }
+    }
+
+    /**
      * 枚举经过 {@code root} 的所有简单环（长度 ≥ 2;自引用环由阶段 1 处理,此处跳过）,
      * 按环长度降序返回（长环的键集更完整,优先尝试）.
      * <p>生产者发现含<b>副产物边</b>(1.1.0 起):root 作为样板的任意输出(不限主产出)
@@ -138,49 +212,9 @@ public final class CycleAnalyzer {
         IAEItemStack rootKey = RecursiveCraftingHelper.canon(root);
         onPath.add(rootKey);
         LinkedHashMap<IAEItemStack, CycleStep> chain = new LinkedHashMap<>();
-        Map<IAEItemStack, List<ICraftingPatternDetails>> producerCache = new LinkedHashMap<>();
-        dfs(cc, world, rootKey, rootKey, onPath, chain, budget, cycles, producerCache);
+        dfs(cc, world, rootKey, rootKey, onPath, chain, budget, cycles, new ProducerIndex(cc, world));
         cycles.sort((a, b) -> Integer.compare(b.size(), a.size()));
         return cycles;
-    }
-
-    /**
-     * 生产 {@code current} 的全部样板:主产出索引快路径 + 副产物全扫描(按请求缓存).
-     * <p>副产物扫描依赖 {@code ICraftingGridCacheAccess} 暴露的全样板键集;
-     * 不可用时(如单元测试的模拟网格)退化为仅主产出索引.</p>
-     */
-    private static List<ICraftingPatternDetails> producersOf(ICraftingGrid cc, World world,
-            IAEItemStack current, Map<IAEItemStack, List<ICraftingPatternDetails>> cache) {
-        List<ICraftingPatternDetails> cached = cache.get(current);
-        if (cached != null) {
-            return cached;
-        }
-        List<ICraftingPatternDetails> out = new ArrayList<>();
-        for (ICraftingPatternDetails pattern : cc.getCraftingFor(current, null, -1, world)) {
-            out.add(pattern);
-        }
-        // 副产物生产者:getCraftingFor 只按主产出索引,需全样板扫描补漏
-        if (cc instanceof com.github.aeddddd.ae2enhanced.mixin.bridge.ICraftingGridCacheAccess) {
-            for (IAEItemStack craftable : ((com.github.aeddddd.ae2enhanced.mixin.bridge.ICraftingGridCacheAccess) cc)
-                    .ae2enhanced$craftableKeys()) {
-                IAEItemStack craftableKey = RecursiveCraftingHelper.canon(craftable);
-                if (craftableKey.equals(current)) {
-                    continue;
-                }
-                for (ICraftingPatternDetails pattern : cc.getCraftingFor(craftableKey, null, -1, world)) {
-                    for (IAEItemStack output : pattern.getCondensedOutputs()) {
-                        if (output != null && current.equals(output)) {
-                            if (!out.contains(pattern)) {
-                                out.add(pattern);
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        cache.put(current, out);
-        return out;
     }
 
     /**
@@ -189,11 +223,11 @@ public final class CycleAnalyzer {
      */
     private static void dfs(ICraftingGrid cc, World world, IAEItemStack root, IAEItemStack current,
             Set<IAEItemStack> onPath, LinkedHashMap<IAEItemStack, CycleStep> chain, int[] budget,
-            List<List<CycleStep>> cycles, Map<IAEItemStack, List<ICraftingPatternDetails>> producerCache) {
+            List<List<CycleStep>> cycles, ProducerIndex producerIndex) {
         if (budget[0]-- <= 0 || cycles.size() >= MAX_CYCLES) {
             return;
         }
-        for (ICraftingPatternDetails pattern : producersOf(cc, world, current, producerCache)) {
+        for (ICraftingPatternDetails pattern : producerIndex.producersOf(current)) {
             boolean producesCurrent = false;
             for (IAEItemStack output : pattern.getCondensedOutputs()) {
                 if (output != null && current.equals(output) && output.getStackSize() > 0) {
@@ -230,7 +264,7 @@ public final class CycleAnalyzer {
                 }
                 onPath.add(from);
                 chain.put(from, step);
-                dfs(cc, world, root, from, onPath, chain, budget, cycles, producerCache);
+                dfs(cc, world, root, from, onPath, chain, budget, cycles, producerIndex);
                 chain.remove(from);
                 onPath.remove(from);
             }
@@ -243,6 +277,15 @@ public final class CycleAnalyzer {
      * detector / DAG 编译器共用,预算受限.
      */
     public static boolean isCycleStep(ICraftingGrid cc, World world, ICraftingPatternDetails pattern) {
+        return isCycleStep(cc, world, pattern, new ProducerIndex(cc, world));
+    }
+
+    /**
+     * 同 {@link #isCycleStep(ICraftingGrid, World, ICraftingPatternDetails)},但共享调用方
+     * 提供的 {@link ProducerIndex}——DAG 编译器等批量场景避免逐节点重复全样板扫描.
+     */
+    public static boolean isCycleStep(ICraftingGrid cc, World world, ICraftingPatternDetails pattern,
+            ProducerIndex producerIndex) {
         Set<IAEItemStack> outputs = new HashSet<>();
         for (IAEItemStack output : pattern.getCondensedOutputs()) {
             if (output != null) {
@@ -250,13 +293,12 @@ public final class CycleAnalyzer {
             }
         }
         int[] budget = { MAX_VISITED };
-        Map<IAEItemStack, List<ICraftingPatternDetails>> producerCache = new LinkedHashMap<>();
         for (IAEItemStack input : pattern.getCondensedInputs()) {
             if (input == null || input.getStackSize() <= 0) {
                 continue;
             }
             if (reachesOutputs(cc, world, RecursiveCraftingHelper.canon(input), outputs, budget,
-                    new HashSet<>(), producerCache)) {
+                    new HashSet<>(), producerIndex)) {
                 return true;
             }
         }
@@ -266,11 +308,11 @@ public final class CycleAnalyzer {
     /** 沿"被产生"边回溯:current 的传递原料中是否出现 targets 中的键. */
     private static boolean reachesOutputs(ICraftingGrid cc, World world, IAEItemStack current,
             Set<IAEItemStack> targets, int[] budget, Set<IAEItemStack> visited,
-            Map<IAEItemStack, List<ICraftingPatternDetails>> producerCache) {
+            ProducerIndex producerIndex) {
         if (!visited.add(current) || budget[0]-- <= 0) {
             return false;
         }
-        for (ICraftingPatternDetails producer : producersOf(cc, world, current, producerCache)) {
+        for (ICraftingPatternDetails producer : producerIndex.producersOf(current)) {
             boolean produces = false;
             for (IAEItemStack output : producer.getCondensedOutputs()) {
                 if (output != null && current.equals(output)) {
@@ -289,7 +331,7 @@ public final class CycleAnalyzer {
                 if (targets.contains(from)) {
                     return true;
                 }
-                if (reachesOutputs(cc, world, from, targets, budget, visited, producerCache)) {
+                if (reachesOutputs(cc, world, from, targets, budget, visited, producerIndex)) {
                     return true;
                 }
             }
@@ -307,8 +349,8 @@ public final class CycleAnalyzer {
         IAEItemStack whatKey = RecursiveCraftingHelper.canon(what);
         List<List<CycleStep>> out = new ArrayList<>();
         Set<List<ICraftingPatternDetails>> seen = new HashSet<>();
-        Map<IAEItemStack, List<ICraftingPatternDetails>> producerCache = new LinkedHashMap<>();
-        for (ICraftingPatternDetails pattern : producersOf(cc, world, whatKey, producerCache)) {
+        ProducerIndex producerIndex = new ProducerIndex(cc, world);
+        for (ICraftingPatternDetails pattern : producerIndex.producersOf(whatKey)) {
             boolean selfInput = false;
             for (IAEItemStack input : pattern.getCondensedInputs()) {
                 if (input != null && whatKey.equals(input)) {

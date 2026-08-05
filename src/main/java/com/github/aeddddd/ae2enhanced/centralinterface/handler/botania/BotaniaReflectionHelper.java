@@ -1,14 +1,16 @@
 package com.github.aeddddd.ae2enhanced.centralinterface.handler.botania;
 
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+import com.github.aeddddd.ae2enhanced.mixin.late.botania.ITileAltarAccessor;
+import com.github.aeddddd.ae2enhanced.mixin.late.botania.ITilePoolAccessor;
+import com.github.aeddddd.ae2enhanced.mixin.late.botania.ITileRuneAltarAccessor;
+import com.github.aeddddd.ae2enhanced.mixin.late.botania.ITileSimpleInventoryAccessor;
 import net.minecraft.block.Block;
 import net.minecraft.block.properties.IProperty;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.item.EntityItem;
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.EnumHand;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.IItemHandlerModifiable;
 
@@ -24,14 +26,19 @@ import java.util.List;
  * (对应 handler 会在 isValidTarget 中回退到类型检查).
  *
  * 本类自身不引用任何 vazkii.botania 类型,因此可以安全地被无条件加载.
+ *
+ * <p><b>服务端崩溃注意事项</b>:TilePool / TileRuneAltar / TileAltar 均声明了
+ * renderHUD(Minecraft, ScaledResolution) 客户端专属方法。JVM 在执行
+ * getMethod/getDeclaredMethod 时会解析目标类全部已声明方法的签名,
+ * 在 Dedicated Server 上必然抛出 NoClassDefFoundError: net/minecraft/client/Minecraft。
+ * 因此这三个类(以及其父类 TileSimpleInventory 的 getItemHandler)的<b>方法</b>一律通过
+ * mixin.late.botania 包下的 Invoker 接口访问;<b>字段</b>类型均不引用客户端类,
+ * getDeclaredField 不触发方法签名解析,可安全保留反射.</p>
  */
 public class BotaniaReflectionHelper {
 
-    // ---- TilePool ----
+    // ---- TilePool (方法见 ITilePoolAccessor) ----
     public static final Class<?> CLASS_TILE_POOL;
-    public static final Method METHOD_POOL_GET_MATCHING_RECIPE;
-    public static final Method METHOD_POOL_GET_CURRENT_MANA;
-    public static final Method METHOD_POOL_COLLIDE_ENTITY_ITEM;
 
     // ---- TileAlfPortal ----
     public static final Class<?> CLASS_TILE_ALF_PORTAL;
@@ -42,28 +49,15 @@ public class BotaniaReflectionHelper {
     public static final Method METHOD_ARE_ITEMS_VALID;
     public static final Method METHOD_GET_ITEMS;
 
-    // ---- TileRuneAltar ----
+    // ---- TileRuneAltar (方法见 ITileRuneAltarAccessor / ITileSimpleInventoryAccessor) ----
     public static final Class<?> CLASS_TILE_RUNE_ALTAR;
     public static final Field FIELD_CURRENT_RECIPE;
     public static final Field FIELD_COOLDOWN;
     public static final Field FIELD_MANA;
     public static final Field FIELD_MANA_TO_GET;
-    public static final Method METHOD_RUNE_ALTAR_IS_EMPTY;
-    public static final Method METHOD_RUNE_ALTAR_ADD_ITEM;
-    public static final Method METHOD_RUNE_ALTAR_GET_ITEM_HANDLER;
-    public static final Method METHOD_RUNE_ALTAR_GET_CURRENT_MANA;
-    public static final Method METHOD_RUNE_ALTAR_RECIEVE_MANA;
-    public static final Method METHOD_RUNE_ALTAR_SAVE_LAST_RECIPE;
-    public static final Method METHOD_RUNE_ALTAR_GET_SIZE_INVENTORY;
 
-    // ---- TileAltar ----
+    // ---- TileAltar (方法见 ITileAltarAccessor / ITileSimpleInventoryAccessor) ----
     public static final Class<?> CLASS_TILE_ALTAR;
-    public static final Method METHOD_ALTAR_IS_EMPTY;
-    public static final Method METHOD_ALTAR_HAS_LAVA;
-    public static final Method METHOD_ALTAR_HAS_WATER;
-    public static final Method METHOD_ALTAR_SET_WATER;
-    public static final Method METHOD_ALTAR_COLLIDE_ENTITY_ITEM;
-    public static final Method METHOD_ALTAR_GET_ITEM_HANDLER;
 
     // ---- BotaniaStateProps / AlfPortalState ----
     @SuppressWarnings("rawtypes")
@@ -97,9 +91,6 @@ public class BotaniaReflectionHelper {
 
     static {
         Class<?> tilePool = null;
-        Method poolGetMatchingRecipe = null;
-        Method poolGetCurrentMana = null;
-        Method poolCollideEntityItem = null;
 
         Class<?> tileAlfPortal = null;
 
@@ -113,21 +104,8 @@ public class BotaniaReflectionHelper {
         Field cooldown = null;
         Field mana = null;
         Field manaToGet = null;
-        Method runeAltarIsEmpty = null;
-        Method runeAltarAddItem = null;
-        Method runeAltarGetItemHandler = null;
-        Method runeAltarGetCurrentMana = null;
-        Method runeAltarRecieveMana = null;
-        Method runeAltarSaveLastRecipe = null;
-        Method runeAltarGetSizeInventory = null;
 
         Class<?> tileAltar = null;
-        Method altarIsEmpty = null;
-        Method altarHasLava = null;
-        Method altarHasWater = null;
-        Method altarSetWater = null;
-        Method altarCollideEntityItem = null;
-        Method altarGetItemHandler = null;
 
         IProperty alfPortalStateProp = null;
         Object alfPortalStateOff = null;
@@ -156,9 +134,6 @@ public class BotaniaReflectionHelper {
 
         try {
             tilePool = Class.forName("vazkii.botania.common.block.tile.mana.TilePool");
-            poolGetMatchingRecipe = tilePool.getMethod("getMatchingRecipe", ItemStack.class, IBlockState.class);
-            poolGetCurrentMana = tilePool.getMethod("getCurrentMana");
-            poolCollideEntityItem = tilePool.getMethod("collideEntityItem", EntityItem.class);
         } catch (Exception e) {
             AE2Enhanced.LOGGER.warn("[AE2E] BotaniaReflectionHelper failed to cache TilePool", e);
         }
@@ -190,25 +165,12 @@ public class BotaniaReflectionHelper {
             mana = tileRuneAltar.getDeclaredField("mana");
             mana.setAccessible(true);
             manaToGet = tileRuneAltar.getField("manaToGet");
-            runeAltarIsEmpty = tileRuneAltar.getMethod("isEmpty");
-            runeAltarAddItem = tileRuneAltar.getMethod("addItem", EntityPlayer.class, ItemStack.class, EnumHand.class);
-            runeAltarGetItemHandler = tileRuneAltar.getMethod("getItemHandler");
-            runeAltarGetCurrentMana = tileRuneAltar.getMethod("getCurrentMana");
-            runeAltarRecieveMana = tileRuneAltar.getMethod("recieveMana", int.class);
-            runeAltarSaveLastRecipe = tileRuneAltar.getMethod("saveLastRecipe");
-            runeAltarGetSizeInventory = tileRuneAltar.getMethod("getSizeInventory");
         } catch (Exception e) {
             AE2Enhanced.LOGGER.warn("[AE2E] BotaniaReflectionHelper failed to cache TileRuneAltar", e);
         }
 
         try {
             tileAltar = Class.forName("vazkii.botania.common.block.tile.TileAltar");
-            altarIsEmpty = tileAltar.getMethod("isEmpty");
-            altarHasLava = tileAltar.getMethod("hasLava");
-            altarHasWater = tileAltar.getMethod("hasWater");
-            altarSetWater = tileAltar.getMethod("setWater", boolean.class);
-            altarCollideEntityItem = tileAltar.getMethod("collideEntityItem", EntityItem.class);
-            altarGetItemHandler = tileAltar.getMethod("getItemHandler");
         } catch (Exception e) {
             AE2Enhanced.LOGGER.warn("[AE2E] BotaniaReflectionHelper failed to cache TileAltar", e);
         }
@@ -271,9 +233,6 @@ public class BotaniaReflectionHelper {
         }
 
         CLASS_TILE_POOL = tilePool;
-        METHOD_POOL_GET_MATCHING_RECIPE = poolGetMatchingRecipe;
-        METHOD_POOL_GET_CURRENT_MANA = poolGetCurrentMana;
-        METHOD_POOL_COLLIDE_ENTITY_ITEM = poolCollideEntityItem;
 
         CLASS_TILE_ALF_PORTAL = tileAlfPortal;
 
@@ -287,21 +246,8 @@ public class BotaniaReflectionHelper {
         FIELD_COOLDOWN = cooldown;
         FIELD_MANA = mana;
         FIELD_MANA_TO_GET = manaToGet;
-        METHOD_RUNE_ALTAR_IS_EMPTY = runeAltarIsEmpty;
-        METHOD_RUNE_ALTAR_ADD_ITEM = runeAltarAddItem;
-        METHOD_RUNE_ALTAR_GET_ITEM_HANDLER = runeAltarGetItemHandler;
-        METHOD_RUNE_ALTAR_GET_CURRENT_MANA = runeAltarGetCurrentMana;
-        METHOD_RUNE_ALTAR_RECIEVE_MANA = runeAltarRecieveMana;
-        METHOD_RUNE_ALTAR_SAVE_LAST_RECIPE = runeAltarSaveLastRecipe;
-        METHOD_RUNE_ALTAR_GET_SIZE_INVENTORY = runeAltarGetSizeInventory;
 
         CLASS_TILE_ALTAR = tileAltar;
-        METHOD_ALTAR_IS_EMPTY = altarIsEmpty;
-        METHOD_ALTAR_HAS_LAVA = altarHasLava;
-        METHOD_ALTAR_HAS_WATER = altarHasWater;
-        METHOD_ALTAR_SET_WATER = altarSetWater;
-        METHOD_ALTAR_COLLIDE_ENTITY_ITEM = altarCollideEntityItem;
-        METHOD_ALTAR_GET_ITEM_HANDLER = altarGetItemHandler;
 
         ALFPORTAL_STATE_PROP = alfPortalStateProp;
         ALFPORTAL_STATE_OFF = alfPortalStateOff;
@@ -357,15 +303,15 @@ public class BotaniaReflectionHelper {
     // ---- TilePool ----
 
     public static Object getPoolMatchingRecipe(ItemStack stack, IBlockState state) {
-        return invoke(METHOD_POOL_GET_MATCHING_RECIPE, null, stack, state);
+        return ITilePoolAccessor.ae2e$getMatchingRecipe(stack, state);
     }
 
     public static int getPoolCurrentMana(Object pool) {
-        return invokeInt(METHOD_POOL_GET_CURRENT_MANA, pool);
+        return ((ITilePoolAccessor) pool).ae2e$getCurrentMana();
     }
 
     public static boolean poolCollideEntityItem(Object pool, EntityItem item) {
-        return invokeBool(METHOD_POOL_COLLIDE_ENTITY_ITEM, pool, item);
+        return ((ITilePoolAccessor) pool).ae2e$collideEntityItem(item);
     }
 
     // ---- TileRuneAltar ----
@@ -427,57 +373,57 @@ public class BotaniaReflectionHelper {
     }
 
     public static boolean runeAltarIsEmpty(Object altar) {
-        return invokeBool(METHOD_RUNE_ALTAR_IS_EMPTY, altar);
+        return ((ITileRuneAltarAccessor) altar).ae2e$isEmpty();
     }
 
     public static boolean runeAltarAddItem(Object altar, ItemStack stack) {
-        return invokeBool(METHOD_RUNE_ALTAR_ADD_ITEM, altar, null, stack, null);
+        return ((ITileRuneAltarAccessor) altar).ae2e$addItem(null, stack, null);
     }
 
     public static IItemHandlerModifiable runeAltarGetItemHandler(Object altar) {
-        return (IItemHandlerModifiable) invoke(METHOD_RUNE_ALTAR_GET_ITEM_HANDLER, altar);
+        return ((ITileSimpleInventoryAccessor) altar).ae2e$getItemHandler();
     }
 
     public static int runeAltarGetCurrentMana(Object altar) {
-        return invokeInt(METHOD_RUNE_ALTAR_GET_CURRENT_MANA, altar);
+        return ((ITileRuneAltarAccessor) altar).ae2e$getCurrentMana();
     }
 
     public static void runeAltarRecieveMana(Object altar, int mana) {
-        invoke(METHOD_RUNE_ALTAR_RECIEVE_MANA, altar, mana);
+        ((ITileRuneAltarAccessor) altar).ae2e$recieveMana(mana);
     }
 
     public static void runeAltarSaveLastRecipe(Object altar) {
-        invoke(METHOD_RUNE_ALTAR_SAVE_LAST_RECIPE, altar);
+        ((ITileRuneAltarAccessor) altar).ae2e$saveLastRecipe();
     }
 
     public static int runeAltarGetSizeInventory(Object altar) {
-        return invokeInt(METHOD_RUNE_ALTAR_GET_SIZE_INVENTORY, altar);
+        return ((ITileRuneAltarAccessor) altar).ae2e$getSizeInventory();
     }
 
     // ---- TileAltar ----
 
     public static boolean altarIsEmpty(Object altar) {
-        return invokeBool(METHOD_ALTAR_IS_EMPTY, altar);
+        return ((ITileAltarAccessor) altar).ae2e$isEmpty();
     }
 
     public static boolean altarHasLava(Object altar) {
-        return invokeBool(METHOD_ALTAR_HAS_LAVA, altar);
+        return ((ITileAltarAccessor) altar).ae2e$hasLava();
     }
 
     public static boolean altarHasWater(Object altar) {
-        return invokeBool(METHOD_ALTAR_HAS_WATER, altar);
+        return ((ITileAltarAccessor) altar).ae2e$hasWater();
     }
 
     public static void altarSetWater(Object altar, boolean water) {
-        invoke(METHOD_ALTAR_SET_WATER, altar, water);
+        ((ITileAltarAccessor) altar).ae2e$setWater(water);
     }
 
     public static boolean altarCollideEntityItem(Object altar, EntityItem item) {
-        return invokeBool(METHOD_ALTAR_COLLIDE_ENTITY_ITEM, altar, item);
+        return ((ITileAltarAccessor) altar).ae2e$collideEntityItem(item);
     }
 
     public static IItemHandlerModifiable altarGetItemHandler(Object altar) {
-        return (IItemHandlerModifiable) invoke(METHOD_ALTAR_GET_ITEM_HANDLER, altar);
+        return ((ITileSimpleInventoryAccessor) altar).ae2e$getItemHandler();
     }
 
     // ---- BotaniaStateProps ----

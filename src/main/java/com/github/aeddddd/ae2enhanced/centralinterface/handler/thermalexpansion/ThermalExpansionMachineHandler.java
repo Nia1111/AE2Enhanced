@@ -14,12 +14,14 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
+import net.minecraftforge.fluids.capability.IFluidHandler;
+import net.minecraftforge.fluids.capability.IFluidTankProperties;
 import net.minecraftforge.fml.common.Loader;
 
 import com.github.aeddddd.ae2enhanced.centralinterface.HandlerCapabilities;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -405,16 +407,22 @@ public class ThermalExpansionMachineHandler implements IRemoteHandler {
     }
 
     private FluidStack getTankFluid(TileEntity te) {
-        try {
-            Method getTankFluid = te.getClass().getMethod("getTankFluid");
-            Object result = getTankFluid.invoke(te);
-            if (result instanceof FluidStack) {
-                return (FluidStack) result;
+        // 不用反射:部分 TE 机器(TileRefinery/TileTransposer 等)声明了返回客户端类
+        // TextureAtlasSprite 的 getTexture 方法,getMethod 解析方法签名会在
+        // Dedicated Server 上抛 NoClassDefFoundError.改用 Forge 流体 Capability.
+        if (!te.hasCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null)) {
+            return null; // 该机器没有 tank
+        }
+        IFluidHandler handler = te.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null);
+        if (handler == null) {
+            return null;
+        }
+        // 与原 getTankFluid 语义一致:返回第一个非空储罐的流体,全空返回 null
+        for (IFluidTankProperties props : handler.getTankProperties()) {
+            FluidStack contents = props.getContents();
+            if (contents != null && contents.amount > 0) {
+                return contents;
             }
-        } catch (NoSuchMethodException e) {
-            // 该机器没有 tank
-        } catch (Exception e) {
-            AE2Enhanced.LOGGER.debug("[AE2E] Failed to get TE tank fluid", e);
         }
         return null;
     }

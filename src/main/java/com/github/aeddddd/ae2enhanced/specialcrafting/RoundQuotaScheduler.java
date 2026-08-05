@@ -56,10 +56,22 @@ public final class RoundQuotaScheduler {
      * 任务提交成功时快照 tasks 次数（供后续配额推导）.
      */
     public static void snapshot(CraftingCPUCluster cluster, Map<ICraftingPatternDetails, Long> totals) {
-        if (totals != null && !totals.isEmpty()) {
-            TOTALS.put(cluster, Collections.unmodifiableMap(new LinkedHashMap<>(totals)));
-            QUOTAS.remove(cluster);
+        if (totals == null || totals.isEmpty()) {
+            return;
         }
+        // 剔除 value <= 0 的幽灵条目（多备选 pattern 分支中未被使用的样板，
+        // AE2 原生 isBusy() 同样剔除），否则推导配额时会出现 0 配额导致除零崩溃
+        Map<ICraftingPatternDetails, Long> cleaned = new LinkedHashMap<>();
+        for (Map.Entry<ICraftingPatternDetails, Long> entry : totals.entrySet()) {
+            if (entry.getValue() != null && entry.getValue() > 0) {
+                cleaned.put(entry.getKey(), entry.getValue());
+            }
+        }
+        if (cleaned.isEmpty()) {
+            return;
+        }
+        TOTALS.put(cluster, Collections.unmodifiableMap(cleaned));
+        QUOTAS.remove(cluster);
     }
 
     /**

@@ -54,6 +54,10 @@ public class AE2EnhancedJEIPlugin implements IModPlugin {
         if (ItemRegistry.GAS_DROP != null) {
             blacklist.addIngredientToBlacklist(new ItemStack(ItemRegistry.GAS_DROP));
         }
+        // 指南书为测试物品：JEI 隐藏
+        if (ItemRegistry.GUIDE_BOOK != null) {
+            blacklist.addIngredientToBlacklist(new ItemStack(ItemRegistry.GUIDE_BOOK));
+        }
 
         // 必须将 BlackHoleRecipe 包装为 BlackHoleRecipeWrapper,与 IRecipeCategory 的泛型匹配
         List<BlackHoleRecipeWrapper> wrappers = new ArrayList<>();

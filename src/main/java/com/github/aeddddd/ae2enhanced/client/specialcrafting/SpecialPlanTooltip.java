@@ -28,14 +28,10 @@ public final class SpecialPlanTooltip {
     }
 
     /**
-     * 普通处理样板的行内描述:调用次数 + 按当前 CPU 协处理器估算的发配轮次.
-     *
-     * @param pushesPerRound 每拍推送预算（1 + 协处理器数）
+     * 普通处理样板的行内描述:仅显示调用次数.
      */
-    public static String normalDescriptionLine(long calls, long pushesPerRound) {
-        long rounds = Math.max(1, (calls + pushesPerRound - 1) / pushesPerRound);
-        return "\u00a77" + I18n.format("gui.ae2enhanced.special_plan.normal_calls", compact(calls),
-                compact(rounds));
+    public static String normalDescriptionLine(long calls) {
+        return "\u00a77" + I18n.format("gui.ae2enhanced.special_plan.normal_calls", compact(calls));
     }
 
     /**

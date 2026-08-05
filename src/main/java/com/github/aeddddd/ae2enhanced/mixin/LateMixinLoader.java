@@ -28,9 +28,6 @@ public class LateMixinLoader implements ILateMixinLoader {
         if (!Ae2fcCompat.AE2FC_LOADED) {
             configs.add("mixins.ae2enhanced.late.fluid.json");
         }
-        if (Loader.isModLoaded("functionalstoragelegacy")) {
-            configs.add("mixins.ae2enhanced.late.fsl.json");
-        }
         if (Loader.isModLoaded("storagedrawers")) {
             configs.add("mixins.ae2enhanced.late.sd.json");
         }
@@ -64,6 +61,9 @@ public class LateMixinLoader implements ILateMixinLoader {
         }
         if (Loader.isModLoaded("projecte")) {
             configs.add("mixins.ae2enhanced.late.projecte.json");
+        }
+        if (Loader.isModLoaded("botania")) {
+            configs.add("mixins.ae2enhanced.late.botania.json");
         }
         if (Loader.isModLoaded("modularmachinery")) {
             configs.add("mixins.ae2enhanced.late.mmce.json");

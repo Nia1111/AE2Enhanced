@@ -44,4 +44,7 @@ public final class ItemRegistry {
 
     // 个人维度核心
     public static ItemPersonalDimension PERSONAL_DIMENSION;
+
+    // 指南书（测试物品，JEI 隐藏）
+    public static com.github.aeddddd.ae2enhanced.guide.item.ItemGuideBook GUIDE_BOOK;
 }

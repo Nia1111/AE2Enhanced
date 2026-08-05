@@ -102,7 +102,7 @@ public class MixinGuiCraftConfirm {
                 long calls = info.callCountOf(hovered);
                 if (calls > 0) {
                     sb.append('\n').append(com.github.aeddddd.ae2enhanced.client.specialcrafting.SpecialPlanTooltip
-                            .normalDescriptionLine(calls, ae2enhanced$pushesPerRound()));
+                            .normalDescriptionLine(calls));
                 }
             }
             return sb.toString();
@@ -125,25 +125,8 @@ public class MixinGuiCraftConfirm {
     }
 
     /**
-     * 每拍推送预算（1 + 当前选中 CPU 协处理器数）;无法确定时按 1 估算.
-     */
-    @Unique
-    private long ae2enhanced$pushesPerRound() {
-        try {
-            net.minecraft.inventory.Container container = ((GuiCraftConfirm) (Object) this).inventorySlots;
-            if (container instanceof appeng.container.implementations.ContainerCraftConfirm) {
-                return 1L + Math.max(0,
-                        ((appeng.container.implementations.ContainerCraftConfirm) container).getCpuCoProcessors());
-            }
-        } catch (Throwable ignored) {
-            // 估算失败按 1
-        }
-        return 1L;
-    }
-
-    /**
      * 行内描述（1.1.0 对齐）:每个可见单元格的数量区下方追加一行灰色小字——
-     * 自增殖"调用 N 次"/循环链"约 R 轮发配"/普通样板"调用 N 次(约 R 轮发配)".
+     * 自增殖"调用 N 次"/循环链"约 R 轮发配"/普通样板"调用 N 次".
      * 坐标方案与原生数量行一致(0.5 缩放、续接 downY 流).缓存为空时零影响.
      */
     @Inject(method = "drawFG", at = @At("TAIL"), require = 0)
@@ -156,13 +139,12 @@ public class MixinGuiCraftConfirm {
             int viewStart = ((MixinAEBaseGuiAccessor) this).ae2enhanced$getMyScrollBar().getCurrentScroll() * 3;
             int viewEnd = viewStart + 15; // 3 列 × 5 行
             net.minecraft.client.gui.FontRenderer fr = net.minecraft.client.Minecraft.getMinecraft().fontRenderer;
-            long pushesPerRound = ae2enhanced$pushesPerRound();
             int x = 0;
             int y = 0;
             for (int z = viewStart; z < Math.min(viewEnd, this.visual.size()); z++) {
                 IAEItemStack refStack = this.visual.get(z);
                 if (refStack != null) {
-                    String desc = ae2enhanced$inlineDesc(refStack, pushesPerRound);
+                    String desc = ae2enhanced$inlineDesc(refStack);
                     if (desc != null) {
                         ae2enhanced$drawCellLine(fr, desc, x, y, viewStart, z);
                     }
@@ -178,7 +160,7 @@ public class MixinGuiCraftConfirm {
     }
 
     @Unique
-    private String ae2enhanced$inlineDesc(IAEItemStack refStack, long pushesPerRound) {
+    private String ae2enhanced$inlineDesc(IAEItemStack refStack) {
         SpecialPlanInfo info = SpecialPlanClientCache.infoFor(refStack.asItemStackRepresentation());
         if (info == null) {
             return null;
@@ -191,7 +173,7 @@ public class MixinGuiCraftConfirm {
         long calls = info.callCountOf(refStack);
         if (calls > 0) {
             return com.github.aeddddd.ae2enhanced.client.specialcrafting.SpecialPlanTooltip
-                    .normalDescriptionLine(calls, pushesPerRound);
+                    .normalDescriptionLine(calls);
         }
         return null;
     }

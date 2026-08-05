@@ -2,6 +2,7 @@ package com.github.aeddddd.ae2enhanced.proxy;
 
 import appeng.api.AEApi;
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+import com.github.aeddddd.ae2enhanced.config.AE2EnhancedConfig;
 import com.github.aeddddd.ae2enhanced.registry.content.BlockRegistry;
 import com.github.aeddddd.ae2enhanced.registry.content.ItemRegistry;
 import com.github.aeddddd.ae2enhanced.registry.content.PartRegistry;
@@ -84,6 +85,7 @@ public class ClientProxy extends CommonProxy {
         ClientRegistry.registerKeyBinding(JEI_SEARCH_KEY);
         ClientRegistry.registerKeyBinding(OPEN_OMNI_TERMINAL_KEY);
         ClientRegistry.registerKeyBinding(TOGGLE_MAGNET_KEY);
+        ClientRegistry.registerKeyBinding(com.github.aeddddd.ae2enhanced.guide.GuideHotkeyHandler.OPEN_GUIDE_KEY);
         KeyHandlerOmniTool.init();
     }
 
@@ -97,6 +99,12 @@ public class ClientProxy extends CommonProxy {
         MinecraftForge.EVENT_BUS.register(new com.github.aeddddd.ae2enhanced.client.render.PlacementPreviewRenderer());
         MinecraftForge.EVENT_BUS.register(new ChunkPowerHighlightRenderer());
         MinecraftForge.EVENT_BUS.register(new com.github.aeddddd.ae2enhanced.client.render.BindingLineRenderer());
+
+        // 指南系统：资源重载加载页面 + 按住 G 热键
+        if (AE2EnhancedConfig.guide.enabled) {
+            com.github.aeddddd.ae2enhanced.guide.GuideManager.init();
+            MinecraftForge.EVENT_BUS.register(new com.github.aeddddd.ae2enhanced.guide.GuideHotkeyHandler());
+        }
 
         ClientRegistry.bindTileEntitySpecialRenderer(TileAssemblyController.class, new RenderBlackHole());
         ClientRegistry.bindTileEntitySpecialRenderer(TileMicroSingularity.class, new RenderMicroSingularity());
@@ -312,6 +320,9 @@ public class ClientProxy extends CommonProxy {
         }
         if (ItemRegistry.PERSONAL_DIMENSION != null) {
             registerItemModel(ItemRegistry.PERSONAL_DIMENSION);
+        }
+        if (ItemRegistry.GUIDE_BOOK != null) {
+            registerItemModel(ItemRegistry.GUIDE_BOOK);
         }
 
         // 先进ME工具：4模式使用 ItemMeshDefinition 动态切换模型

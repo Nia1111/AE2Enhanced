@@ -49,12 +49,16 @@ public final class DagCompiler {
     private final Set<IAEItemStack> boundaryKeys;
     /** true = 第一遍(只探环,容忍回落);false = 第二遍(正式编译). */
     private final boolean detectOnly;
+    /** 两遍编译共享的生产者索引(成环检测的副产物倒排只建一次). */
+    private final CycleAnalyzer.ProducerIndex producerIndex;
 
-    private DagCompiler(ICraftingGrid cc, World world, Set<IAEItemStack> boundaryKeys, boolean detectOnly) {
+    private DagCompiler(ICraftingGrid cc, World world, Set<IAEItemStack> boundaryKeys, boolean detectOnly,
+            CycleAnalyzer.ProducerIndex producerIndex) {
         this.cc = cc;
         this.world = world;
         this.boundaryKeys = boundaryKeys;
         this.detectOnly = detectOnly;
+        this.producerIndex = producerIndex;
     }
 
     /**
@@ -65,12 +69,13 @@ public final class DagCompiler {
         try {
             IAEItemStack rootKey = RecursiveCraftingHelper.canon(root);
             Set<IAEItemStack> boundaryKeys = new HashSet<>();
+            CycleAnalyzer.ProducerIndex producerIndex = new CycleAnalyzer.ProducerIndex(cc, world);
             try {
-                new DagCompiler(cc, world, boundaryKeys, true).visit(rootKey);
+                new DagCompiler(cc, world, boundaryKeys, true, producerIndex).visit(rootKey);
             } catch (DagFallback ignored) {
                 // 第一遍只负责发现边界;分支编译失败不影响(第二遍做真正的校验)
             }
-            DagCompiler compiler = new DagCompiler(cc, world, boundaryKeys, false);
+            DagCompiler compiler = new DagCompiler(cc, world, boundaryKeys, false, producerIndex);
             DagGraph.DagNode rootNode = compiler.visit(rootKey);
             DagGraph graph = new DagGraph(rootNode);
             // 逆后序:父节点(需求方)先于子节点(原料方)
@@ -147,7 +152,7 @@ public final class DagCompiler {
         }
         // 选定样板本身是环步骤(含经副产物闭合的催化环)→ 本节点收缩为循环边界,
         // 由 CycleBoundarySolver 联立求解(否则边界会错位落到环键上而不可解)
-        if (CycleAnalyzer.isCycleStep(this.cc, this.world, chosen)) {
+        if (CycleAnalyzer.isCycleStep(this.cc, this.world, chosen, this.producerIndex)) {
             return new DagGraph.DagNode(DagGraph.Kind.CYCLE, key, 0, null);
         }
         long outPer = 0;

@@ -98,12 +98,10 @@ public class DagCraftingJob extends CraftingJob {
         try {
             result = DagExecutor.execute(graph, output.getStackSize(), inv, this, cc, this.world, root, src);
         } catch (DagFallback fallback) {
-            System.err.println("[DAG-DEBUG] execute fallback: " + fallback.reason); // DEBUG TEMP
             SpecialLog.info("[DAG] 执行回落({}): {}", fallback.reason, output);
             return null;
         }
         this.hasCycleBoundary = result.hasCycleBoundary;
-        dumpTree(root, 0); // DEBUG TEMP
         if (!result.missingItems.isEmpty()) {
             // 原生 simulation 标志由失败重试置位;DAG 缺料不抛异常,须显式置位,
             // 否则产出"有缺料却标记可提交"的不一致计划
@@ -112,21 +110,5 @@ public class DagCraftingJob extends CraftingJob {
         SpecialLog.info("[DAG] 计划完成: {}×{},节点 {},循环边界 {}", output, output.getStackSize(),
                 graph.topoOrder.size(), this.hasCycleBoundary);
         return root;
-    }
-
-    private static void dumpTree(CraftingTreeNode node, int depth) { // DEBUG TEMP
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < depth; i++) {
-            sb.append("  ");
-        }
-        System.err.println("[TREE] " + sb + "node what=" + Ae2CraftingReflect.getNodeWhat(node)
-                + " missing=" + " procs=" + Ae2CraftingReflect.getNodeProcesses(node).size());
-        for (appeng.crafting.CraftingTreeProcess pro : Ae2CraftingReflect.getNodeProcesses(node)) {
-            System.err.println("[TREE] " + sb + "  pro " + Ae2CraftingReflect.getProcessDetails(pro)
-                    + " crafts=" + Ae2CraftingReflect.getProcessCrafts(pro));
-            for (CraftingTreeNode child : Ae2CraftingReflect.getProcessNodes(pro).keySet()) {
-                dumpTree(child, depth + 2);
-            }
-        }
     }
 }

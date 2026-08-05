@@ -66,6 +66,30 @@ public class AE2EnhancedConfig {
     })
     public static Debug debug = new Debug();
 
+    @Config.Name("Guide")
+    @Config.Comment({
+        "In-game guide settings.",
+        "Client-side only; controls the guide GUI and the 'hold G to show guide' hotkey."
+    })
+    public static Guide guide = new Guide();
+
+    public static class Guide {
+
+        @Config.Comment({
+            "Enable the in-game guide system (page loading, hold-G hotkey, guide GUI).",
+            "Default: true"
+        })
+        public boolean enabled = true;
+
+        @Config.Comment({
+            "Color theme of the guide GUI.",
+            "Valid values: vscode-dark (VS Code Dark+), github-light (GitHub Light),",
+            "dracula (Dracula), nord (Nord).",
+            "Default: vscode-dark"
+        })
+        public String theme = "vscode-dark";
+    }
+
     public static class Debug {
 
         @Config.Comment({

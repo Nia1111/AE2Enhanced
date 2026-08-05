@@ -75,6 +75,7 @@ public final class GameRegistryManager {
         ItemRegistry.ME_PLACEMENT_TOOL = new ItemMEPlacementTool();
         ItemRegistry.VIRTUAL_PARALLEL_CARD = new ItemVirtualParallelCard();
         ItemRegistry.PERSONAL_DIMENSION = new ItemPersonalDimension();
+        ItemRegistry.GUIDE_BOOK = new com.github.aeddddd.ae2enhanced.guide.item.ItemGuideBook();
     }
 
     @SubscribeEvent
@@ -101,7 +102,6 @@ public final class GameRegistryManager {
             BlockRegistry.NETWORK_ACCESS_NODE = new BlockNetworkAccessNode(),
             BlockRegistry.CHUNK_POWER_NODE = new BlockChunkPowerNode(),
             BlockRegistry.COMPRESSED_CHUNK_POWER_NODE = new BlockCompressedChunkPowerNode(),
-            BlockRegistry.ADVANCED_PLATFORM_CONTROLLER = new BlockAdvancedPlatformController(),
             BlockRegistry.ADVANCED_ME_COLLECTOR = new BlockAdvancedMECollector(),
             BlockRegistry.ME_NETWORK_RECYCLER = new BlockMENetworkRecycler(),
             BlockRegistry.YELLOW_STRIPES_BLOCK_B = new BlockYellowStripesBlockB()
@@ -113,8 +113,6 @@ public final class GameRegistryManager {
         }
 
         GameRegistry.registerTileEntity(TileAssemblyController.class, AE2Enhanced.MOD_ID + ":assembly_controller");
-        // 占位：旧存档中的 advanced_platform_controller TileEntity 会被替换为空实现
-        GameRegistry.registerTileEntity(com.github.aeddddd.ae2enhanced.tile.TileAdvancedPlatformController.class, AE2Enhanced.MOD_ID + ":advanced_platform_controller");
         GameRegistry.registerTileEntity(TileAssemblyMeInterface.class, AE2Enhanced.MOD_ID + ":assembly_me_interface");
         GameRegistry.registerTileEntity(TileMicroSingularity.class, AE2Enhanced.MOD_ID + ":micro_singularity");
         GameRegistry.registerTileEntity(TileHyperdimensionalController.class, AE2Enhanced.MOD_ID + ":hyperdimensional_controller");
@@ -169,7 +167,6 @@ public final class GameRegistryManager {
             new ItemBlock(BlockRegistry.NETWORK_ACCESS_NODE).setRegistryName(BlockRegistry.NETWORK_ACCESS_NODE.getRegistryName()).setCreativeTab(AE2Enhanced.CREATIVE_TAB),
             new ItemBlock(BlockRegistry.CHUNK_POWER_NODE).setRegistryName(BlockRegistry.CHUNK_POWER_NODE.getRegistryName()).setCreativeTab(AE2Enhanced.CREATIVE_TAB),
             new ItemBlock(BlockRegistry.COMPRESSED_CHUNK_POWER_NODE).setRegistryName(BlockRegistry.COMPRESSED_CHUNK_POWER_NODE.getRegistryName()).setCreativeTab(AE2Enhanced.CREATIVE_TAB),
-            new ItemBlock(BlockRegistry.ADVANCED_PLATFORM_CONTROLLER).setRegistryName(BlockRegistry.ADVANCED_PLATFORM_CONTROLLER.getRegistryName()).setCreativeTab(AE2Enhanced.CREATIVE_TAB),
             new ItemBlock(BlockRegistry.ADVANCED_ME_COLLECTOR).setRegistryName(BlockRegistry.ADVANCED_ME_COLLECTOR.getRegistryName()).setCreativeTab(AE2Enhanced.CREATIVE_TAB),
             new ItemBlock(BlockRegistry.ME_NETWORK_RECYCLER).setRegistryName(BlockRegistry.ME_NETWORK_RECYCLER.getRegistryName()).setCreativeTab(AE2Enhanced.CREATIVE_TAB),
             new ItemBlock(BlockRegistry.YELLOW_STRIPES_BLOCK_B).setRegistryName(BlockRegistry.YELLOW_STRIPES_BLOCK_B.getRegistryName()).setCreativeTab(AE2Enhanced.CREATIVE_TAB)
@@ -221,6 +218,7 @@ public final class GameRegistryManager {
         event.getRegistry().register(ItemRegistry.ME_PLACEMENT_TOOL);
         event.getRegistry().register(ItemRegistry.VIRTUAL_PARALLEL_CARD);
         event.getRegistry().register(ItemRegistry.PERSONAL_DIMENSION);
+        event.getRegistry().register(ItemRegistry.GUIDE_BOOK);
     }
 
     @SubscribeEvent

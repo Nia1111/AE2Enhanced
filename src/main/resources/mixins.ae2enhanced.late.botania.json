@@ -1,0 +1,16 @@
+{
+  "package": "com.github.aeddddd.ae2enhanced.mixin.late.botania",
+  "plugin": "com.github.aeddddd.ae2enhanced.mixin.BotaniaMixinPlugin",
+  "refmap": "mixin.refmap.json",
+  "target": "@env(DEFAULT)",
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "ITileAltarAccessor",
+    "ITilePoolAccessor",
+    "ITileRuneAltarAccessor",
+    "ITileSimpleInventoryAccessor"
+  ],
+  "client": [],
+  "server": []
+}

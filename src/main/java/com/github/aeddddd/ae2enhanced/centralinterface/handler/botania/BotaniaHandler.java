@@ -40,7 +40,7 @@ import net.minecraft.util.EnumParticleTypes;
  *   <li>花药台 (botania:altar) — 放入材料后手动触发配方合成</li>
  * </ul>
  *
- * 所有 Botania 类均通过 {@link BotaniaReflectionHelper} 反射访问,
+ * 所有 Botania 类均通过 {@link BotaniaReflectionHelper} 访问(方法经 Mixin Invoker,字段经反射),
  * 本类不存在对 vazkii.botania 的编译期硬引用.
  */
 public class BotaniaHandler implements IRemoteHandler, IVirtualBatchCraftingHandler {

@@ -38,7 +38,6 @@ public final class CycleBoundarySolver {
     public static boolean solveInto(ICraftingGrid cc, CraftingJob job, IAEItemStack what, long target,
             MECraftingInventory inv, CraftingTreeNode rootNode, IActionSource src, World world)
             throws InterruptedException {
-        System.err.println("[DAG-DEBUG] solveInto " + what + "x" + target); // DEBUG TEMP
         // ① 净增殖自引用（单节点自环）
         for (ICraftingPatternDetails pattern : cc.getCraftingFor(what, null, -1, world)) {
             if (RecursiveCraftingHelper.isNetPositiveSelfRef(pattern, what)) {
@@ -47,7 +46,6 @@ public final class CycleBoundarySolver {
         }
         // ② 跨样板环:并集优先(θ 形共享结构),再逐环迭代
         List<List<CycleAnalyzer.CycleStep>> cycles = CycleAnalyzer.findCyclesThrough(cc, what, world);
-        System.err.println("[DAG-DEBUG] cycles through " + what + ": " + cycles.size()); // DEBUG TEMP
         CycleAnalyzer.Analysis union = CycleAnalyzer.analyzeUnion(cycles);
         if (union != null && union.rateClass() == CycleAnalyzer.RateClass.PRODUCTIVE
                 && CycleSolver.trySolve(cc, job, union, inv, what, target, rootNode,
@@ -80,7 +78,6 @@ public final class CycleBoundarySolver {
             }
         }
         SpecialLog.info("[DAG] 循环边界不可解: {}×{}", what, target);
-        System.err.println("[DAG-DEBUG] boundary unsolvable: " + what + "x" + target); // DEBUG TEMP
         return false;
     }
 

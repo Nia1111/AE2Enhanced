@@ -105,14 +105,14 @@ public class SimulationEnv {
      * 以 {@link SpecialCraftingJob} 运行模拟（路由命中后的实际执行路径）.
      */
     public CraftingJob runSpecial(IAEItemStack what) {
-        return this.runJob(new SpecialCraftingJob(this.world, this.grid, this.actionSource, what, null));
+        return this.runJob(this.newSpecialJob(what));
     }
 
     /**
      * 以原生 {@link CraftingJob} 运行模拟（回归基线）.
      */
     public CraftingJob runNative(IAEItemStack what) {
-        return this.runJob(new CraftingJob(this.world, this.grid, this.actionSource, what, null));
+        return this.runJob(this.newNativeJob(what));
     }
 
     /**
@@ -120,8 +120,47 @@ public class SimulationEnv {
      * （DAG 计划引擎默认路径）.
      */
     public CraftingJob runDag(IAEItemStack what) {
-        return this.runJob(new com.github.aeddddd.ae2enhanced.craftingplan.dag.DagCraftingJob(this.world,
-                this.grid, this.actionSource, what, null));
+        return this.runJob(this.newDagJob(what));
+    }
+
+    /** 构造原生 {@link CraftingJob}（不执行,供基准测试自行计时）. */
+    public CraftingJob newNativeJob(IAEItemStack what) {
+        return new CraftingJob(this.world, this.grid, this.actionSource, what, null);
+    }
+
+    /** 构造 {@link SpecialCraftingJob}（不执行,供基准测试自行计时）. */
+    public CraftingJob newSpecialJob(IAEItemStack what) {
+        return new SpecialCraftingJob(this.world, this.grid, this.actionSource, what, null);
+    }
+
+    /** 构造 {@link com.github.aeddddd.ae2enhanced.craftingplan.dag.DagCraftingJob}（不执行）. */
+    public CraftingJob newDagJob(IAEItemStack what) {
+        return new com.github.aeddddd.ae2enhanced.craftingplan.dag.DagCraftingJob(this.world, this.grid,
+                this.actionSource, what, null);
+    }
+
+    /**
+     * 基准测试用:在超时预算内执行 job 并返回;超时则中断 job 线程并返回 null.
+     * <p>使用守护线程:超时后被中断仍不退出的残留 job 不会阻止 JVM 退出.</p>
+     */
+    public CraftingJob runJobTimed(CraftingJob job, long timeout, TimeUnit unit) {
+        ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "ae2e-timed-job");
+            t.setDaemon(true);
+            return t;
+        });
+        try {
+            Future<?> future = executor.submit(job);
+            job.simulateFor(Integer.MAX_VALUE);
+            future.get(timeout, unit);
+            return job;
+        } catch (java.util.concurrent.TimeoutException e) {
+            return null;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     public World world() {

@@ -54,9 +54,6 @@ public final class BlockRegistry {
     // 压缩区块魔力节点(免费向 3×3 区块 Botania 魔力设施供魔)
     public static BlockCompressedChunkManaNode COMPRESSED_CHUNK_MANA_NODE;
 
-    // 先进中枢平台
-    public static BlockAdvancedPlatformController ADVANCED_PLATFORM_CONTROLLER;
-
     // 先进 ME 收集器
     public static BlockAdvancedMECollector ADVANCED_ME_COLLECTOR;
 
