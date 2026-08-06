@@ -65,4 +65,9 @@ public final class BlockRegistry {
 
     // 个人维度地板替代方块（GTCEu yellow_stripes_block_b）
     public static BlockYellowStripesBlockB YELLOW_STRIPES_BLOCK_B;
+
+    // 趋势显示幕墙
+    public static BlockDisplayPanel DISPLAY_PANEL;
+    public static BlockDisplayFrame DISPLAY_FRAME_DARK;
+    public static BlockDisplayFrame DISPLAY_FRAME_LIGHT;
 }

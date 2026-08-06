@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "IGI",
+    "GDG",
+    "IGI"
+  ],
+  "key": {
+    "I": { "item": "minecraft:iron_ingot" },
+    "G": { "item": "appliedenergistics2:quartz_glass" },
+    "D": { "item": "minecraft:dye", "data": 15 }
+  },
+  "result": {
+    "item": "ae2enhanced:display_frame_light",
+    "count": 4
+  }
+}

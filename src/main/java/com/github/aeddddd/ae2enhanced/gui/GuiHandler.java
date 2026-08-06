@@ -82,6 +82,7 @@ public class GuiHandler implements IGuiHandler {
     public static final int GUI_ME_NETWORK_RECYCLER = 28;
     public static final int GUI_EMC_INTERFACE = 29;
     public static final int GUI_PERSONAL_DIMENSION_CONFIG = 30;
+    public static final int GUI_DISPLAY_WALL = 31;
 
 
     /** 编码页码到 GUI ID：低4位为 base ID,bit8-15为页码,bit16-20为 patternPages */
@@ -252,6 +253,16 @@ public class GuiHandler implements IGuiHandler {
             }
             return new ContainerPersonalDimensionConfig(target);
         }
+        if (ID == GUI_DISPLAY_WALL) {
+            if (te instanceof com.github.aeddddd.ae2enhanced.tile.TileDisplayPanel) {
+                com.github.aeddddd.ae2enhanced.tile.TileDisplayPanel tile =
+                        (com.github.aeddddd.ae2enhanced.tile.TileDisplayPanel) te;
+                if (tile.isMasterRole()) {
+                    return new com.github.aeddddd.ae2enhanced.container.ContainerDisplayWall(player.inventory, tile);
+                }
+            }
+            return null;
+        }
         return null;
     }
 
@@ -384,6 +395,13 @@ public class GuiHandler implements IGuiHandler {
         }
         if (ID == GUI_PERSONAL_DIMENSION_CONFIG) {
             return new GuiPersonalDimensionConfig(player, new ContainerPersonalDimensionConfig(player.getUniqueID()));
+        }
+        if (ID == GUI_DISPLAY_WALL) {
+            if (te instanceof com.github.aeddddd.ae2enhanced.tile.TileDisplayPanel) {
+                return new com.github.aeddddd.ae2enhanced.client.gui.GuiDisplayWall(player.inventory,
+                        (com.github.aeddddd.ae2enhanced.tile.TileDisplayPanel) te);
+            }
+            return null;
         }
         return null;
     }

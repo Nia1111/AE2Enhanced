@@ -1,0 +1,9 @@
+{
+  "variants": {
+    "facing=north": { "model": "ae2enhanced:display_panel" },
+    "facing=south": { "model": "ae2enhanced:display_panel", "y": 180 },
+    "facing=east":  { "model": "ae2enhanced:display_panel", "y": 90 },
+    "facing=west":  { "model": "ae2enhanced:display_panel", "y": 270 },
+    "inventory":    { "model": "ae2enhanced:display_panel" }
+  }
+}

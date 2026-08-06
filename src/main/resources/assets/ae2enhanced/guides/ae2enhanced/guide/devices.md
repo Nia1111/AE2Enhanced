@@ -18,3 +18,4 @@ Single-block devices that extend what an ME network can do.
 - [Chunk Nodes](devices/chunk-nodes.md) — Power or Mana supply for every machine in a chunk area.
 - [Collector and Recycler](devices/collector-recycler.md) — Intercept drops into the network; recycle machine outputs remotely.
 - [Smart Pattern](devices/smart-pattern.md) — Multi-recipe patterns encoded by the Smart Pattern Interface.
+- [Display Wall](devices/display-wall.md) — Multi-block screen plotting storage trends over time.

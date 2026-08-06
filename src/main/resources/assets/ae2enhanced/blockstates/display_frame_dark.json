@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "normal":    { "model": "ae2enhanced:display_frame_dark" },
+    "inventory": { "model": "ae2enhanced:display_frame_dark" }
+  }
+}

@@ -119,5 +119,9 @@ public final class ModNetwork {
         nw.registerMessage(PacketPersonalDimensionRegistrySync.Handler.class, PacketPersonalDimensionRegistrySync.class, 52, Side.CLIENT);
         nw.registerMessage(PacketEnergyStorageBusAction.Handler.class, PacketEnergyStorageBusAction.class, 53, Side.SERVER);
         nw.registerMessage(PacketSpecialPlanInfo.Handler.class, PacketSpecialPlanInfo.class, 43, Side.CLIENT);
+        nw.registerMessage(com.github.aeddddd.ae2enhanced.network.packet.PacketDisplayAction.Handler.class,
+                com.github.aeddddd.ae2enhanced.network.packet.PacketDisplayAction.class, 54, Side.SERVER);
+        nw.registerMessage(com.github.aeddddd.ae2enhanced.network.packet.PacketDisplayTick.Handler.class,
+                com.github.aeddddd.ae2enhanced.network.packet.PacketDisplayTick.class, 55, Side.CLIENT);
     }
 }

@@ -18,3 +18,4 @@ navigation:
 - [区块节点](devices/chunk-nodes.md) —— 为区块范围内所有机器供电或供魔.
 - [收集器与回收节点](devices/collector-recycler.md) —— 掉落物直接拦截入网; 远程回收机器产物.
 - [智能样板](devices/smart-pattern.md) —— 由智能样板接口编码的多配方样板.
+- [趋势显示幕墙](devices/display-wall.md) —— 绘制网络储量随时间变化趋势的多方块大屏.

@@ -11,6 +11,7 @@ devices/network-access-node.md
 devices/chunk-nodes.md
 devices/collector-recycler.md
 devices/smart-pattern.md
+devices/display-wall.md
 buses.md
 buses/stocking-bus.md
 buses/universal-buses.md

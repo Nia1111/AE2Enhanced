@@ -110,6 +110,9 @@ public class ClientProxy extends CommonProxy {
         ClientRegistry.bindTileEntitySpecialRenderer(TileMicroSingularity.class, new RenderMicroSingularity());
         ClientRegistry.bindTileEntitySpecialRenderer(TileHyperdimensionalController.class, new RenderHyperdimensionalController());
         ClientRegistry.bindTileEntitySpecialRenderer(TileComputationCore.class, new RenderComputationCore());
+        ClientRegistry.bindTileEntitySpecialRenderer(
+                com.github.aeddddd.ae2enhanced.tile.TileDisplayPanel.class,
+                new com.github.aeddddd.ae2enhanced.client.render.RenderDisplayWall());
         // E2a：注册 EssentiaDrop 的内置物品渲染器(流体/气体使用标准模型系统)
         if (ItemRegistry.ESSENTIA_DROP != null) {
             try {
@@ -229,6 +232,9 @@ public class ClientProxy extends CommonProxy {
         registerBlockItemModel(BlockRegistry.ADVANCED_ME_COLLECTOR);
         registerBlockItemModel(BlockRegistry.ME_NETWORK_RECYCLER);
         registerBlockItemModel(BlockRegistry.YELLOW_STRIPES_BLOCK_B);
+        registerBlockItemModel(BlockRegistry.DISPLAY_PANEL);
+        registerBlockItemModel(BlockRegistry.DISPLAY_FRAME_DARK);
+        registerBlockItemModel(BlockRegistry.DISPLAY_FRAME_LIGHT);
         if (BlockRegistry.EMC_INTERFACE != null) {
             registerBlockItemModel(BlockRegistry.EMC_INTERFACE);
         }

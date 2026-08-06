@@ -73,6 +73,30 @@ public class AE2EnhancedConfig {
     })
     public static Guide guide = new Guide();
 
+    @Config.Name("DisplayWall")
+    @Config.Comment({
+        "Statistics Display Wall settings.",
+        "Controls power draw and client-side render distance."
+    })
+    public static DisplayWall displayWall = new DisplayWall();
+
+    public static class DisplayWall {
+
+        @Config.Comment({
+            "Idle power draw per screen panel block (AE/t).",
+            "Total = width x height x this value. Default: 2.0"
+        })
+        @Config.RangeDouble(min = 0.0, max = 1000.0)
+        public double powerPerBlock = 2.0;
+
+        @Config.Comment({
+            "Client-side max render distance of the screen TESR (blocks).",
+            "Default: 128"
+        })
+        @Config.RangeInt(min = 16, max = 512)
+        public int renderDistance = 128;
+    }
+
     public static class Guide {
 
         @Config.Comment({

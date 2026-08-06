@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "GRG",
+    "RFR",
+    "GRG"
+  ],
+  "key": {
+    "G": { "item": "appliedenergistics2:quartz_glass" },
+    "R": { "item": "minecraft:redstone" },
+    "F": { "item": "appliedenergistics2:material", "data": 7 }
+  },
+  "result": {
+    "item": "ae2enhanced:display_panel",
+    "count": 2
+  }
+}
