@@ -1,6 +1,7 @@
 package com.github.aeddddd.ae2enhanced.guide.client;
 
 import com.github.aeddddd.ae2enhanced.AE2Enhanced;
+import com.github.aeddddd.ae2enhanced.client.gui.GuiButtonTech;
 import com.github.aeddddd.ae2enhanced.config.AE2EnhancedConfig;
 import com.github.aeddddd.ae2enhanced.guide.GuideBook;
 import com.github.aeddddd.ae2enhanced.guide.GuideManager;
@@ -72,8 +73,8 @@ public class GuiGuide extends GuiScreen {
         // 全屏布局：无外边距
         this.buttonList.clear();
         String themeLabel = I18n.format("gui.ae2enhanced.guide.theme", theme.displayName);
-        this.themeButton = new GuiButton(BTN_THEME, this.width - themeButtonWidth(themeLabel) - 6, 4,
-                themeButtonWidth(themeLabel), 14, themeLabel);
+        this.themeButton = new GuiButtonTech(BTN_THEME, this.width - themeButtonWidth(themeLabel) - 6, 3,
+                themeButtonWidth(themeLabel), 16, themeLabel);
         this.buttonList.add(this.themeButton);
 
         int contentTop = TOP_HEIGHT;

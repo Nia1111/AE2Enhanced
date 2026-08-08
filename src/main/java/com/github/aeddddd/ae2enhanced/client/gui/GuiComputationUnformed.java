@@ -15,7 +15,8 @@ public class GuiComputationUnformed extends GuiStructureUnformed {
 
     public GuiComputationUnformed(InventoryPlayer playerInv, TileComputationCore tile) {
         super(playerInv, tile, new ContainerComputationUnformed(playerInv, tile), 260,
-                150, 140, 134, 170, 76, 54, 70, 46, 58, 70);
+                "textures/gui/structure_unformed.png",
+                150, 134, 170, 76, 54, 70, 46, 58, 70);
     }
 
     @Override

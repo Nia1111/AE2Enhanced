@@ -1,11 +1,13 @@
 package com.github.aeddddd.ae2enhanced.client.gui;
 
+import com.github.aeddddd.ae2enhanced.AE2Enhanced;
 import com.github.aeddddd.ae2enhanced.config.AE2EnhancedConfig;
 import com.github.aeddddd.ae2enhanced.container.ContainerComputationFormed;
 import com.github.aeddddd.ae2enhanced.tile.TileComputationCore;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.resources.I18n;
+import net.minecraft.util.ResourceLocation;
 
 import java.io.IOException;
 
@@ -14,6 +16,17 @@ import java.io.IOException;
  * Pure display, no item slots, no inventory rendering.
  */
 public class GuiComputationFormed extends GuiContainer {
+
+    private static final ResourceLocation TEXTURE =
+        new ResourceLocation(AE2Enhanced.MOD_ID, "textures/gui/computation_formed.png");
+
+    // 手绘纹理配色（浅色背景上的文字颜色）
+    private static final int TEXT_TITLE = 0xFF413F54;
+    private static final int TEXT_BODY  = 0xFF3C4055;
+    private static final int TEXT_DIM   = 0xFF696D88;
+    private static final int TEXT_WARN  = 0xFFA85F00;
+    private static final int BAR_BG     = 0xFF696D88;
+    private static final int BAR_FILL   = 0xFF708CBA;
 
     private final TileComputationCore tile;
 
@@ -31,44 +44,24 @@ public class GuiComputationFormed extends GuiContainer {
 
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
-        // 纯展示 GUI，无容器背景，背景已在 drawScreen 中绘制
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        this.mc.getTextureManager().bindTexture(TEXTURE);
+        this.drawModalRectWithCustomSizedTexture(guiLeft, guiTop, 0, 0, xSize, ySize, 512, 512);
     }
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         this.drawDefaultBackground();
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-
-        drawRect(guiLeft, guiTop, guiLeft + xSize, guiTop + ySize, GuiColors.PANEL_BG);
-        drawRect(guiLeft, guiTop, guiLeft + xSize, guiTop + 2, GuiColors.ACCENT);
-
-        drawRect(guiLeft, guiTop, guiLeft + xSize, guiTop + 1, GuiColors.BORDER_DIM);
-        drawRect(guiLeft, guiTop + ySize - 1, guiLeft + xSize, guiTop + ySize, GuiColors.BORDER_DIM);
-        drawRect(guiLeft, guiTop, guiLeft + 1, guiTop + ySize, GuiColors.BORDER_DIM);
-        drawRect(guiLeft + xSize - 1, guiTop, guiLeft + xSize, guiTop + ySize, GuiColors.BORDER_DIM);
-
-        int corner = 10;
-        drawRect(guiLeft, guiTop, guiLeft + corner, guiTop + 2, GuiColors.ACCENT);
-        drawRect(guiLeft, guiTop, guiLeft + 2, guiTop + corner, GuiColors.ACCENT);
-        drawRect(guiLeft + xSize - corner, guiTop, guiLeft + xSize, guiTop + 2, GuiColors.ACCENT);
-        drawRect(guiLeft + xSize - 2, guiTop, guiLeft + xSize, guiTop + corner, GuiColors.ACCENT);
-        drawRect(guiLeft, guiTop + ySize - 2, guiLeft + corner, guiTop + ySize, GuiColors.ACCENT);
-        drawRect(guiLeft, guiTop + ySize - corner, guiLeft + 2, guiTop + ySize, GuiColors.ACCENT);
-        drawRect(guiLeft + xSize - corner, guiTop + ySize - 2, guiLeft + xSize, guiTop + ySize, GuiColors.ACCENT);
-        drawRect(guiLeft + xSize - 2, guiTop + ySize - corner, guiLeft + xSize, guiTop + ySize, GuiColors.ACCENT);
-
-        drawRect(guiLeft + 10, guiTop + 36, guiLeft + xSize - 10, guiTop + ySize - 28, GuiColors.PANEL_LIGHT);
-        drawRect(guiLeft + 10, guiTop + 36, guiLeft + xSize - 10, guiTop + 37, GuiColors.BORDER_DIM);
-        drawRect(guiLeft + 10, guiTop + ySize - 29, guiLeft + xSize - 10, guiTop + ySize - 28, GuiColors.BORDER_DIM);
+        super.drawScreen(mouseX, mouseY, partialTicks);
 
         String title = I18n.format("gui.ae2enhanced.computation.formed.title");
         int titleWidth = fontRenderer.getStringWidth(title);
-        fontRenderer.drawString(title, guiLeft + (xSize - titleWidth) / 2, guiTop + 8, GuiColors.ACCENT);
+        fontRenderer.drawString(title, guiLeft + (xSize - titleWidth) / 2, guiTop + 8, TEXT_TITLE);
 
-        drawRect(guiLeft + 16, guiTop + 22, guiLeft + xSize - 16, guiTop + 23, GuiColors.ACCENT_SOFT);
+        drawRect(guiLeft + 16, guiTop + 22, guiLeft + xSize - 16, guiTop + 23, 0xFF878FA5);
 
         if (tile == null) {
-            fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.tile_unavailable"), guiLeft + 20, guiTop + 40, GuiColors.TEXT_WARN);
+            fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.tile_unavailable"), guiLeft + 20, guiTop + 40, TEXT_WARN);
             return;
         }
 
@@ -80,45 +73,45 @@ public class GuiComputationFormed extends GuiContainer {
         String formedStr = tile.isFormed()
                 ? I18n.format("gui.ae2enhanced.computation.status.online")
                 : I18n.format("gui.ae2enhanced.computation.status.offline");
-        fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.label.status", formedStr), x, y, GuiColors.TEXT_MAIN);
+        fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.label.status", formedStr), x, y, TEXT_BODY);
         y += lineHeight + 4;
 
         // Parallel limit with bar
         int parallel = tile.getParallelLimit();
-        fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.label.parallel", parallel), x, y, GuiColors.TEXT_MAIN);
+        fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.label.parallel", parallel), x, y, TEXT_BODY);
         y += 12;
-        drawBar(x, y, x + 140, 8, 1.0f, GuiColors.BAR_BG, GuiColors.BAR_FILL);
+        drawBar(x, y, x + 140, 8, 1.0f, BAR_BG, BAR_FILL);
         y += 14;
 
         // Active orders
         int orders = tile.getActiveOrderCount();
-        fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.label.active_orders", orders), x, y, GuiColors.TEXT_MAIN);
+        fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.label.active_orders", orders), x, y, TEXT_BODY);
         y += lineHeight;
 
         // Max orders from config
         int maxOrders = AE2EnhancedConfig.crafting.maxActiveOrders;
-        fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.label.queue_capacity", maxOrders), x, y, GuiColors.TEXT_MAIN);
+        fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.label.queue_capacity", maxOrders), x, y, TEXT_BODY);
         y += lineHeight + 4;
 
         // Divider
-        drawRect(x, y, guiLeft + xSize - 20, y + 1, GuiColors.BORDER_DIM);
+        drawRect(x, y, guiLeft + xSize - 20, y + 1, 0xFF878FA5);
         y += 6;
 
         // Placeholder for order list (P1 engine)
         if (orders == 0) {
-            fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.orders.empty"), x, y, 0xFF668899);
+            fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.orders.empty"), x, y, TEXT_DIM);
         } else {
-            fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.orders.placeholder"), x, y, 0xFF668899);
+            fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.orders.placeholder"), x, y, TEXT_DIM);
         }
         y += lineHeight + 4;
 
         // Crafting engine placeholder
-        fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.engine.initializing"), x, y, 0xFF556677);
+        fontRenderer.drawString(I18n.format("gui.ae2enhanced.computation.engine.initializing"), x, y, TEXT_DIM);
 
         // Bottom hint
         String hint = I18n.format("gui.ae2enhanced.computation.hint.close");
         int hintW = fontRenderer.getStringWidth(hint);
-        fontRenderer.drawString(hint, guiLeft + (xSize - hintW) / 2, guiTop + ySize - 18, 0xFF445566);
+        fontRenderer.drawString(hint, guiLeft + (xSize - hintW) / 2, guiTop + ySize - 18, TEXT_DIM);
     }
 
     private void drawBar(int x, int y, int maxX, int height, float ratio, int bgColor, int fillColor) {

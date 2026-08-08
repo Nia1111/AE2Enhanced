@@ -4,6 +4,7 @@ import com.github.aeddddd.ae2enhanced.AE2Enhanced;
 import com.github.aeddddd.ae2enhanced.network.packet.PacketRequestAssembly;
 import net.minecraft.block.Block;
 import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.entity.player.InventoryPlayer;
@@ -11,6 +12,7 @@ import net.minecraft.inventory.Container;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.ResourceLocation;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -23,16 +25,26 @@ import java.util.Map;
  * 消除 GuiAssemblyUnformed / GuiHyperdimensionalUnformed / GuiComputationUnformed
  * 中各自重复的 ~90 行代码.
  */
-public abstract class GuiStructureUnformed extends GuiTechPanel {
+public abstract class GuiStructureUnformed extends GuiContainer {
+
+    // 手绘纹理配色（浅色背景上的文字/分隔线颜色）
+    private static final int TEXT_TITLE   = 0xFF413F54;
+    private static final int TEXT_SUB     = 0xFF696D88;
+    private static final int TEXT_BODY    = 0xFF3C4055;
+    private static final int TEXT_OK      = 0xFF1E7A3C;
+    private static final int TEXT_WARN    = 0xFFA85F00;
+    private static final int TEXT_ERROR   = 0xFFB03A2E;
+    private static final int DIVIDER      = 0xFF878FA5;
 
     protected final TileEntity tile;
     protected GuiButtonTech assembleButton;
     protected Map<Block, Integer> missingMap = new HashMap<>();
     protected int refreshTicks = 0;
 
+    private final ResourceLocation texture;
+
     // 布局参数(相对 guiTop 或绝对坐标)
     private final int buttonYOffset;
-    private final int innerPanelBottom;
     private final int statusYOffset;
     private final int inventoryDividerYOffset;
     private final int missingListStartY;
@@ -43,16 +55,17 @@ public abstract class GuiStructureUnformed extends GuiTechPanel {
     private final int headerDividerY;
 
     public GuiStructureUnformed(InventoryPlayer playerInv, TileEntity tile, Container container, int ySize,
-                                int buttonYOffset, int innerPanelBottom, int statusYOffset,
+                                String texturePath,
+                                int buttonYOffset, int statusYOffset,
                                 int inventoryDividerYOffset, int missingListStartY,
                                 int readyTextY, int hintTextY, int missingTitleY,
                                 int headerY, int headerDividerY) {
         super(container);
         this.tile = tile;
+        this.texture = new ResourceLocation(AE2Enhanced.MOD_ID, texturePath);
         this.xSize = 280;
         this.ySize = ySize;
         this.buttonYOffset = buttonYOffset;
-        this.innerPanelBottom = innerPanelBottom;
         this.statusYOffset = statusYOffset;
         this.inventoryDividerYOffset = inventoryDividerYOffset;
         this.missingListStartY = missingListStartY;
@@ -141,37 +154,37 @@ public abstract class GuiStructureUnformed extends GuiTechPanel {
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-        drawTechPanelFrame();
-        drawInnerPanel(guiLeft + 10, guiTop + 40, guiLeft + xSize - 10, guiTop + innerPanelBottom);
+        this.mc.getTextureManager().bindTexture(texture);
+        this.drawModalRectWithCustomSizedTexture(guiLeft, guiTop, 0, 0, xSize, ySize, 512, 512);
     }
 
     @Override
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
         String title = I18n.format(getTitleKey());
         int titleWidth = fontRenderer.getStringWidth(title);
-        fontRenderer.drawString(title, (xSize - titleWidth) / 2, 12, GuiColors.ACCENT);
+        fontRenderer.drawString(title, (xSize - titleWidth) / 2, 12, TEXT_TITLE);
 
         String subtitle = I18n.format(getSubtitleKey());
         int subWidth = fontRenderer.getStringWidth(subtitle);
-        fontRenderer.drawString(subtitle, (xSize - subWidth) / 2, 28, 0xFF88ccdd);
+        fontRenderer.drawString(subtitle, (xSize - subWidth) / 2, 28, TEXT_SUB);
 
-        drawRect(16, 36, xSize - 16, 37, GuiColors.ACCENT_SOFT);
+        drawRect(16, 36, xSize - 16, 37, DIVIDER);
 
         if (missingMap.isEmpty()) {
             String ready = I18n.format("gui.ae2enhanced.unformed.ready");
             int rw = fontRenderer.getStringWidth(ready);
-            fontRenderer.drawString(ready, (xSize - rw) / 2, readyTextY, GuiColors.TEXT_SUCCESS);
+            fontRenderer.drawString(ready, (xSize - rw) / 2, readyTextY, TEXT_OK);
 
             String hint = I18n.format("gui.ae2enhanced.unformed.hint");
             int hw = fontRenderer.getStringWidth(hint);
-            fontRenderer.drawString(hint, (xSize - hw) / 2, hintTextY, 0xFF88aaaa);
+            fontRenderer.drawString(hint, (xSize - hw) / 2, hintTextY, TEXT_SUB);
         } else {
             String missingTitle = I18n.format("gui.ae2enhanced.unformed.missing");
-            fontRenderer.drawString(missingTitle, 26, missingTitleY, GuiColors.TEXT_WARN);
+            fontRenderer.drawString(missingTitle, 26, missingTitleY, TEXT_WARN);
 
-            fontRenderer.drawString(I18n.format("gui.ae2enhanced.unformed.header.material"), 36, headerY, 0xFF88aabb);
-            fontRenderer.drawString(I18n.format("gui.ae2enhanced.unformed.header.quantity"), xSize - 90, headerY, 0xFF88aabb);
-            drawRect(30, headerDividerY, xSize - 30, headerDividerY + 1, GuiColors.BORDER_DIM);
+            fontRenderer.drawString(I18n.format("gui.ae2enhanced.unformed.header.material"), 36, headerY, TEXT_SUB);
+            fontRenderer.drawString(I18n.format("gui.ae2enhanced.unformed.header.quantity"), xSize - 90, headerY, TEXT_SUB);
+            drawRect(30, headerDividerY, xSize - 30, headerDividerY + 1, DIVIDER);
 
             int y = missingListStartY;
             for (Map.Entry<Block, Integer> entry : missingMap.entrySet()) {
@@ -180,9 +193,9 @@ public abstract class GuiStructureUnformed extends GuiTechPanel {
                 ItemStack stack = new ItemStack(block, 1);
                 String name = stack.getDisplayName();
 
-                fontRenderer.drawString(name, 36, y, GuiColors.TEXT_MAIN);
+                fontRenderer.drawString(name, 36, y, TEXT_BODY);
                 String countStr = "x" + count;
-                fontRenderer.drawString(countStr, xSize - 36 - fontRenderer.getStringWidth(countStr), y, GuiColors.TEXT_ERROR);
+                fontRenderer.drawString(countStr, xSize - 36 - fontRenderer.getStringWidth(countStr), y, TEXT_ERROR);
                 y += 16;
             }
         }
@@ -190,14 +203,14 @@ public abstract class GuiStructureUnformed extends GuiTechPanel {
         if (missingMap.isEmpty()) {
             String status = I18n.format("gui.ae2enhanced.unformed.status.ready");
             int sw = fontRenderer.getStringWidth(status);
-            fontRenderer.drawString(status, (xSize - sw) / 2, statusYOffset, GuiColors.TEXT_SUCCESS);
+            fontRenderer.drawString(status, (xSize - sw) / 2, statusYOffset, TEXT_OK);
         } else {
             String status = I18n.format("gui.ae2enhanced.unformed.status.missing");
             int sw = fontRenderer.getStringWidth(status);
-            fontRenderer.drawString(status, (xSize - sw) / 2, statusYOffset, GuiColors.TEXT_ERROR);
+            fontRenderer.drawString(status, (xSize - sw) / 2, statusYOffset, TEXT_ERROR);
         }
 
-        drawRect(16, inventoryDividerYOffset, xSize - 16, inventoryDividerYOffset + 1, GuiColors.ACCENT_SOFT);
+        drawRect(16, inventoryDividerYOffset, xSize - 16, inventoryDividerYOffset + 1, DIVIDER);
     }
 
     @Override

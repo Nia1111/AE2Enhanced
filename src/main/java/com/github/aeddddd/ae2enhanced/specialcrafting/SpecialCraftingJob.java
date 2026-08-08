@@ -186,9 +186,11 @@ public class SpecialCraftingJob extends CraftingJob {
 
         // 注意:不做"库存直接交付"——AE2 执行模型只认样板产出作为交付来源,
         // 交付量一律由样板产出:crafts 覆盖全额,种子保留,余量执行结束返回网络.
-        long crafts = (target + gain - 1) / gain;
-        if (crafts <= 0 || crafts > Long.MAX_VALUE / inPer) {
-            // 天文数字订单（贷款量溢出）:直接构造缺料失败计划,O(1)
+        // 溢出安全 ceilDiv(target、gain 为正,必得 crafts ≥ 1)
+        long crafts = target / gain + (target % gain != 0 ? 1 : 0);
+        // 守卫取 max(outPer, inPer):产出 crafts×outPer 经原生无饱和乘法,超 long 即记账错乱
+        if (crafts > Long.MAX_VALUE / Math.max(outPer, inPer)) {
+            // 天文数字订单（产出/贷款量溢出）:直接构造缺料失败计划,O(1)
             return this.missingRoot(cc, what, target);
         }
 
@@ -249,8 +251,10 @@ public class SpecialCraftingJob extends CraftingJob {
             return null; // 无种子 → 原生兜底(首份即缺,快速失败)
         }
 
-        long crafts = (target + outY - 1) / outY;
-        if (crafts <= 0 || crafts > Long.MAX_VALUE / inX) {
+        // 溢出安全 ceilDiv(target、outY 为正,必得 crafts ≥ 1)
+        long crafts = target / outY + (target % outY != 0 ? 1 : 0);
+        // 守卫取 max(outY, inX):产出 crafts×outY 经原生无饱和乘法,超 long 即记账错乱
+        if (crafts > Long.MAX_VALUE / Math.max(outY, inX)) {
             return this.missingRoot(cc, what, target);
         }
 

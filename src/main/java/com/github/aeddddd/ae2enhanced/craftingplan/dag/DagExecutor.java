@@ -155,8 +155,16 @@ public final class DagExecutor {
                 hasCycleBoundary = true;
                 CraftingTreeNode subtreeRoot = node == graph.root ? rootNode
                         : new CraftingTreeNode(cc, job, node.key.copy(), null, -1, 0);
-                if (!CycleBoundarySolver.solveInto(cc, job, node.key, need, inv, subtreeRoot, src, world)) {
+                CycleBoundarySolver.BoundaryResult boundary = CycleBoundarySolver.solveInto(cc, job, node.key,
+                        need, inv, subtreeRoot, src, world);
+                if (boundary == CycleBoundarySolver.BoundaryResult.FALLBACK) {
                     throw new DagFallback("cycle_boundary_unsolvable:" + node.key);
+                }
+                if (boundary == CycleBoundarySolver.BoundaryResult.MISSING) {
+                    // 天文数字边界需求:O(1) 缺料记账(对齐根路径 missingRoot 语义),
+                    // 继续拓扑扫描而非整单回落原生(大网络上回落即高请求计算卡死)
+                    missingByNode.merge(node, need, Long::sum);
+                    continue;
                 }
                 if (node != graph.root) {
                     ParentSlot slot = cycleSlotByNode.get(node);
@@ -284,7 +292,17 @@ public final class DagExecutor {
             DagGraph.DagNode node = entry.getKey();
             long amount = entry.getValue();
             missingItems.merge(node.key, amount, Long::sum);
-            CraftingTreeNode slot = node == graph.root ? rootNode : terminalSlotByNode.get(node);
+            CraftingTreeNode slot;
+            if (node == graph.root) {
+                slot = rootNode;
+            } else {
+                slot = terminalSlotByNode.get(node);
+                if (slot == null) {
+                    // 循环边界缺料:回填到物化阶段的占位子节点
+                    ParentSlot parentSlot = cycleSlotByNode.get(node);
+                    slot = parentSlot == null ? null : parentSlot.childNode;
+                }
+            }
             if (slot != null) {
                 Ae2CraftingReflect.setNodeMissing(slot, amount);
             }

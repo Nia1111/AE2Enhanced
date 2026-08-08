@@ -3,7 +3,24 @@ package com.github.aeddddd.ae2enhanced.client.gui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 
+/**
+ * 手绘风格按钮 —— 像素级复刻 3.png 中的按钮条带：
+ * 深海军蓝外框 + 内圈亮色斜面 + 中部填充 + 底部双行阴影；
+ * 悬停时切换为高亮蓝配色（DAFFFF/9CD3FF/708CBA）。
+ */
 public class GuiButtonTech extends GuiButton {
+
+    // 手绘调色板（取自 3.png 按钮条带）
+    private static final int BORDER       = 0xFF413F54;
+    private static final int BEVEL        = 0xFFADB0C4;
+    private static final int FILL         = 0xFF9A9FB4;
+    private static final int BOTTOM       = 0xFF696D88;
+    private static final int BEVEL_HOVER  = 0xFFDAFFFF;
+    private static final int FILL_HOVER   = 0xFF9CD3FF;
+    private static final int BOTTOM_HOVER = 0xFF708CBA;
+    private static final int FILL_OFF     = 0xFF878FA5;
+    private static final int TEXT         = 0xFF413F54;
+    private static final int TEXT_OFF     = 0xFF3E4256;
 
     public GuiButtonTech(int buttonId, int x, int y, int width, int height, String text) {
         super(buttonId, x, y, width, height, text);
@@ -15,32 +32,46 @@ public class GuiButtonTech extends GuiButton {
 
         this.hovered = mouseX >= this.x && mouseY >= this.y && mouseX < this.x + this.width && mouseY < this.y + this.height;
 
-        // 背景色：默认深蓝,悬停变亮,禁用变暗
-        int bgColor = this.enabled ? 0xFF0d1b2a : 0xFF1a1a2e;
-        if (this.hovered && this.enabled) {
-            bgColor = 0xFF1b3a5a;
+        int bevel, fill, bottom, textColor;
+        if (!this.enabled) {
+            bevel = BEVEL;
+            fill = FILL_OFF;
+            bottom = BOTTOM;
+            textColor = TEXT_OFF;
+        } else if (this.hovered) {
+            bevel = BEVEL_HOVER;
+            fill = FILL_HOVER;
+            bottom = BOTTOM_HOVER;
+            textColor = TEXT;
+        } else {
+            bevel = BEVEL;
+            fill = FILL;
+            bottom = BOTTOM;
+            textColor = TEXT;
         }
-        drawRect(this.x, this.y, this.x + this.width, this.y + this.height, bgColor);
 
-        // 边框：启用时青色,禁用时灰色
-        int borderColor = this.enabled ? 0xFF00d4ff : 0xFF555555;
-        if (this.hovered && this.enabled) {
-            borderColor = 0xFF66e5ff;
-        }
-        // 上边框
-        drawRect(this.x, this.y, this.x + this.width, this.y + 1, borderColor);
-        // 下边框
-        drawRect(this.x, this.y + this.height - 1, this.x + this.width, this.y + this.height, borderColor);
-        // 左边框
-        drawRect(this.x, this.y, this.x + 1, this.y + this.height, borderColor);
-        // 右边框
-        drawRect(this.x + this.width - 1, this.y, this.x + this.width, this.y + this.height, borderColor);
+        int x0 = this.x, y0 = this.y;
+        int x1 = x0 + this.width, y1 = y0 + this.height;
+
+        // 中部填充（含底部阴影区，后面覆盖）
+        drawRect(x0, y0, x1, y1, fill);
+
+        // 内圈斜面：上 / 左 / 右 1px
+        drawRect(x0 + 1, y0 + 1, x1 - 1, y0 + 2, bevel);
+        drawRect(x0 + 1, y0 + 1, x0 + 2, y1 - 4, bevel);
+        drawRect(x1 - 2, y0 + 1, x1 - 1, y1 - 4, bevel);
+
+        // 底部：1px 斜面行 + 2px 阴影行
+        drawRect(x0 + 1, y1 - 4, x1 - 1, y1 - 3, bevel);
+        drawRect(x0 + 1, y1 - 3, x1 - 1, y1 - 1, bottom);
+
+        // 外框 1px
+        drawRect(x0, y0, x1, y0 + 1, BORDER);
+        drawRect(x0, y1 - 1, x1, y1, BORDER);
+        drawRect(x0, y0, x0 + 1, y1, BORDER);
+        drawRect(x1 - 1, y0, x1, y1, BORDER);
 
         // 文字
-        int textColor = this.enabled ? 0xFFe0e0e0 : 0xFF888888;
-        if (this.hovered && this.enabled) {
-            textColor = 0xFFffffff;
-        }
         mc.fontRenderer.drawString(this.displayString,
             this.x + (this.width - mc.fontRenderer.getStringWidth(this.displayString)) / 2,
             this.y + (this.height - 8) / 2,

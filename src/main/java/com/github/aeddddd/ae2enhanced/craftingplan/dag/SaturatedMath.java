@@ -24,8 +24,8 @@ public final class SaturatedMath {
         return a * b;
     }
 
-    /** 向上取整除法(a、b 为正). */
+    /** 向上取整除法(a、b 为正).溢出安全:不用 (a+b-1) 形式,a 接近 Long.MAX 时加法必回绕. */
     public static long ceilDiv(long a, long b) {
-        return (a + b - 1) / b;
+        return a / b + (a % b != 0 ? 1 : 0);
     }
 }

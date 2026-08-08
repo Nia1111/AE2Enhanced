@@ -15,7 +15,8 @@ public class GuiAssemblyUnformed extends GuiStructureUnformed {
 
     public GuiAssemblyUnformed(InventoryPlayer playerInv, TileAssemblyController tile) {
         super(playerInv, tile, new ContainerAssemblyUnformed(playerInv, tile), 350,
-                236, 210, 224, 256, 80, 62, 82, 46, 62, 74);
+                "textures/gui/assembly_unformed.png",
+                236, 224, 256, 80, 62, 82, 46, 62, 74);
     }
 
     @Override

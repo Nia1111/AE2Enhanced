@@ -314,6 +314,34 @@ public class DagExtremeScaleBenchmarkTest {
         return env;
     }
 
+    /**
+     * 极端请求量场景:同一张大图直接请求 {@link Long#MAX_VALUE}——需求沿边饱和传播,
+     * 循环边界触及数值不可表示区.修复前:ceilDiv 加法回绕/贷款欠资 → 整单回落原生
+     * (>10 min 卡死);修复后:O(1) 缺料记账,秒级出缺料计划.
+     */
+    @Test
+    public void mixedCrossGraphExtremeDemandBenchmark() {
+        Assumptions.assumeTrue(ENABLED, "set AE2E_BENCH=1 to enable");
+
+        SimulationEnv env = buildMixedEnv();
+        IAEItemStack root = key(ROOT_ID);
+        IAEItemStack request = mult(root, Long.MAX_VALUE);
+
+        long t0 = System.nanoTime();
+        CraftingJob dagJob = env.runJobTimed(env.newDagJob(request), 10, TimeUnit.MINUTES);
+        long dagNanos = System.nanoTime() - t0;
+        assertThat(dagJob).as("极端请求下 DAG 须在预算内完成(修复前回落原生>10min)").isNotNull();
+        PlanView dagPlan = PlanView.of(dagJob);
+        assertThat(dagPlan.simulation()).as("天文数字需求应产出缺料计划").isTrue();
+        long craftsSaturated = 0;
+        for (long v : dagPlan.patternTimes().values()) {
+            craftsSaturated = Long.MAX_VALUE - craftsSaturated < v ? Long.MAX_VALUE : craftsSaturated + v;
+        }
+        System.out.printf(
+                "[BENCH] 极端请求(Long.MAX): DAG 耗时 %,.1f ms | 缺料计划(符合预期)| 样板调用(饱和合计)=%,d 缺料种类=%,d%n",
+                dagNanos / 1e6, craftsSaturated, dagPlan.missingItems().size());
+    }
+
     // ==================== 根级催化环:SpecialCraftingJob 路径基准 ====================
 
     /**
