@@ -1,4 +1,7 @@
 {
+  "conditions": [
+    { "type": "ae2enhanced:botania_loaded" }
+  ],
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "IMI",

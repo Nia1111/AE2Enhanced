@@ -1,5 +1,6 @@
 {
     "conditions": {
-        "projecte_loaded": "com.github.aeddddd.ae2enhanced.integration.projecte.ProjectELoadedCondition"
+        "projecte_loaded": "com.github.aeddddd.ae2enhanced.integration.projecte.ProjectELoadedCondition",
+        "botania_loaded": "com.github.aeddddd.ae2enhanced.integration.botania.BotaniaLoadedCondition"
     }
 }

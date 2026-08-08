@@ -1,10 +1,12 @@
 package com.github.aeddddd.ae2enhanced.craftingplan.dag;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -80,11 +82,13 @@ public final class DagExecutor {
      * @param inv 模拟库存（调用方已 ignore 请求物）
      * @param job 缺料/used 记账宿主（availableCheck 已就位,供边界求解 checkUse）
      * @param rootNode 物化根节点（what = 请求物）
+     * @param simulation true = 模拟趟(缺料重算):多样板节点首分支不封顶,
+     *        镜像原生失败重试的"乐观幻影生产";false = 非模拟趟(分支按供给容量封顶)
      */
     public static Result execute(DagGraph graph, long target, MECraftingInventory inv,
-            CraftingJob job, ICraftingGrid cc, World world, CraftingTreeNode rootNode, IActionSource src)
-            throws DagFallback, InterruptedException {
-        Map<DagGraph.DagNode, CraftingTreeProcess> proByNode = new IdentityHashMap<>();
+            CraftingJob job, ICraftingGrid cc, World world, CraftingTreeNode rootNode, IActionSource src,
+            boolean simulation) throws DagFallback, InterruptedException {
+        Map<DagGraph.DagNode, List<CraftingTreeProcess>> prosByNode = new IdentityHashMap<>();
         Map<DagGraph.DagNode, CraftingTreeNode> terminalSlotByNode = new IdentityHashMap<>();
         Map<DagGraph.DagNode, ParentSlot> cycleSlotByNode = new IdentityHashMap<>();
 
@@ -105,33 +109,48 @@ public final class DagExecutor {
             if (!attached.add(node)) {
                 continue; // 已挂载:本父槽位保持空叶子(共享生产)
             }
-            CraftingTreeProcess pro = new CraftingTreeProcess(cc, job, node.pattern, parentTreeNode, 1);
-            // 构造函数不建输入子节点(惰性),物化结构需要立即展开
-            Ae2CraftingReflect.processAddProcess(pro);
-            Ae2CraftingReflect.addProcessToNode(parentTreeNode, pro);
-            proByNode.put(node, pro);
-            for (DagGraph.Edge edge : node.edges) {
-                CraftingTreeNode childTreeNode = findChildNode(pro, edge.child().key);
-                if (childTreeNode == null) {
-                    throw new DagFallback("child_node_missing:" + edge.child().key);
-                }
-                switch (edge.child().kind) {
-                    case NORMAL:
-                        queue.add(edge.child());
-                        parentQueue.add(childTreeNode);
-                        break;
-                    case CYCLE:
-                        cycleSlotByNode.putIfAbsent(edge.child(), new ParentSlot(pro, childTreeNode));
-                        break;
-                    case TERMINAL:
-                        terminalSlotByNode.putIfAbsent(edge.child(), childTreeNode);
-                        break;
-                    case EMITTER:
-                        throw new DagFallback("emitter_node:" + edge.child().key);
-                    default:
-                        throw new DagFallback("unexpected_node_kind");
+            // 分支列表:主分支 + 额外候选分支(顺序 = 原生 getCraftingFor 尝试序);
+            // 每个分支物化独立 CraftingTreeProcess(原生多样板节点同样逐样板一个 process)
+            List<ICraftingPatternDetails> branchPatterns = new ArrayList<>();
+            List<List<DagGraph.Edge>> branchEdges = new ArrayList<>();
+            branchPatterns.add(node.pattern);
+            branchEdges.add(node.edges);
+            for (DagGraph.Branch branch : node.extraBranches) {
+                branchPatterns.add(branch.pattern);
+                branchEdges.add(branch.edges);
+            }
+            List<CraftingTreeProcess> pros = new ArrayList<>(branchPatterns.size());
+            for (int b = 0; b < branchPatterns.size(); b++) {
+                CraftingTreeProcess pro = new CraftingTreeProcess(cc, job, branchPatterns.get(b),
+                        parentTreeNode, 1);
+                // 构造函数不建输入子节点(惰性),物化结构需要立即展开
+                Ae2CraftingReflect.processAddProcess(pro);
+                Ae2CraftingReflect.addProcessToNode(parentTreeNode, pro);
+                pros.add(pro);
+                for (DagGraph.Edge edge : branchEdges.get(b)) {
+                    CraftingTreeNode childTreeNode = findChildNode(pro, edge.child().key);
+                    if (childTreeNode == null) {
+                        throw new DagFallback("child_node_missing:" + edge.child().key);
+                    }
+                    switch (edge.child().kind) {
+                        case NORMAL:
+                            queue.add(edge.child());
+                            parentQueue.add(childTreeNode);
+                            break;
+                        case CYCLE:
+                            cycleSlotByNode.putIfAbsent(edge.child(), new ParentSlot(pro, childTreeNode));
+                            break;
+                        case TERMINAL:
+                            terminalSlotByNode.putIfAbsent(edge.child(), childTreeNode);
+                            break;
+                        case EMITTER:
+                            throw new DagFallback("emitter_node:" + edge.child().key);
+                        default:
+                            throw new DagFallback("unexpected_node_kind");
+                    }
                 }
             }
+            prosByNode.put(node, pros);
         }
 
         // ==================== 阶段 2:拓扑单趟记账 ====================
@@ -206,6 +225,12 @@ public final class DagExecutor {
                     missingByNode.merge(node, remaining, Long::sum);
                     break;
                 case NORMAL: {
+                    if (!node.extraBranches.isEmpty()) {
+                        // 多样板接管:按原生分支顺序批量分配(非模拟趟容量封顶)
+                        executeMultiBranch(node, remaining, inv, requests, missingByNode, synthetic,
+                                prosByNode.get(node), simulation, src);
+                        break;
+                    }
                     long times = SaturatedMath.ceilDiv(remaining, node.outputPerCraft);
                     for (DagGraph.Edge edge : node.edges) {
                         long childRequest = SaturatedMath.multiply(edge.perCraft(), times);
@@ -254,11 +279,11 @@ public final class DagExecutor {
                         inv.injectItems(out, Actionable.MODULATE, src);
                         synthetic.merge(RecursiveCraftingHelper.canon(out), out.getStackSize(), Long::sum);
                     }
-                    CraftingTreeProcess pro = proByNode.get(node);
-                    if (pro == null) {
+                    List<CraftingTreeProcess> pros = prosByNode.get(node);
+                    if (pros == null) {
                         throw new DagFallback("process_not_materialized:" + node.key);
                     }
-                    Ae2CraftingReflect.setProcessCrafts(pro, times);
+                    Ae2CraftingReflect.setProcessCrafts(pros.get(0), times);
                     break;
                 }
                 default:
@@ -308,6 +333,119 @@ public final class DagExecutor {
             }
         }
         return new Result(missingItems, hasCycleBoundary);
+    }
+
+    /**
+     * 多样板节点执行(移植自 1.20.1,修复"多样板 key × 极大数量"的 O(数量) 陷阱):
+     * 镜像原生多分支语义——按 {@code getCraftingFor} 顺序"分支 1 尽力 → 分支 2",
+     * 但把逐次 {@code request(child,1)} 收敛为<b>按供给容量整批</b>:
+     * 分支可执行次数 = min(⌈剩余/单次产出⌉, min_e (supplyCap(子) − 已提交需求)/perCraft).
+     * <p>容量截断仅在非模拟趟启用(真实"分支尽力"语义);模拟趟镜像原生"乐观幻影生产":
+     * 分支 1 包揽全部剩余,缺料沿其原料子树在终端浮现(分支 2 不参与).
+     * 容量方向保守(只可能低估):低估只会让更多量落到后续分支,不产生虚假缺料.</p>
+     */
+    private static void executeMultiBranch(DagGraph.DagNode node, long remaining,
+            MECraftingInventory inv, Map<DagGraph.DagNode, Long> requests,
+            Map<DagGraph.DagNode, Long> missingByNode, Map<IAEItemStack, Long> synthetic,
+            List<CraftingTreeProcess> pros, boolean simulation, IActionSource src) {
+        // 本节点本次评估专用 memo:supplyCap 读取的是当前库存,多节点间不复用
+        // (库存随执行变化,陈旧 memo 会高估容量、把缺料错误地压在前序分支)
+        Map<DagGraph.DagNode, Long> multiMemo = new IdentityHashMap<>();
+        for (int b = 0; b < pros.size() && remaining > 0; b++) {
+            ICraftingPatternDetails pattern;
+            long outPer;
+            List<DagGraph.Edge> edges;
+            if (b == 0) {
+                pattern = node.pattern;
+                outPer = node.outputPerCraft;
+                edges = node.edges;
+            } else {
+                DagGraph.Branch branch = node.extraBranches.get(b - 1);
+                pattern = branch.pattern;
+                outPer = branch.outPer;
+                edges = branch.edges;
+            }
+            long times = SaturatedMath.ceilDiv(remaining, outPer);
+            if (!simulation) {
+                for (DagGraph.Edge edge : edges) {
+                    long available = SaturatedMath.add(supplyCap(edge.child(), inv, multiMemo),
+                            -requests.getOrDefault(edge.child(), 0L));
+                    times = Math.min(times, Math.max(0L, available / edge.perCraft()));
+                }
+            }
+            if (times <= 0) {
+                continue;
+            }
+            for (DagGraph.Edge edge : edges) {
+                requests.merge(edge.child(), SaturatedMath.multiply(edge.perCraft(), times),
+                        SaturatedMath::add);
+            }
+            // 产出注入(含副产物)+ 合成侧余额记账(与单分支路径一致;
+            // 多分支节点经编译保证无容器输入,无需容器回记)
+            for (IAEItemStack output : pattern.getCondensedOutputs()) {
+                if (output == null) {
+                    continue;
+                }
+                IAEItemStack out = output.copy();
+                out.setStackSize(SaturatedMath.multiply(output.getStackSize(), times));
+                inv.injectItems(out, Actionable.MODULATE, src);
+                synthetic.merge(RecursiveCraftingHelper.canon(out), out.getStackSize(), Long::sum);
+            }
+            Ae2CraftingReflect.setProcessCrafts(pros.get(b), times);
+            remaining -= SaturatedMath.multiply(times, outPer);
+        }
+        if (remaining > 0) {
+            // 仅非模拟趟可达(模拟趟首分支不封顶必包揽);调用方据此触发模拟趟重算
+            missingByNode.merge(node, remaining, Long::sum);
+        }
+    }
+
+    /**
+     * 节点供给上限(多样板分支容量用):当前模拟库存(含已注入的合成侧余额)
+     * + 各输入供给上限递归推出的可产量(多样板节点为各分支之和);
+     * 发射台/循环边界按乐观无界.
+     * 方向保证:只可能高估,高估导致的超计划在终端以缺料形式浮现,
+     * 不会产出"看似可行实际缺料"的计划.
+     */
+    private static long supplyCap(DagGraph.DagNode node, MECraftingInventory inv,
+            Map<DagGraph.DagNode, Long> memo) {
+        Long cached = memo.get(node);
+        if (cached != null) {
+            return cached;
+        }
+        long cap;
+        switch (node.kind) {
+            case EMITTER:
+            case CYCLE:
+                cap = Long.MAX_VALUE / 4;
+                break;
+            case TERMINAL:
+                cap = invAmount(inv, node.key);
+                break;
+            case NORMAL: {
+                long acc = invAmount(inv, node.key);
+                acc = SaturatedMath.add(acc, branchCap(node.outputPerCraft, node.edges, inv, memo));
+                for (DagGraph.Branch branch : node.extraBranches) {
+                    acc = SaturatedMath.add(acc, branchCap(branch.outPer, branch.edges, inv, memo));
+                }
+                cap = acc;
+                break;
+            }
+            default:
+                cap = 0;
+        }
+        memo.put(node, cap);
+        return cap;
+    }
+
+    /** 单分支可产量:min_e supplyCap(子)/perCraft × 单次产出. */
+    private static long branchCap(long outPer, List<DagGraph.Edge> edges, MECraftingInventory inv,
+            Map<DagGraph.DagNode, Long> memo) {
+        long crafts = Long.MAX_VALUE / 4;
+        for (DagGraph.Edge edge : edges) {
+            crafts = Math.min(crafts, supplyCap(edge.child(), inv, memo) / edge.perCraft());
+        }
+        return SaturatedMath.multiply(crafts, outPer);
     }
 
     /** 在 pro 的输入子节点中找到 what 等于 key 的节点(挂载点). */

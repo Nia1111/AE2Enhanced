@@ -51,6 +51,8 @@ public final class DagCompiler {
     private final boolean detectOnly;
     /** 两遍编译共享的生产者索引(成环检测的副产物倒排只建一次). */
     private final CycleAnalyzer.ProducerIndex producerIndex;
+    /** 本趟编译是否产出了多样板节点(传导到 DagGraph.hasMultiBranch). */
+    private boolean sawMultiBranch;
 
     private DagCompiler(ICraftingGrid cc, World world, Set<IAEItemStack> boundaryKeys, boolean detectOnly,
             CycleAnalyzer.ProducerIndex producerIndex) {
@@ -78,6 +80,7 @@ public final class DagCompiler {
             DagCompiler compiler = new DagCompiler(cc, world, boundaryKeys, false, producerIndex);
             DagGraph.DagNode rootNode = compiler.visit(rootKey);
             DagGraph graph = new DagGraph(rootNode);
+            graph.hasMultiBranch = compiler.sawMultiBranch;
             // 逆后序:父节点(需求方)先于子节点(原料方)
             for (int i = compiler.postOrder.size() - 1; i >= 0; i--) {
                 graph.topoOrder.add(compiler.postOrder.get(i));
@@ -117,12 +120,10 @@ public final class DagCompiler {
         DagGraph.DagNode node = this.buildNode(key);
         this.nodes.put(key, node);
         if (node.kind == DagGraph.Kind.NORMAL) {
-            for (IAEItemStack input : node.pattern.getCondensedInputs()) {
-                if (input == null || input.getStackSize() <= 0) {
-                    continue;
-                }
-                long perCraft = input.getStackSize();
-                node.edges.add(new DagGraph.Edge(this.visit(RecursiveCraftingHelper.canon(input)), perCraft));
+            this.visitInputs(node.pattern, node.edges);
+            // 多样板接管:额外分支的输入同样展开(分支序 = 原生尝试序)
+            for (DagGraph.Branch branch : node.extraBranches) {
+                this.visitInputs(branch.pattern, branch.edges);
             }
         }
         this.colors.put(key, BLACK);
@@ -130,17 +131,27 @@ public final class DagCompiler {
         return node;
     }
 
+    /** 展开一个分支的输入边(condensed 输入序 = 原生逐槽位处理序). */
+    private void visitInputs(ICraftingPatternDetails pattern, List<DagGraph.Edge> edges) throws DagFallback {
+        for (IAEItemStack input : pattern.getCondensedInputs()) {
+            if (input == null || input.getStackSize() <= 0) {
+                continue;
+            }
+            long perCraft = input.getStackSize();
+            edges.add(new DagGraph.Edge(this.visit(RecursiveCraftingHelper.canon(input)), perCraft));
+        }
+    }
+
     private DagGraph.DagNode buildNode(IAEItemStack key) throws DagFallback {
-        ICraftingPatternDetails chosen = null;
+        List<ICraftingPatternDetails> clean = new ArrayList<>();
         boolean sawAny = false;
         for (ICraftingPatternDetails pattern : this.cc.getCraftingFor(key, null, -1, this.world)) {
             sawAny = true;
             if (isClean(pattern)) {
-                chosen = pattern;
-                break;
+                clean.add(pattern);
             }
         }
-        if (chosen == null) {
+        if (clean.isEmpty()) {
             if (sawAny) {
                 // 有样板但全部含替代输入:本版本不接管
                 throw new DagFallback("unclean_inputs:" + key);
@@ -150,13 +161,39 @@ public final class DagCompiler {
             }
             return new DagGraph.DagNode(DagGraph.Kind.TERMINAL, key, 0, null);
         }
+        ICraftingPatternDetails chosen = clean.get(0);
         // 选定样板本身是环步骤(含经副产物闭合的催化环)→ 本节点收缩为循环边界,
         // 由 CycleBoundarySolver 联立求解(否则边界会错位落到环键上而不可解)
         if (CycleAnalyzer.isCycleStep(this.cc, this.world, chosen, this.producerIndex)) {
             return new DagGraph.DagNode(DagGraph.Kind.CYCLE, key, 0, null);
         }
+        DagGraph.DagNode node = new DagGraph.DagNode(DagGraph.Kind.NORMAL, key, outPerOf(chosen, key),
+                chosen);
+        if (clean.size() > 1) {
+            // 多样板接管(修复"多样板 key × 极大数量"的 O(数量) 下单陷阱,移植自 1.20.1):
+            // 任一分支含容器输入或为环步骤 → 语义过繁,整单回落原生(保守)
+            this.sawMultiBranch = true;
+            if (hasContainerInput(chosen)) {
+                throw new DagFallback("container_multi:" + key);
+            }
+            for (int i = 1; i < clean.size(); i++) {
+                ICraftingPatternDetails branch = clean.get(i);
+                if (hasContainerInput(branch)) {
+                    throw new DagFallback("container_multi:" + key);
+                }
+                if (CycleAnalyzer.isCycleStep(this.cc, this.world, branch, this.producerIndex)) {
+                    throw new DagFallback("cycle_multi:" + key);
+                }
+                node.extraBranches.add(new DagGraph.Branch(branch, outPerOf(branch, key)));
+            }
+        }
+        return node;
+    }
+
+    /** 样板对本 key 的单次产出(累计全部输出槽);无产出即编译失败. */
+    private static long outPerOf(ICraftingPatternDetails pattern, IAEItemStack key) throws DagFallback {
         long outPer = 0;
-        for (IAEItemStack output : chosen.getCondensedOutputs()) {
+        for (IAEItemStack output : pattern.getCondensedOutputs()) {
             if (output != null && key.equals(output)) {
                 outPer = SaturatedMath.add(outPer, output.getStackSize());
             }
@@ -164,7 +201,20 @@ public final class DagCompiler {
         if (outPer <= 0) {
             throw new DagFallback("pattern_without_output:" + key);
         }
-        return new DagGraph.DagNode(DagGraph.Kind.NORMAL, key, outPer, chosen);
+        return outPer;
+    }
+
+    /** 任一输入带容器返还(多分支节点的容器语义不予接管). */
+    private static boolean hasContainerInput(ICraftingPatternDetails pattern) {
+        for (IAEItemStack input : pattern.getCondensedInputs()) {
+            if (input == null || input.getItem() == null) {
+                continue;
+            }
+            if (input.getItem().hasContainerItem(input.getDefinition())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

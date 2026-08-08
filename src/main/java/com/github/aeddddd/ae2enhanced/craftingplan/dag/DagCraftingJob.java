@@ -94,26 +94,56 @@ public class DagCraftingJob extends CraftingJob {
             return null;
         }
 
-        MECraftingInventory inv = new MECraftingInventory(Ae2CraftingReflect.getOriginal(this), true, false, true);
-        Ae2CraftingReflect.invIgnore(inv, output); // 镜像原生:请求物自身库存不参与计划扣除
-        Ae2CraftingReflect.setAvailableCheck(this,
-                new MECraftingInventory(Ae2CraftingReflect.getOriginal(this), false, false, false));
-        CraftingTreeNode root = new CraftingTreeNode(cc, this, output.copy(), null, -1, 0);
+        // 趟 1:非模拟语义(多样板节点分支按供给容量封顶 = 真分支耗尽)
         DagExecutor.Result result;
+        CraftingTreeNode root;
         try {
-            result = DagExecutor.execute(graph, output.getStackSize(), inv, this, cc, this.world, root, src);
+            root = this.executePass(graph, output, cc, src, false);
+            result = this.lastPassResult;
         } catch (DagFallback fallback) {
             SpecialLog.info("[DAG] 执行回落({}): {}", fallback.reason, output);
             return null;
         }
-        this.hasCycleBoundary = result.hasCycleBoundary;
         if (!result.missingItems.isEmpty()) {
             // 原生 simulation 标志由失败重试置位;DAG 缺料不抛异常,须显式置位,
             // 否则产出"有缺料却标记可提交"的不一致计划
             Ae2CraftingReflect.setSimulate(this, true);
+            if (graph.hasMultiBranch) {
+                // 趟 2(移植自 1.20.1):镜像原生失败重试——模拟语义下首分支不封顶
+                // ("乐观幻影生产"),缺料浮现于分支 1 原料层,分支 2 不参与;
+                // 单分支图两趟等价,无需重算(既有单趟行为,parity 测试锁定)
+                try {
+                    root = this.executePass(graph, output, cc, src, true);
+                    result = this.lastPassResult;
+                } catch (DagFallback fallback) {
+                    SpecialLog.info("[DAG] 模拟趟执行回落({}): {}", fallback.reason, output);
+                    return null;
+                }
+            }
         }
+        this.hasCycleBoundary = result.hasCycleBoundary;
         SpecialLog.info("[DAG] 计划完成: {}×{},节点 {},循环边界 {}", output, output.getStackSize(),
                 graph.topoOrder.size(), this.hasCycleBoundary);
+        return root;
+    }
+
+    /** 单趟执行结果暂存(供 computeDagPlan 读取,避免包装类). */
+    private DagExecutor.Result lastPassResult;
+
+    /**
+     * 单趟 DAG 执行:全新模拟库存 + 全新物化树(趟间互不染指,
+     * availableCheck 同步重置——镜像原生 CraftingJob.run 失败重试的重建).
+     */
+    private CraftingTreeNode executePass(DagGraph graph, IAEItemStack output, ICraftingGrid cc,
+            IActionSource src, boolean simulation) throws DagFallback, InterruptedException {
+        MECraftingInventory inv = new MECraftingInventory(Ae2CraftingReflect.getOriginal(this), true, false,
+                true);
+        Ae2CraftingReflect.invIgnore(inv, output); // 镜像原生:请求物自身库存不参与计划扣除
+        Ae2CraftingReflect.setAvailableCheck(this,
+                new MECraftingInventory(Ae2CraftingReflect.getOriginal(this), false, false, false));
+        CraftingTreeNode root = new CraftingTreeNode(cc, this, output.copy(), null, -1, 0);
+        this.lastPassResult = DagExecutor.execute(graph, output.getStackSize(), inv, this, cc, this.world,
+                root, src, simulation);
         return root;
     }
 

@@ -320,9 +320,21 @@ public class ClientProxy extends CommonProxy {
         // ME 放置工具
         registerItemModel(ItemRegistry.ME_PLACEMENT_TOOL);
 
-        // 虚拟并行卡：单模型，名称颜色按 tier 变化
+        // 虚拟并行卡：8 个 tier 使用 ItemMeshDefinition 动态切换模型
         if (ItemRegistry.VIRTUAL_PARALLEL_CARD != null) {
-            registerItemModel(ItemRegistry.VIRTUAL_PARALLEL_CARD);
+            ModelResourceLocation[] tierModels = new ModelResourceLocation[ItemVirtualParallelCard.MAX_TIER];
+            for (int i = 0; i < tierModels.length; i++) {
+                tierModels[i] = new ModelResourceLocation(
+                        AE2Enhanced.MOD_ID + ":virtual_parallel_card_" + (i + 1), "inventory");
+            }
+            ModelLoader.registerItemVariants(ItemRegistry.VIRTUAL_PARALLEL_CARD, tierModels);
+            ModelLoader.setCustomMeshDefinition(ItemRegistry.VIRTUAL_PARALLEL_CARD, stack -> {
+                int tier = ItemVirtualParallelCard.getTier(stack);
+                if (tier < 0 || tier >= tierModels.length) {
+                    tier = 0;
+                }
+                return tierModels[tier];
+            });
         }
         if (ItemRegistry.PERSONAL_DIMENSION != null) {
             registerItemModel(ItemRegistry.PERSONAL_DIMENSION);

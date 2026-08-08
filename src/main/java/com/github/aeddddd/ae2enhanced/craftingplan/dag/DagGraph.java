@@ -45,6 +45,22 @@ public final class DagGraph {
         }
     }
 
+    /**
+     * 一个候选分支(多样板接管):同 key 的第 N 个干净样板及其输入边.
+     * 分支顺序 = {@code getCraftingFor} 返回序,与原生多分支
+     * "分支 1 尽力→分支 2"的尝试顺序一致.
+     */
+    public static final class Branch {
+        public final ICraftingPatternDetails pattern;
+        public final long outPer;
+        public final List<Edge> edges = new ArrayList<>();
+
+        Branch(ICraftingPatternDetails pattern, long outPer) {
+            this.pattern = pattern;
+            this.outPer = outPer;
+        }
+    }
+
     public static final class DagNode {
         public final Kind kind;
         public final IAEItemStack key;
@@ -53,6 +69,12 @@ public final class DagGraph {
         @Nullable
         public final ICraftingPatternDetails pattern;
         public final List<Edge> edges = new ArrayList<>();
+        /**
+         * 额外候选分支(多样板接管,仅 NORMAL):pattern/edges/outputPerCraft
+         * 为主分支(分支 0),本列表为分支 1..N;为空 = 单一样板节点.
+         * 编译规则:任一分支含容器输入或为环步骤 → 整单回落(不生成多分支节点).
+         */
+        public final List<Branch> extraBranches = new ArrayList<>();
 
         DagNode(Kind kind, IAEItemStack key, long outputPerCraft, @Nullable ICraftingPatternDetails pattern) {
             this.kind = kind;
@@ -64,6 +86,11 @@ public final class DagGraph {
 
     public final List<DagNode> topoOrder = new ArrayList<>();
     public final DagNode root;
+    /**
+     * 图中是否含多样板节点:含时缺料计划须以"模拟语义"第二趟重算
+     * (首分支不封顶,对齐原生失败重试),见 DagCraftingJob.
+     */
+    public boolean hasMultiBranch;
 
     DagGraph(DagNode root) {
         this.root = root;
